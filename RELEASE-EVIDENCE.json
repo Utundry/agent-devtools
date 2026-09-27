@@ -1,23 +1,37 @@
 {
   "format": "agent-devtools-public-release-evidence",
   "formatVersion": 1,
-  "version": "0.7.0-stageM2-public-readiness",
-  "status": "pass-candidate",
+  "version": "0.7.0.1-public-onboarding-hotfix",
+  "status": "pass-hotfix-candidate",
+  "author": {
+    "name": "Nikolay Laptev",
+    "email": "caveboy@yandex.ru",
+    "github": "Utundry"
+  },
   "source": {
     "files": 129,
-    "fingerprint": "6252fbead81c4d69f16bcbf5ef6be6af498c4226e09633b189bb0316fc86409c"
+    "fingerprint": "05368772aea55e1f8766d00aadfd57c65ebd08a84a64e1997da1ba62b8eab92f"
   },
   "verification": {
-    "testsPassed": 101,
+    "testsPassed": 102,
     "testsFailed": 0,
     "compileall": "pass",
     "bootstrapSelfCheck": "pass",
-    "readmeCleanRoomScenarios": 5
+    "interactiveEmptyWorkspacePrompt": "pass-english-no-cyrillic",
+    "m2CleanRoomScenariosPreserved": 5
   },
   "bootstrap": {
-    "singleFileSha256": "3602d09795ddacc6202309dcf0df3b4fb38f9e99e20a06287d7b2ec4c4c74ce0",
-    "kitSha256": "1ea5b836a3cddf87e622d1f6b17df0183a18a18a121da15f53d971b2c6858501",
-    "selfArtifactExcludedFromDetection": true
+    "installerVersion": 8,
+    "singleFileSha256": "7dc8c57424a30877b167917a0ac02098e149d9b6a5d585bb0008ecae2ef91555",
+    "kitSha256": "56c54a3e79be1e145eb679714e8219b803fcba0e517f6bfe8698b12bbee5068e",
+    "defaultPromptLanguage": "en",
+    "multilingualIntentParsingPreserved": true
+  },
+  "ci": {
+    "pythonVersions": ["3.11", "3.12", "3.13"],
+    "checkoutAction": "actions/checkout@v7",
+    "setupPythonAction": "actions/setup-python@v7",
+    "node20DeprecationWarningAddressed": true
   },
   "publicSafety": {
     "privateConsumerSnapshots": false,

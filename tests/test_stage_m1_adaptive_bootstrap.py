@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 from agent_devtools.bootstrap import classify_intent, detect_project, detect_stack
@@ -76,6 +77,15 @@ class AdaptiveBootstrapTests(unittest.TestCase):
             detected = detect_project(root)
             self.assertEqual(["rust"], stack["technologies"])
             self.assertIsNone(detected.preset_id)
+
+    def test_public_bootstrap_uses_english_default_prompts(self) -> None:
+        kit = Path(__file__).resolve().parents[1] / "bootstrap" / "agent-devtools-bootstrap-kit.zip"
+        with zipfile.ZipFile(kit, "r") as archive:
+            source = archive.read(".agent-devtools-bootstrap-kit/BOOTSTRAP_AGENT_DEVTOOLS.py").decode("utf-8")
+        self.assertIn("What are you planning to do or discuss in this project?", source)
+        self.assertIn("What stack are you planning to use (language, framework, tests/build tools)?", source)
+        self.assertNotIn("Что планируется делать или обсуждать в этом проекте?", source)
+        self.assertNotIn("Какой стек планируется", source)
 
 
 if __name__ == "__main__":

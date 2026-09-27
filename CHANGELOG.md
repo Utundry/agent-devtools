@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.0.1-public-onboarding-hotfix
+
+- makes all default interactive bootstrap prompts English; multilingual intent parsing remains supported;
+- adds public author/contact metadata for Nikolay Laptev (`Utundry`, `caveboy@yandex.ru`);
+- updates GitHub Actions to Node 24-compatible `actions/checkout@v7` and `actions/setup-python@v7`;
+- adds a regression test that verifies the distributed bootstrap kit contains the English prompts and no Russian default onboarding prompt.
+
 ## 0.7.0-stageM2-public-readiness
 
 - promotes the Stage M1 adaptive bootstrap into the public source tree;

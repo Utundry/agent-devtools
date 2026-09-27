@@ -12,7 +12,7 @@ requirement → research/context → finding/assumption → decision → verific
 
 Agent DevTools keeps that chain close to the project, with Python standard library + SQLite only, no mandatory cloud service, daemon, embeddings, vector database, or external Python package.
 
-Current public-readiness candidate: **0.7.0-stageM2-public-readiness**.
+Current version: **0.7.0.1**.
 
 ## 60-second start
 
@@ -173,6 +173,16 @@ Useful starting points:
 ## Project status
 
 Agent DevTools is intentionally published as a **0.x project**. The core is already used in real development and non-development work, but the CLI/contracts may continue to evolve while remaining explicit and versioned.
+
+## Author and contact
+
+**Nikolay Laptev** (`Utundry`)
+
+Email: `caveboy@yandex.ru`
+
+GitHub: https://github.com/Utundry
+
+For bugs and feature requests, prefer GitHub Issues so discussion stays visible to the project. Security-sensitive reports should follow `SECURITY.md`.
 
 ## License
 

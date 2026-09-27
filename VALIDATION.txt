@@ -1,49 +1,35 @@
-Agent DevTools 0.7.0-stageM2-public-readiness
+Agent DevTools 0.7.0.1-public-onboarding-hotfix
 Date: 2026-09-27
-Status: PUBLIC-READINESS SOURCE CANDIDATE
+Status: PUBLIC ONBOARDING HOTFIX CANDIDATE
 
 Scope
-- adaptive universal-first bootstrap promoted into the public source tree;
-- empty workspace installs neutral non-development core before asking intent;
-- development specialization asks stack only when missing;
-- existing repositories infer stack from evidence first;
-- public README / MIT LICENSE / CONTRIBUTING / SECURITY / GitHub CI added;
-- private consumer source/fixture artifacts and internal donor notes removed from the public tree;
-- legacy policy-format compatibility remains only as an intentional parser/test contract.
+- default interactive bootstrap questions are English-only;
+- multilingual intent parsing remains supported;
+- public author/contact metadata identifies Nikolay Laptev (`Utundry`, caveboy@yandex.ru);
+- GitHub Actions use Node 24-compatible actions/checkout@v7 and actions/setup-python@v7;
+- public bootstrap regression coverage verifies English prompts and rejects the former Russian default onboarding prompt.
 
 Verification
 - compileall: PASS
-- isolated CI test groups: 101/101 PASS
+- isolated CI test groups: 102/102 PASS
   - core + smoke + A4 + A5: 23/23
   - A6 exact replay: 6/6
   - B1 release foundation: 8/8
   - B3 + context C1/C2/C3: 27/27
-  - D1/D1.1/D1.2 + M1 adaptive bootstrap + adapters: 37/37
+  - D1/D1.1/D1.2 + M1 adaptive bootstrap + adapters: 38/38
 - bootstrap self-check: PASS
-- README clean-room with bootstrap physically inside workspace: PASS
-  - empty -> needs-intent, general/non-development, no development policy
-  - continuation -> development/python-stdlib
-  - existing Python/pytest -> python-pytest inferred from repository evidence
-  - research -> research profile, no development policy
-  - existing Rust -> rust detected, needs-development-adapter, no redundant stack question
-- mandatory external Python dependencies: 0
-- mandatory services: 0
+- interactive pseudo-TTY clean-room with the single-file bootstrap physically inside an empty workspace: PASS
+  - prompt: `What are you planning to do or discuss in this project?`
+  - no Cyrillic output emitted by Agent DevTools
+  - neutral/general bootstrap remains valid for ambiguous non-development input
+- M2 adaptive onboarding semantics are unchanged apart from the default human-facing language.
 
-Clean-room defects found and fixed during M2
-- bootstrap self-poisoning: the single-file installer itself was initially mistaken for Python project evidence in an otherwise empty directory; installer/bootstrap artifacts are now excluded from stack/project inference and covered by regression test.
-- intent classification: the README phrase “Build a Python command-line tool” plus explicit --stack did not initially classify as development; explicit stack now implies development intent and build/implement/coding/cli vocabulary is covered by regression test.
-
-Known verification behavior
-- direct aggregate unittest discovery in this environment can leave the process alive after tests pass when several heavy integration modules share one interpreter. Public CI therefore runs every qualified test group in a separate Python process. No test is omitted.
-- release/replay integration tests are intentionally not nested inside a parent self-host Agent Check run because they invoke Agent Check themselves and the project lock correctly prevents recursive concurrent runs.
-
-Public source safety
-- no bundled private consumer source snapshot
-- no bundled private consumer fixture ZIP
-- no internal donor/reference inventory documents
-- no runtime secrets or credentials detected by release scan
+Author/contact
+- Nikolay Laptev
+- GitHub: Utundry
+- Email: caveboy@yandex.ru
 
 Canonical source files (excluding generated release metadata): 129
-Canonical source fingerprint: 6252fbead81c4d69f16bcbf5ef6be6af498c4226e09633b189bb0316fc86409c
-Bootstrap SHA-256: 3602d09795ddacc6202309dcf0df3b4fb38f9e99e20a06287d7b2ec4c4c74ce0
-Bootstrap kit SHA-256: 1ea5b836a3cddf87e622d1f6b17df0183a18a18a121da15f53d971b2c6858501
+Canonical source fingerprint: 05368772aea55e1f8766d00aadfd57c65ebd08a84a64e1997da1ba62b8eab92f
+Bootstrap SHA-256: 7dc8c57424a30877b167917a0ac02098e149d9b6a5d585bb0008ecae2ef91555
+Bootstrap kit SHA-256: 56c54a3e79be1e145eb679714e8219b803fcba0e517f6bfe8698b12bbee5068e

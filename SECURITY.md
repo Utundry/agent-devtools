@@ -6,7 +6,7 @@ Security fixes are applied to the current 0.x development line. Older experiment
 
 ## Reporting a vulnerability
 
-Please report a suspected vulnerability privately to the repository maintainers using GitHub's private vulnerability reporting feature when available. Do not include secrets, access tokens, private repository contents, or customer data in a public issue.
+Please report a suspected vulnerability privately to **Nikolay Laptev** at `caveboy@yandex.ru`, or use GitHub's private vulnerability reporting feature when available. Do not include secrets, access tokens, private repository contents, or customer data in a public issue.
 
 A useful report includes the affected Agent DevTools version, operating system/Python version, reproduction steps, expected vs actual behavior, and whether the issue can modify project files, execute unintended commands, expose local data, or weaken verification/replay guarantees.
 
