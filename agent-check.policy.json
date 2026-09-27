@@ -1,0 +1,161 @@
+{
+  "format": "agent-devtools-check-policy",
+  "formatVersion": 1,
+  "features": {
+    "core": {
+      "affects": [
+        "check",
+        "release",
+        "context",
+        "tests"
+      ]
+    },
+    "check": {
+      "affects": [
+        "tests"
+      ]
+    },
+    "release": {
+      "affects": [
+        "tests"
+      ]
+    },
+    "context": {
+      "affects": [
+        "tests"
+      ]
+    },
+    "docs": {
+      "affects": []
+    },
+    "tests": {
+      "affects": []
+    }
+  },
+  "sources": [
+    {
+      "patterns": [
+        "agent_devtools/core/**"
+      ],
+      "impact": [
+        "core"
+      ]
+    },
+    {
+      "patterns": [
+        "agent_devtools/check/**"
+      ],
+      "impact": [
+        "check"
+      ]
+    },
+    {
+      "patterns": [
+        "agent_devtools/release/**"
+      ],
+      "impact": [
+        "release"
+      ]
+    },
+    {
+      "patterns": [
+        "agent_devtools/context/**"
+      ],
+      "impact": [
+        "context"
+      ]
+    },
+    {
+      "patterns": [
+        "tests/**"
+      ],
+      "impact": [
+        "tests"
+      ]
+    },
+    {
+      "patterns": [
+        "presets/**",
+        "agent_devtools/presets.py"
+      ],
+      "impact": [
+        "check",
+        "tests"
+      ],
+      "description": "declarative preset catalog"
+    },
+    {
+      "patterns": [
+        "docs/**",
+        "README.md",
+        "CHANGELOG.md",
+        "*.example.json"
+      ],
+      "impact": [
+        "docs"
+      ]
+    },
+    {
+      "patterns": [
+        "agent.py",
+        "agent_devtools/cli.py",
+        "agent_devtools/project.py",
+        "agent-tools.json",
+        "agent-check.policy.json"
+      ],
+      "impact": [
+        "global"
+      ]
+    },
+    {
+      "patterns": [
+        "scripts/**",
+        "TRANSFER-METADATA.json",
+        "VALIDATION.txt",
+        "MANIFEST.sha256",
+        ".gitignore"
+      ],
+      "impact": [
+        "tests"
+      ]
+    }
+  ],
+  "suites": {
+    "tests": {
+      "impact": [
+        "core",
+        "check",
+        "release",
+        "context",
+        "tests"
+      ]
+    },
+    "compile": {
+      "impact": [
+        "core",
+        "check",
+        "release",
+        "context",
+        "tests"
+      ]
+    }
+  },
+  "profiles": {
+    "affected": {
+      "selection": "affected",
+      "suites": [
+        "tests",
+        "compile"
+      ],
+      "always": []
+    },
+    "full": {
+      "selection": "all",
+      "suites": [
+        "tests",
+        "compile"
+      ],
+      "always": []
+    }
+  }
+}

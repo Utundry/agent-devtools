@@ -1,0 +1,158 @@
+{
+  "format": "agent-devtools-preset-component",
+  "formatVersion": 1,
+  "id": "php-backend",
+  "components": [
+    "base"
+  ],
+  "requirements": [
+    "PHP",
+    "Composer",
+    "vendor/bin/phpunit installed"
+  ],
+  "files": {
+    "agent-tools.json": {
+      "check": {
+        "suiteOrder": [
+          "backend-tests",
+          "backend-composer"
+        ],
+        "guards": [
+          {
+            "suite": "backend-tests",
+            "patterns": [
+              "tests/**",
+              "backend/tests/**"
+            ]
+          }
+        ],
+        "commands": {
+          "backend-tests": {
+            "argv": [
+              "php",
+              "vendor/bin/phpunit"
+            ],
+            "inputs": [
+              "backend/**",
+              "src/**",
+              "app/**",
+              "tests/**",
+              "composer.json",
+              "composer.lock"
+            ],
+            "requires": [
+              "vendor/bin/phpunit",
+              "composer.json"
+            ],
+            "tool": "php",
+            "timeoutSeconds": 900,
+            "resultAdapter": "exit-code"
+          },
+          "backend-composer": {
+            "argv": [
+              "composer",
+              "validate",
+              "--no-check-publish"
+            ],
+            "inputs": [
+              "composer.json",
+              "composer.lock"
+            ],
+            "requires": [
+              "composer.json"
+            ],
+            "timeoutSeconds": 120,
+            "resultAdapter": "exit-code"
+          }
+        },
+        "certification": {
+          "reusableSuites": [
+            "backend-tests",
+            "backend-composer"
+          ]
+        },
+        "replay": {
+          "sharedPaths": [
+            "vendor"
+          ]
+        }
+      }
+    },
+    "agent-check.policy.json": {
+      "features": {
+        "backend": {
+          "affects": [
+            "backend-tests"
+          ]
+        },
+        "backend-tests": {
+          "affects": []
+        },
+        "backend-composer": {
+          "affects": [
+            "backend-tests"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "patterns": [
+            "backend/**",
+            "src/**/*.php",
+            "app/**/*.php"
+          ],
+          "impact": [
+            "backend"
+          ],
+          "description": "PHP backend source"
+        },
+        {
+          "patterns": [
+            "tests/**",
+            "backend/tests/**"
+          ],
+          "impact": [
+            "backend-tests"
+          ],
+          "description": "backend tests"
+        },
+        {
+          "patterns": [
+            "composer.json",
+            "composer.lock"
+          ],
+          "impact": [
+            "backend-composer"
+          ],
+          "description": "Composer metadata"
+        }
+      ],
+      "suites": {
+        "backend-tests": {
+          "impact": [
+            "backend-tests"
+          ]
+        },
+        "backend-composer": {
+          "impact": [
+            "backend-composer"
+          ]
+        }
+      },
+      "profiles": {
+        "affected": {
+          "suites": [
+            "backend-tests",
+            "backend-composer"
+          ]
+        },
+        "full": {
+          "suites": [
+            "backend-tests",
+            "backend-composer"
+          ]
+        }
+      }
+    }
+  }
+}

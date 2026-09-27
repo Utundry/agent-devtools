@@ -1,0 +1,20 @@
+{
+  "format": "agent-devtools-check-policy",
+  "formatVersion": 1,
+  "features": {
+    "source": {"affects": ["tests"]},
+    "tests": {"affects": []}
+  },
+  "sources": [
+    {"patterns": ["src/**"], "impact": ["source"], "description": "application source"},
+    {"patterns": ["tests/**"], "impact": ["tests"], "description": "test source"}
+  ],
+  "suites": {
+    "tests": {"impact": ["tests"]},
+    "lint": {"impact": ["source", "tests"]}
+  },
+  "profiles": {
+    "affected": {"selection": "affected", "suites": ["tests", "lint"], "always": []},
+    "full": {"selection": "all", "suites": ["tests", "lint"], "always": []}
+  }
+}

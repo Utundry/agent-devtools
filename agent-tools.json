@@ -1,0 +1,140 @@
+{
+  "version": 1,
+  "ignore": [
+    ".git/**",
+    ".agent-cache/**",
+    ".agent-work/**",
+    "**/__pycache__/**",
+    "*.pyc",
+    "build/**",
+    "dist/**"
+  ],
+  "check": {
+    "policy": "agent-check.policy.json",
+    "suiteOrder": [
+      "tests",
+      "compile"
+    ],
+    "guards": [
+      {
+        "suite": "tests",
+        "patterns": [
+          "tests/**"
+        ]
+      }
+    ],
+    "dependencies": [],
+    "commands": {
+      "tests": {
+        "argv": [
+          "{python}",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-v"
+        ],
+        "inputs": [
+          "agent_devtools/**",
+          "tests/**",
+          "agent.py",
+          "agent-tools.json",
+          "agent-check.policy.json",
+          "presets/**",
+          "agent-context.map.json"
+        ],
+        "tool": "python",
+        "timeoutSeconds": 120,
+        "cache": true,
+        "resultAdapter": {
+          "kind": "unittest",
+          "requireCount": false
+        }
+      },
+      "compile": {
+        "argv": [
+          "{python}",
+          "-m",
+          "compileall",
+          "-q",
+          "agent_devtools",
+          "tests"
+        ],
+        "inputs": [
+          "agent_devtools/**",
+          "tests/**",
+          "presets/**"
+        ],
+        "tool": "python",
+        "timeoutSeconds": 60,
+        "cache": true,
+        "resultAdapter": "exit-code"
+      }
+    },
+    "certification": {
+      "profile": "full",
+      "reusableSuites": [
+        "tests",
+        "compile"
+      ],
+      "globalInputs": [
+        "agent-tools.json",
+        "agent-check.policy.json",
+        "agent-context.map.json"
+      ],
+      "evidencePath": ".agent-cache/check-certified-evidence-v1.json"
+    },
+    "replay": {
+      "sourceInclude": [
+        "**"
+      ],
+      "sourceExclude": [
+        "MANIFEST.sha256",
+        "VALIDATION.txt",
+        "TRANSFER-METADATA.json"
+      ],
+      "sharedPaths": []
+    }
+  },
+  "sourceKinds": [
+    {
+      "glob": "docs/**",
+      "kind": "documentation",
+      "weight": 1.1
+    },
+    {
+      "glob": "tests/**",
+      "kind": "test",
+      "weight": 1.2
+    }
+  ],
+  "release": {
+    "artifactPrefix": "agent-devtools",
+    "packages": [
+      {
+        "id": "source",
+        "kind": "source"
+      }
+    ]
+  },
+  "context": {
+    "database": ".agent-cache/context.sqlite",
+    "semanticMap": "agent-context.map.json",
+    "defaultBudget": 3500,
+    "candidateFiles": 20,
+    "candidateChunks": 80,
+    "maxGraphDepth": 1,
+    "lowPriority": [
+      "CHANGELOG.md",
+      "docs/archive/**",
+      "reference/**"
+    ],
+    "kindCaps": {
+      "source": 0.6,
+      "test": 0.3,
+      "documentation": 0.3,
+      "reference": 0.15
+    }
+  }
+}

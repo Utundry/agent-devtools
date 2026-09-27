@@ -1,0 +1,24 @@
+{
+  "format": "agent-devtools-preset-component",
+  "formatVersion": 1,
+  "id": "release-vite-runtime-frontend",
+  "requirements": [],
+  "files": {
+    "agent-tools.json": {
+      "release": {
+        "packages": [
+          {
+            "id": "runtime",
+            "kind": "files",
+            "include": [
+              "frontend/dist/**"
+            ],
+            "required": [
+              "frontend/dist/index.html"
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

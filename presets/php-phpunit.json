@@ -1,0 +1,179 @@
+{
+  "format": "agent-devtools-preset",
+  "formatVersion": 1,
+  "id": "php-phpunit",
+  "title": "PHP + PHPUnit",
+  "description": "Composer/PHP project using PHPUnit and composer validate.",
+  "components": [
+    "context-base",
+    "release-source",
+    "release-php-runtime-root"
+  ],
+  "requirements": [
+    "PHP",
+    "Composer",
+    "vendor/bin/phpunit installed"
+  ],
+  "files": {
+    "agent-tools.json": {
+      "version": 1,
+      "ignore": [
+        ".git/**",
+        ".agent-cache/**",
+        ".agent-work/**",
+        "**/__pycache__/**",
+        "node_modules/**",
+        "vendor/**",
+        "dist/**",
+        "build/**",
+        "coverage/**"
+      ],
+      "check": {
+        "policy": "agent-check.policy.json",
+        "suiteOrder": [
+          "tests",
+          "composer"
+        ],
+        "guards": [
+          {
+            "suite": "tests",
+            "patterns": [
+              "tests/**"
+            ]
+          }
+        ],
+        "dependencies": [],
+        "commands": {
+          "tests": {
+            "argv": [
+              "php",
+              "vendor/bin/phpunit"
+            ],
+            "inputs": [
+              "src/**",
+              "app/**",
+              "tests/**",
+              "composer.json",
+              "composer.lock"
+            ],
+            "tool": "php",
+            "timeoutSeconds": 900,
+            "resultAdapter": "exit-code"
+          },
+          "composer": {
+            "argv": [
+              "composer",
+              "validate",
+              "--no-check-publish"
+            ],
+            "inputs": [
+              "composer.json",
+              "composer.lock"
+            ],
+            "timeoutSeconds": 120,
+            "resultAdapter": "exit-code"
+          }
+        },
+        "certification": {
+          "profile": "full",
+          "reusableSuites": [
+            "tests",
+            "composer"
+          ],
+          "globalInputs": [
+            "agent-tools.json",
+            "agent-check.policy.json"
+          ],
+          "evidencePath": ".agent-cache/check-certified-evidence-v1.json"
+        },
+        "replay": {
+          "sourceInclude": [
+            "**"
+          ],
+          "sourceExclude": [],
+          "sharedPaths": [
+            "vendor"
+          ]
+        }
+      }
+    },
+    "agent-check.policy.json": {
+      "format": "agent-devtools-check-policy",
+      "formatVersion": 1,
+      "features": {
+        "php": {
+          "affects": [
+            "tests"
+          ]
+        },
+        "tests": {
+          "affects": []
+        },
+        "composer": {
+          "affects": [
+            "tests"
+          ]
+        }
+      },
+      "sources": [
+        {
+          "patterns": [
+            "src/**",
+            "app/**",
+            "*.php"
+          ],
+          "impact": [
+            "php"
+          ]
+        },
+        {
+          "patterns": [
+            "tests/**"
+          ],
+          "impact": [
+            "tests"
+          ]
+        },
+        {
+          "patterns": [
+            "composer.json",
+            "composer.lock"
+          ],
+          "impact": [
+            "composer"
+          ]
+        }
+      ],
+      "suites": {
+        "tests": {
+          "impact": [
+            "tests"
+          ]
+        },
+        "composer": {
+          "impact": [
+            "composer"
+          ]
+        }
+      },
+      "profiles": {
+        "affected": {
+          "selection": "affected",
+          "suites": [
+            "tests",
+            "composer"
+          ],
+          "always": []
+        },
+        "full": {
+          "selection": "all",
+          "suites": [
+            "tests",
+            "composer"
+          ],
+          "always": []
+        }
+      }
+    }
+  }
+}

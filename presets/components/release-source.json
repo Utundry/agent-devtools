@@ -1,0 +1,21 @@
+{
+  "format": "agent-devtools-preset-component",
+  "formatVersion": 1,
+  "id": "release-source",
+  "components": [
+    "base"
+  ],
+  "requirements": [],
+  "files": {
+    "agent-tools.json": {
+      "release": {
+        "packages": [
+          {
+            "id": "source",
+            "kind": "source"
+          }
+        ]
+      }
+    }
+  }
+}

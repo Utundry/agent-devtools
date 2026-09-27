@@ -1,0 +1,10 @@
+# Agent DevTools derived/runtime state
+.agent-cache/
+.agent-work/
+__pycache__/
+*.pyc
+
+# Local scratch / packaging
+build/
+dist/
+*.tmp

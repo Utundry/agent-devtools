@@ -1,0 +1,32 @@
+{
+  "format": "agent-devtools-preset-component",
+  "formatVersion": 1,
+  "id": "release-php-runtime-root",
+  "requirements": [],
+  "files": {
+    "agent-tools.json": {
+      "release": {
+        "packages": [
+          {
+            "id": "runtime",
+            "kind": "files",
+            "include": [
+              "src/**",
+              "app/**",
+              "public/**",
+              "composer.json",
+              "composer.lock"
+            ],
+            "exclude": [
+              "tests/**",
+              "**/tests/**"
+            ],
+            "required": [
+              "composer.json"
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

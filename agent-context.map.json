@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "semanticRegions": [
+    {
+      "id": "context.default-budget",
+      "file": "agent-tools.json",
+      "selector": {
+        "type": "json-pointer",
+        "value": "/context/defaultBudget"
+      }
+    },
+    {
+      "id": "context.graph-depth",
+      "file": "agent-tools.json",
+      "selector": {
+        "type": "json-pointer",
+        "value": "/context/maxGraphDepth"
+      }
+    }
+  ]
+}

@@ -1,0 +1,237 @@
+{
+  "format": "agent-devtools-preset",
+  "formatVersion": 1,
+  "id": "vue-vite",
+  "title": "Vue + Vite",
+  "description": "Vue/TypeScript project using vue-tsc, npm test and Vite build.",
+  "components": [
+    "context-base",
+    "release-source",
+    "release-vite-runtime-root"
+  ],
+  "requirements": [
+    "Node.js",
+    "npm",
+    "vue-tsc and vite available to npx",
+    "a working npm test script"
+  ],
+  "files": {
+    "agent-tools.json": {
+      "version": 1,
+      "ignore": [
+        ".git/**",
+        ".agent-cache/**",
+        ".agent-work/**",
+        "**/__pycache__/**",
+        "node_modules/**",
+        "vendor/**",
+        "dist/**",
+        "build/**",
+        "coverage/**"
+      ],
+      "check": {
+        "policy": "agent-check.policy.json",
+        "suiteOrder": [
+          "typecheck",
+          "tests",
+          "build"
+        ],
+        "guards": [
+          {
+            "suite": "tests",
+            "patterns": [
+              "test/**",
+              "tests/**",
+              "**/*.test.ts",
+              "**/*.spec.ts"
+            ]
+          }
+        ],
+        "dependencies": [
+          {
+            "ifSelectedAny": [
+              "build"
+            ],
+            "require": "typecheck",
+            "reason": "build changes also require frontend type checking"
+          }
+        ],
+        "commands": {
+          "typecheck": {
+            "argv": [
+              "npx",
+              "vue-tsc",
+              "--noEmit"
+            ],
+            "inputs": [
+              "src/**",
+              "*.vue",
+              "tsconfig*.json",
+              "package.json",
+              "package-lock.json"
+            ],
+            "tool": "node",
+            "timeoutSeconds": 600,
+            "resultAdapter": "exit-code"
+          },
+          "tests": {
+            "argv": [
+              "npm",
+              "test"
+            ],
+            "inputs": [
+              "src/**",
+              "test/**",
+              "tests/**",
+              "package.json",
+              "package-lock.json"
+            ],
+            "tool": "node",
+            "timeoutSeconds": 900,
+            "resultAdapter": "exit-code"
+          },
+          "build": {
+            "argv": [
+              "npx",
+              "vite",
+              "build"
+            ],
+            "inputs": [
+              "src/**",
+              "index.html",
+              "vite.config.*",
+              "package.json",
+              "package-lock.json"
+            ],
+            "tool": "node",
+            "timeoutSeconds": 900,
+            "cache": false,
+            "resultAdapter": {
+              "kind": "vite",
+              "requiredFiles": [
+                "dist/index.html"
+              ]
+            },
+            "outputs": {
+              "required": [
+                "dist/index.html"
+              ],
+              "capture": [
+                "dist/index.html",
+                "dist/assets/**"
+              ]
+            }
+          }
+        },
+        "certification": {
+          "profile": "full",
+          "reusableSuites": [
+            "typecheck",
+            "tests",
+            "build"
+          ],
+          "globalInputs": [
+            "agent-tools.json",
+            "agent-check.policy.json"
+          ],
+          "evidencePath": ".agent-cache/check-certified-evidence-v1.json"
+        },
+        "replay": {
+          "sourceInclude": [
+            "**"
+          ],
+          "sourceExclude": [],
+          "sharedPaths": [
+            "node_modules"
+          ]
+        }
+      }
+    },
+    "agent-check.policy.json": {
+      "format": "agent-devtools-check-policy",
+      "formatVersion": 1,
+      "features": {
+        "frontend": {
+          "affects": [
+            "types",
+            "tests",
+            "build"
+          ]
+        },
+        "types": {
+          "affects": []
+        },
+        "tests": {
+          "affects": []
+        },
+        "build": {
+          "affects": []
+        }
+      },
+      "sources": [
+        {
+          "patterns": [
+            "src/**",
+            "index.html",
+            "vite.config.*",
+            "tsconfig*.json",
+            "package.json"
+          ],
+          "impact": [
+            "frontend"
+          ],
+          "description": "Vue/Vite frontend"
+        },
+        {
+          "patterns": [
+            "test/**",
+            "tests/**",
+            "**/*.test.ts",
+            "**/*.spec.ts"
+          ],
+          "impact": [
+            "tests"
+          ],
+          "description": "frontend tests"
+        }
+      ],
+      "suites": {
+        "typecheck": {
+          "impact": [
+            "types"
+          ]
+        },
+        "tests": {
+          "impact": [
+            "tests"
+          ]
+        },
+        "build": {
+          "impact": [
+            "build"
+          ]
+        }
+      },
+      "profiles": {
+        "affected": {
+          "selection": "affected",
+          "suites": [
+            "typecheck",
+            "tests",
+            "build"
+          ],
+          "always": []
+        },
+        "full": {
+          "selection": "all",
+          "suites": [
+            "typecheck",
+            "tests",
+            "build"
+          ],
+          "always": []
+        }
+      }
+    }
+  }
+}

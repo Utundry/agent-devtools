@@ -1,0 +1,31 @@
+{
+  "format": "agent-devtools-preset-component",
+  "formatVersion": 1,
+  "id": "release-php-runtime-backend",
+  "requirements": [],
+  "files": {
+    "agent-tools.json": {
+      "release": {
+        "packages": [
+          {
+            "id": "runtime",
+            "kind": "files",
+            "include": [
+              "backend/**",
+              "public/**",
+              "composer.json",
+              "composer.lock"
+            ],
+            "exclude": [
+              "backend/tests/**",
+              "**/tests/**"
+            ],
+            "required": [
+              "backend/**"
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

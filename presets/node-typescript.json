@@ -1,0 +1,188 @@
+{
+  "format": "agent-devtools-preset",
+  "formatVersion": 1,
+  "id": "node-typescript",
+  "title": "Node + TypeScript",
+  "description": "TypeScript project with tsc --noEmit and the package's npm test script.",
+  "components": [
+    "context-base",
+    "release-source"
+  ],
+  "requirements": [
+    "Node.js",
+    "npm",
+    "TypeScript available to npx",
+    "a working npm test script"
+  ],
+  "files": {
+    "agent-tools.json": {
+      "version": 1,
+      "ignore": [
+        ".git/**",
+        ".agent-cache/**",
+        ".agent-work/**",
+        "**/__pycache__/**",
+        "node_modules/**",
+        "vendor/**",
+        "dist/**",
+        "build/**",
+        "coverage/**"
+      ],
+      "check": {
+        "policy": "agent-check.policy.json",
+        "suiteOrder": [
+          "typecheck",
+          "tests"
+        ],
+        "guards": [
+          {
+            "suite": "tests",
+            "patterns": [
+              "test/**",
+              "tests/**",
+              "**/*.test.ts",
+              "**/*.spec.ts"
+            ]
+          }
+        ],
+        "dependencies": [],
+        "commands": {
+          "typecheck": {
+            "argv": [
+              "npx",
+              "tsc",
+              "--noEmit"
+            ],
+            "inputs": [
+              "src/**",
+              "*.ts",
+              "*.tsx",
+              "tsconfig*.json",
+              "package.json",
+              "package-lock.json"
+            ],
+            "tool": "node",
+            "timeoutSeconds": 600,
+            "resultAdapter": "exit-code"
+          },
+          "tests": {
+            "argv": [
+              "npm",
+              "test"
+            ],
+            "inputs": [
+              "src/**",
+              "test/**",
+              "tests/**",
+              "package.json",
+              "package-lock.json"
+            ],
+            "tool": "node",
+            "timeoutSeconds": 900,
+            "resultAdapter": "exit-code"
+          }
+        },
+        "certification": {
+          "profile": "full",
+          "reusableSuites": [
+            "typecheck",
+            "tests"
+          ],
+          "globalInputs": [
+            "agent-tools.json",
+            "agent-check.policy.json"
+          ],
+          "evidencePath": ".agent-cache/check-certified-evidence-v1.json"
+        },
+        "replay": {
+          "sourceInclude": [
+            "**"
+          ],
+          "sourceExclude": [],
+          "sharedPaths": [
+            "node_modules"
+          ]
+        }
+      }
+    },
+    "agent-check.policy.json": {
+      "format": "agent-devtools-check-policy",
+      "formatVersion": 1,
+      "features": {
+        "source": {
+          "affects": [
+            "tests",
+            "types"
+          ]
+        },
+        "tests": {
+          "affects": []
+        },
+        "types": {
+          "affects": []
+        }
+      },
+      "sources": [
+        {
+          "patterns": [
+            "src/**",
+            "*.ts",
+            "*.tsx",
+            "*.js",
+            "*.mjs",
+            "package.json",
+            "tsconfig*.json"
+          ],
+          "impact": [
+            "source"
+          ],
+          "description": "Node/TypeScript source and config"
+        },
+        {
+          "patterns": [
+            "test/**",
+            "tests/**",
+            "**/*.test.ts",
+            "**/*.spec.ts"
+          ],
+          "impact": [
+            "tests"
+          ],
+          "description": "tests"
+        }
+      ],
+      "suites": {
+        "typecheck": {
+          "impact": [
+            "types"
+          ],
+          "description": "TypeScript compiler check"
+        },
+        "tests": {
+          "impact": [
+            "tests"
+          ],
+          "description": "project npm test script"
+        }
+      },
+      "profiles": {
+        "affected": {
+          "selection": "affected",
+          "suites": [
+            "typecheck",
+            "tests"
+          ],
+          "always": []
+        },
+        "full": {
+          "selection": "all",
+          "suites": [
+            "typecheck",
+            "tests"
+          ],
+          "always": []
+        }
+      }
+    }
+  }
+}

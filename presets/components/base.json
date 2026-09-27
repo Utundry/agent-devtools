@@ -1,0 +1,66 @@
+{
+  "format": "agent-devtools-preset-component",
+  "formatVersion": 1,
+  "id": "base",
+  "requirements": [],
+  "files": {
+    "agent-tools.json": {
+      "version": 1,
+      "ignore": [
+        ".git/**",
+        ".agent-cache/**",
+        ".agent-work/**",
+        "**/__pycache__/**",
+        "node_modules/**",
+        "vendor/**",
+        "dist/**",
+        "build/**",
+        "coverage/**"
+      ],
+      "check": {
+        "policy": "agent-check.policy.json",
+        "guards": [],
+        "dependencies": [],
+        "commands": {},
+        "certification": {
+          "profile": "full",
+          "reusableSuites": [],
+          "globalInputs": [
+            "agent-tools.json",
+            "agent-check.policy.json"
+          ],
+          "evidencePath": ".agent-cache/check-certified-evidence-v1.json"
+        },
+        "replay": {
+          "sourceInclude": [
+            "**"
+          ],
+          "sourceExclude": [],
+          "sharedPaths": []
+        }
+      }
+    },
+    "agent-check.policy.json": {
+      "format": "agent-devtools-check-policy",
+      "formatVersion": 1,
+      "features": {},
+      "sources": [],
+      "suites": {},
+      "profiles": {
+        "affected": {
+          "selection": "affected",
+          "suites": [],
+          "always": []
+        },
+        "full": {
+          "selection": "all",
+          "suites": [],
+          "always": []
+        }
+      }
+    }
+  },
+  "components": [
+    "context-base"
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "format": "agent-devtools-preset-component",
+  "formatVersion": 1,
+  "id": "context-base",
+  "requirements": [],
+  "files": {
+    "agent-tools.json": {
+      "context": {
+        "database": ".agent-cache/context.sqlite",
+        "semanticMap": "agent-context.map.json",
+        "defaultBudget": 3500,
+        "candidateFiles": 20,
+        "candidateChunks": 80,
+        "maxGraphDepth": 1,
+        "lowPriority": [
+          "CHANGELOG.md",
+          "docs/archive/**",
+          "releases/**"
+        ]
+      },
+      "sourceKinds": [
+        {
+          "glob": "docs/architecture/**",
+          "kind": "architecture",
+          "weight": 1.4
+        },
+        {
+          "glob": "tests/**",
+          "kind": "test",
+          "weight": 1.2
+        }
+      ],
+      "check": {
+        "certification": {
+          "globalInputs": [
+            "agent-context.map.json"
+          ]
+        }
+      }
+    }
+  }
+}

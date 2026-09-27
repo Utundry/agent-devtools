@@ -1,0 +1,16 @@
+{
+  "format": "agent-devtools-preset",
+  "formatVersion": 1,
+  "id": "php-vue-vite",
+  "title": "PHP backend + Vue/Vite frontend",
+  "description": "Split PHP backend and Vue/Vite frontend assembled from reusable atomic preset components.",
+  "components": [
+    "php-backend",
+    "vue-vite-frontend",
+    "release-source",
+    "release-php-runtime-backend",
+    "release-vite-runtime-frontend"
+  ],
+  "requirements": [],
+  "files": {}
+}

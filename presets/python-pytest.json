@@ -1,0 +1,179 @@
+{
+  "format": "agent-devtools-preset",
+  "formatVersion": 1,
+  "id": "python-pytest",
+  "title": "Python + pytest",
+  "description": "Python project using pytest with compileall as a cheap syntax gate.",
+  "components": [
+    "context-base",
+    "release-source"
+  ],
+  "requirements": [
+    "Python 3",
+    "pytest available in the project environment"
+  ],
+  "files": {
+    "agent-tools.json": {
+      "version": 1,
+      "ignore": [
+        ".git/**",
+        ".agent-cache/**",
+        ".agent-work/**",
+        "**/__pycache__/**",
+        "node_modules/**",
+        "vendor/**",
+        "dist/**",
+        "build/**",
+        "coverage/**"
+      ],
+      "check": {
+        "policy": "agent-check.policy.json",
+        "suiteOrder": [
+          "tests",
+          "compile"
+        ],
+        "guards": [
+          {
+            "suite": "tests",
+            "patterns": [
+              "tests/**",
+              "pyproject.toml",
+              "pytest.ini"
+            ]
+          }
+        ],
+        "dependencies": [],
+        "commands": {
+          "tests": {
+            "argv": [
+              "{python}",
+              "-m",
+              "pytest",
+              "-q"
+            ],
+            "inputs": [
+              "src/**",
+              "tests/**",
+              "*.py",
+              "pyproject.toml",
+              "pytest.ini"
+            ],
+            "tool": "python",
+            "timeoutSeconds": 600,
+            "resultAdapter": {
+              "kind": "pytest",
+              "requireSummary": false
+            },
+            "env": {
+              "PYTHONPATH": "{root}/src"
+            }
+          },
+          "compile": {
+            "argv": [
+              "{python}",
+              "-m",
+              "compileall",
+              "-q",
+              "src",
+              "tests"
+            ],
+            "inputs": [
+              "src/**",
+              "tests/**"
+            ],
+            "tool": "python",
+            "timeoutSeconds": 120,
+            "resultAdapter": "exit-code"
+          }
+        },
+        "certification": {
+          "profile": "full",
+          "reusableSuites": [
+            "tests",
+            "compile"
+          ],
+          "globalInputs": [
+            "agent-tools.json",
+            "agent-check.policy.json"
+          ],
+          "evidencePath": ".agent-cache/check-certified-evidence-v1.json"
+        },
+        "replay": {
+          "sourceInclude": [
+            "**"
+          ],
+          "sourceExclude": [],
+          "sharedPaths": []
+        }
+      }
+    },
+    "agent-check.policy.json": {
+      "format": "agent-devtools-check-policy",
+      "formatVersion": 1,
+      "features": {
+        "source": {
+          "affects": [
+            "tests"
+          ]
+        },
+        "tests": {
+          "affects": []
+        }
+      },
+      "sources": [
+        {
+          "patterns": [
+            "src/**",
+            "*.py"
+          ],
+          "impact": [
+            "source"
+          ],
+          "description": "Python source"
+        },
+        {
+          "patterns": [
+            "tests/**"
+          ],
+          "impact": [
+            "tests"
+          ],
+          "description": "tests"
+        }
+      ],
+      "suites": {
+        "tests": {
+          "impact": [
+            "tests"
+          ],
+          "description": "unit tests"
+        },
+        "compile": {
+          "impact": [
+            "source",
+            "tests"
+          ],
+          "description": "syntax/bytecode compilation"
+        }
+      },
+      "profiles": {
+        "affected": {
+          "selection": "affected",
+          "suites": [
+            "tests",
+            "compile"
+          ],
+          "always": []
+        },
+        "full": {
+          "selection": "all",
+          "suites": [
+            "tests",
+            "compile"
+          ],
+          "always": []
+        }
+      }
+    }
+  }
+}

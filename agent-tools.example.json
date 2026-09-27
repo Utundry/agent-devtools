@@ -1,0 +1,127 @@
+{
+  "version": 1,
+  "ignore": [
+    ".git/**",
+    ".agent-cache/**",
+    ".agent-work/**",
+    "node_modules/**",
+    "vendor/**",
+    "dist/**"
+  ],
+  "check": {
+    "policy": "agent-check.policy.json",
+    "suiteOrder": [
+      "tests",
+      "lint"
+    ],
+    "guards": [
+      {
+        "suite": "tests",
+        "patterns": [
+          "tests/**"
+        ]
+      }
+    ],
+    "dependencies": [],
+    "commands": {
+      "tests": {
+        "argv": [
+          "{python}",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-v"
+        ],
+        "inputs": [
+          "src/**",
+          "tests/**"
+        ],
+        "tool": "python",
+        "timeoutSeconds": 120,
+        "cache": true,
+        "resultAdapter": {
+          "kind": "unittest",
+          "requireCount": false
+        }
+      },
+      "lint": {
+        "argv": [
+          "{python}",
+          "-m",
+          "compileall",
+          "-q",
+          "src",
+          "tests"
+        ],
+        "inputs": [
+          "src/**",
+          "tests/**"
+        ],
+        "tool": "python",
+        "timeoutSeconds": 60,
+        "cache": true,
+        "resultAdapter": "exit-code"
+      }
+    },
+    "certification": {
+      "profile": "full",
+      "reusableSuites": [
+        "tests",
+        "lint"
+      ],
+      "globalInputs": [
+        "agent-tools.json",
+        "agent-check.policy.json"
+      ],
+      "evidencePath": ".agent-cache/check-certified-evidence-v1.json"
+    },
+    "replay": {
+      "sourceInclude": [
+        "**"
+      ],
+      "sourceExclude": [],
+      "sharedPaths": []
+    }
+  },
+  "sourceKinds": [
+    {
+      "glob": "docs/**",
+      "kind": "documentation",
+      "weight": 1.1
+    },
+    {
+      "glob": "tests/**",
+      "kind": "test",
+      "weight": 1.2
+    },
+    {
+      "glob": "migrations/**",
+      "kind": "schema",
+      "weight": 1.2
+    }
+  ],
+  "release": {
+    "artifactPrefix": "example-project",
+    "packages": [
+      {
+        "id": "source",
+        "kind": "source"
+      }
+    ]
+  },
+  "context": {
+    "database": ".agent-cache/context.sqlite",
+    "semanticMap": "agent-context.map.json",
+    "defaultBudget": 3500,
+    "candidateFiles": 20,
+    "candidateChunks": 80,
+    "maxGraphDepth": 1,
+    "lowPriority": [
+      "CHANGELOG.md",
+      "docs/archive/**",
+      "releases/**"
+    ]
+  }
+}

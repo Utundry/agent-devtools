@@ -1,0 +1,33 @@
+{
+  "format": "agent-devtools-public-release-evidence",
+  "formatVersion": 1,
+  "version": "0.7.0-stageM2-public-readiness",
+  "status": "pass-candidate",
+  "source": {
+    "files": 129,
+    "fingerprint": "6252fbead81c4d69f16bcbf5ef6be6af498c4226e09633b189bb0316fc86409c"
+  },
+  "verification": {
+    "testsPassed": 101,
+    "testsFailed": 0,
+    "compileall": "pass",
+    "bootstrapSelfCheck": "pass",
+    "readmeCleanRoomScenarios": 5
+  },
+  "bootstrap": {
+    "singleFileSha256": "3602d09795ddacc6202309dcf0df3b4fb38f9e99e20a06287d7b2ec4c4c74ce0",
+    "kitSha256": "1ea5b836a3cddf87e622d1f6b17df0183a18a18a121da15f53d971b2c6858501",
+    "selfArtifactExcludedFromDetection": true
+  },
+  "publicSafety": {
+    "privateConsumerSnapshots": false,
+    "privateConsumerFixtureZips": false,
+    "internalDonorInventoryDocs": false,
+    "mandatoryExternalPythonDependencies": 0,
+    "mandatoryServices": 0
+  },
+  "knownBehavior": {
+    "aggregateUnittestProcessExit": "environment-sensitive after PASS; CI uses isolated qualified groups",
+    "nestedReleaseReplayUnderSelfCheck": "not used; project lock intentionally prevents recursive Agent Check"
+  }
+}

@@ -1,0 +1,177 @@
+{
+  "format": "agent-devtools-preset",
+  "formatVersion": 1,
+  "id": "python-stdlib",
+  "title": "Python stdlib",
+  "description": "Python project using unittest + compileall.",
+  "components": [
+    "context-base",
+    "release-source"
+  ],
+  "requirements": [
+    "Python 3"
+  ],
+  "files": {
+    "agent-tools.json": {
+      "version": 1,
+      "ignore": [
+        ".git/**",
+        ".agent-cache/**",
+        ".agent-work/**",
+        "**/__pycache__/**",
+        "node_modules/**",
+        "vendor/**",
+        "dist/**",
+        "build/**",
+        "coverage/**"
+      ],
+      "check": {
+        "policy": "agent-check.policy.json",
+        "suiteOrder": [
+          "tests",
+          "compile"
+        ],
+        "guards": [
+          {
+            "suite": "tests",
+            "patterns": [
+              "tests/**"
+            ]
+          }
+        ],
+        "dependencies": [],
+        "commands": {
+          "tests": {
+            "argv": [
+              "{python}",
+              "-m",
+              "unittest",
+              "discover",
+              "-s",
+              "tests",
+              "-v"
+            ],
+            "inputs": [
+              "src/**",
+              "tests/**",
+              "*.py"
+            ],
+            "tool": "python",
+            "timeoutSeconds": 300,
+            "resultAdapter": {
+              "kind": "unittest",
+              "requireCount": false
+            },
+            "env": {
+              "PYTHONPATH": "{root}/src"
+            }
+          },
+          "compile": {
+            "argv": [
+              "{python}",
+              "-m",
+              "compileall",
+              "-q",
+              "src",
+              "tests"
+            ],
+            "inputs": [
+              "src/**",
+              "tests/**"
+            ],
+            "tool": "python",
+            "timeoutSeconds": 120,
+            "resultAdapter": "exit-code"
+          }
+        },
+        "certification": {
+          "profile": "full",
+          "reusableSuites": [
+            "tests",
+            "compile"
+          ],
+          "globalInputs": [
+            "agent-tools.json",
+            "agent-check.policy.json"
+          ],
+          "evidencePath": ".agent-cache/check-certified-evidence-v1.json"
+        },
+        "replay": {
+          "sourceInclude": [
+            "**"
+          ],
+          "sourceExclude": [],
+          "sharedPaths": []
+        }
+      }
+    },
+    "agent-check.policy.json": {
+      "format": "agent-devtools-check-policy",
+      "formatVersion": 1,
+      "features": {
+        "source": {
+          "affects": [
+            "tests"
+          ]
+        },
+        "tests": {
+          "affects": []
+        }
+      },
+      "sources": [
+        {
+          "patterns": [
+            "src/**",
+            "*.py"
+          ],
+          "impact": [
+            "source"
+          ],
+          "description": "Python source"
+        },
+        {
+          "patterns": [
+            "tests/**"
+          ],
+          "impact": [
+            "tests"
+          ],
+          "description": "tests"
+        }
+      ],
+      "suites": {
+        "tests": {
+          "impact": [
+            "tests"
+          ],
+          "description": "unit tests"
+        },
+        "compile": {
+          "impact": [
+            "source",
+            "tests"
+          ],
+          "description": "syntax/bytecode compilation"
+        }
+      },
+      "profiles": {
+        "affected": {
+          "selection": "affected",
+          "suites": [
+            "tests",
+            "compile"
+          ],
+          "always": []
+        },
+        "full": {
+          "selection": "all",
+          "suites": [
+            "tests",
+            "compile"
+          ],
+          "always": []
+        }
+      }
+    }
+  }
+}

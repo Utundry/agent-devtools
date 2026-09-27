@@ -1,0 +1,213 @@
+{
+  "format": "agent-devtools-preset-component",
+  "formatVersion": 1,
+  "id": "vue-vite-frontend",
+  "components": [
+    "base"
+  ],
+  "requirements": [
+    "Node.js",
+    "npm",
+    "vue-tsc and vite available in frontend",
+    "a working frontend npm test script"
+  ],
+  "files": {
+    "agent-tools.json": {
+      "check": {
+        "suiteOrder": [
+          "frontend-typecheck",
+          "frontend-tests",
+          "frontend-build"
+        ],
+        "guards": [
+          {
+            "suite": "frontend-tests",
+            "patterns": [
+              "frontend/test/**",
+              "frontend/tests/**",
+              "frontend/**/*.test.ts",
+              "frontend/**/*.spec.ts"
+            ]
+          }
+        ],
+        "dependencies": [
+          {
+            "ifSelectedAny": [
+              "frontend-build"
+            ],
+            "require": "frontend-typecheck",
+            "reason": "frontend build changes also require type checking"
+          }
+        ],
+        "commands": {
+          "frontend-typecheck": {
+            "argv": [
+              "npx",
+              "vue-tsc",
+              "--noEmit"
+            ],
+            "cwd": "frontend",
+            "inputs": [
+              "frontend/src/**",
+              "frontend/tsconfig*.json",
+              "frontend/package.json",
+              "frontend/package-lock.json"
+            ],
+            "requires": [
+              "frontend/package.json"
+            ],
+            "tool": "node",
+            "timeoutSeconds": 600,
+            "resultAdapter": "exit-code"
+          },
+          "frontend-tests": {
+            "argv": [
+              "npm",
+              "test"
+            ],
+            "cwd": "frontend",
+            "inputs": [
+              "frontend/src/**",
+              "frontend/test/**",
+              "frontend/tests/**",
+              "frontend/package.json",
+              "frontend/package-lock.json"
+            ],
+            "requires": [
+              "frontend/package.json"
+            ],
+            "tool": "node",
+            "timeoutSeconds": 900,
+            "resultAdapter": "exit-code"
+          },
+          "frontend-build": {
+            "argv": [
+              "npx",
+              "vite",
+              "build"
+            ],
+            "cwd": "frontend",
+            "inputs": [
+              "frontend/src/**",
+              "frontend/index.html",
+              "frontend/vite.config.*",
+              "frontend/package.json",
+              "frontend/package-lock.json"
+            ],
+            "requires": [
+              "frontend/package.json"
+            ],
+            "tool": "node",
+            "timeoutSeconds": 900,
+            "cache": false,
+            "resultAdapter": {
+              "kind": "vite",
+              "requireModules": false
+            },
+            "outputs": {
+              "required": [
+                "frontend/dist/index.html"
+              ],
+              "capture": [
+                "frontend/dist/index.html",
+                "frontend/dist/assets/**"
+              ]
+            }
+          }
+        },
+        "certification": {
+          "reusableSuites": [
+            "frontend-typecheck",
+            "frontend-tests",
+            "frontend-build"
+          ]
+        },
+        "replay": {
+          "sharedPaths": [
+            "frontend/node_modules"
+          ]
+        }
+      }
+    },
+    "agent-check.policy.json": {
+      "features": {
+        "frontend": {
+          "affects": [
+            "frontend-types",
+            "frontend-tests",
+            "frontend-build"
+          ]
+        },
+        "frontend-types": {
+          "affects": []
+        },
+        "frontend-tests": {
+          "affects": []
+        },
+        "frontend-build": {
+          "affects": []
+        }
+      },
+      "sources": [
+        {
+          "patterns": [
+            "frontend/src/**",
+            "frontend/index.html",
+            "frontend/package.json",
+            "frontend/vite.config.*",
+            "frontend/tsconfig*.json"
+          ],
+          "impact": [
+            "frontend"
+          ],
+          "description": "Vue/Vite frontend"
+        },
+        {
+          "patterns": [
+            "frontend/test/**",
+            "frontend/tests/**",
+            "frontend/**/*.test.ts",
+            "frontend/**/*.spec.ts"
+          ],
+          "impact": [
+            "frontend-tests"
+          ],
+          "description": "frontend tests"
+        }
+      ],
+      "suites": {
+        "frontend-typecheck": {
+          "impact": [
+            "frontend-types"
+          ]
+        },
+        "frontend-tests": {
+          "impact": [
+            "frontend-tests"
+          ]
+        },
+        "frontend-build": {
+          "impact": [
+            "frontend-build"
+          ]
+        }
+      },
+      "profiles": {
+        "affected": {
+          "suites": [
+            "frontend-typecheck",
+            "frontend-tests",
+            "frontend-build"
+          ]
+        },
+        "full": {
+          "suites": [
+            "frontend-typecheck",
+            "frontend-tests",
+            "frontend-build"
+          ]
+        }
+      }
+    }
+  }
+}
