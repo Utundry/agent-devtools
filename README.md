@@ -16,6 +16,26 @@ Current version: **0.7.0.1**.
 
 ## 60-second start
 
+### Agent-first start
+
+If you are working with an AI coding, research, or general-purpose agent, the shortest onboarding path is to give the agent this repository URL:
+
+https://github.com/Utundry/agent-devtools
+
+A minimal instruction is enough:
+
+> Initialize Agent DevTools in the current workspace using the project above. After bootstrap, read `AGENTS.md`, inspect the current workflow and capabilities through the installed CLI, and use the installed runtime as the source of truth.
+
+For reproducible onboarding, you can give the agent the version-pinned single-file bootstrap directly:
+
+https://raw.githubusercontent.com/Utundry/agent-devtools/v0.7.0.1/bootstrap/AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py
+
+For the latest development version, use:
+
+https://raw.githubusercontent.com/Utundry/agent-devtools/main/bootstrap/AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py
+
+The agent should download and execute the bootstrap from the intended workspace root. If the environment cannot access the network, attach the bootstrap file instead.
+
 ### The normal path: one bootstrap file
 
 Copy `bootstrap/AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py` into or next to the project and run it from the intended workspace root:
