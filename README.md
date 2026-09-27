@@ -18,23 +18,25 @@ Current version: **0.7.0.1**.
 
 ### Agent-first start
 
-If you are working with an AI coding, research, or general-purpose agent, the shortest onboarding path is to give the agent this repository URL:
+If you are working with an AI coding, research, or general-purpose agent, give it this **canonical initialization URL**:
+
+https://raw.githubusercontent.com/Utundry/agent-devtools/main/AGENT-START-HERE.md
+
+That document explicitly tells the agent that Agent DevTools is infrastructure for the **current workspace**, not a request to build a site, demo, or project from the repository. It then points the agent to the version-pinned bootstrap and the required post-bootstrap workflow discovery.
+
+In most agent environments, the URL alone should be sufficient. If you want to remove any remaining ambiguity, use:
+
+> Initialize Agent DevTools in the current workspace using the initialization document above, then continue my actual task.
+
+The project repository remains the human-facing entry point:
 
 https://github.com/Utundry/agent-devtools
 
-A minimal instruction is enough:
-
-> Initialize Agent DevTools in the current workspace using the project above. After bootstrap, read `AGENTS.md`, inspect the current workflow and capabilities through the installed CLI, and use the installed runtime as the source of truth.
-
-For reproducible onboarding, you can give the agent the version-pinned single-file bootstrap directly:
+For manual or automation-oriented installation, the current version-pinned bootstrap is:
 
 https://raw.githubusercontent.com/Utundry/agent-devtools/v0.7.0.1/bootstrap/AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py
 
-For the latest development version, use:
-
-https://raw.githubusercontent.com/Utundry/agent-devtools/main/bootstrap/AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py
-
-The agent should download and execute the bootstrap from the intended workspace root. If the environment cannot access the network, attach the bootstrap file instead.
+The raw Python bootstrap is an installer URL; the `AGENT-START-HERE.md` URL is the preferred **agent handoff** URL. If the environment cannot access the network, attach the bootstrap file instead.
 
 ### The normal path: one bootstrap file
 
