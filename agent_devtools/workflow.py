@@ -7,8 +7,8 @@ from typing import Any
 from . import __version__
 from .profiles import load_profile
 
-CLI_CONTRACT_VERSION = 9
-WORKFLOW_CONTRACT_VERSION = 5
+CLI_CONTRACT_VERSION = 10
+WORKFLOW_CONTRACT_VERSION = 6
 
 
 def workflow_contract(root: Path) -> dict[str, Any]:
@@ -31,6 +31,7 @@ def workflow_contract(root: Path) -> dict[str, Any]:
             "Canonical project change discovery includes untracked files governed by the source contract; plain git diff is not a complete handoff inventory.",
             "Session state and caches are disposable; durable project knowledge is tracked in .agent-knowledge/.",
             "Use preserve for profile-aware portable recovery state; lower-level checkpoint/workspace-snapshot commands remain available when their distinction matters.",
+            "Use handoff to transfer unfinished work across chats or agents as one manifest-verified bundle containing both recoverable state and a resume briefing.",
             "Autonomy starts after alignment: ask only about material gaps that are expensive to get wrong; propose a concrete best option and obtain explicit user approval before substantial execution when such gaps exist. If the task is already sufficiently specified, record the no-gap fast path and proceed without a user turn.",
             "Alignment must be explicit in state, not necessarily visible as friction to the user. Never ask a question merely to satisfy the gate.",
         ],
@@ -39,7 +40,7 @@ def workflow_contract(root: Path) -> dict[str, Any]:
                 "id": "orient",
                 "required": True,
                 "purpose": "Recover project/task context and existing durable knowledge before substantial work.",
-                "commands": ["resume", "work status", "knowledge status"],
+                "commands": ["handoff resume", "resume", "work status", "knowledge status"],
             },
             {
                 "id": "start",
@@ -109,6 +110,7 @@ def capabilities(root: Path) -> dict[str, Any]:
                 "hardWatchdog": profile.verification_mode == "check",
             },
             "resume": True,
+            "handoff": {"create": True, "inspect": True, "resume": True, "profileAware": True, "manifestVerified": True, "freshResumeBrief": True},
             "preserve": {"create": True, "inspect": True, "restore": True, "profileAware": True, "autoDetectArtifactKind": True},
             "checkpoint": True,
             "workspaceSnapshot": {"create": not profile.development, "inspect": True, "restore": not profile.development},

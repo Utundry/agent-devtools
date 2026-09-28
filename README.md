@@ -131,6 +131,16 @@ python devtools/agent/agent.py preserve create
 
 Development profiles produce an unfinished-work checkpoint; research, analysis, document, and general profiles produce a portable workspace snapshot. `preserve inspect` and `preserve restore` auto-detect the artifact kind from its internal metadata. Lower-level `checkpoint` and `workspace-snapshot` commands remain available.
 
+### Handoff between chats or agents
+
+Create one portable bundle with both recoverable state and a compact resume briefing:
+
+```bash
+python devtools/agent/agent.py handoff create
+```
+
+Continue from it with `handoff resume <bundle>`. The handoff wraps the profile-aware `preserve` artifact, verifies all payloads through a SHA-256 manifest, restores through existing conflict-safe rules, and then generates a fresh resume brief. `handoff inspect` verifies without modifying the workspace.
+
 ## Design constraints
 
 Agent DevTools deliberately keeps a small trust and resource footprint:
