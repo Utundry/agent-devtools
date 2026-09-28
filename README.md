@@ -75,6 +75,16 @@ python AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py \
 
 `--intent` and `--stack` are continuation inputs for agents/automation. A human running bootstrap interactively can simply answer the questions instead.
 
+### Updating an existing installation
+
+Once Agent DevTools is installed, updating it is a single semantic action:
+
+```bash
+python devtools/agent/agent.py self-update
+```
+
+It discovers the release pinned by the canonical handoff, freshly downloads that exact installer, checks its release identity, updates the disposable runtime, and verifies the newly installed `toolVersion`. Use `self-update --check` for a read-only availability check or `self-update --version X.Y.Z` for a deterministic target.
+
 After bootstrap, the agent should read `AGENTS.md` and use the installed runtime as the source of truth:
 
 ```bash

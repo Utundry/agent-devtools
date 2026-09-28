@@ -17,6 +17,7 @@ from .presets import PresetError, apply_preset, get_preset, list_presets
 from .onboarding import ensure as ensure_onboarding, status as onboarding_status
 from .profiles import ProfileError, get_profile, list_profiles, load_profile, set_profile
 from .release import cli as release_cli
+from .self_update import SelfUpdateError, self_update as perform_self_update
 from .work import cli as work_cli
 from .workflow import capabilities as workflow_capabilities, workflow_contract
 from . import workspace_snapshot_cli
@@ -101,6 +102,11 @@ def parser() -> argparse.ArgumentParser:
     onboarding_show.add_argument("--json", action="store_true", dest="json_output")
     doctor = sub.add_parser("doctor", help="check the local zero-dependency runtime")
     doctor.add_argument("--json", action="store_true")
+    self_update = sub.add_parser("self-update", help="freshly discover/download/verify and install Agent DevTools")
+    self_update.add_argument("--version", help="explicit target release; omit to follow canonical handoff")
+    self_update.add_argument("--check", action="store_true", help="read-only update availability check")
+    self_update.add_argument("--timeout", type=float, default=30.0, help="network timeout in seconds")
+    self_update.add_argument("--json", action="store_true", dest="json_output")
     changes = sub.add_parser("changes", help="canonical project change-set and patch discovery")
     changes_cli.configure_parser(changes)
     check = sub.add_parser("check", help="portable verification facade")
@@ -227,6 +233,20 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "doctor":
         return _doctor(args.json)
+    if args.command == "self-update":
+        root = discover_project_root()
+        try:
+            payload = perform_self_update(root, requested_version=args.version, check_only=bool(args.check), timeout=float(args.timeout))
+        except SelfUpdateError as exc:
+            print(f"agent self-update: {exc}", file=sys.stderr)
+            return 2
+        if args.json_output:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            print(f"self-update: {payload['status']} · {payload['currentVersion']} -> {payload['targetVersion']}")
+            if payload.get("performed"):
+                print(f"  installed: {payload.get('installedVersion')}")
+        return 0
     if args.command == "changes":
         return changes_cli.main(discover_project_root(), args)
     if args.command == "check":
