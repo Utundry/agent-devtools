@@ -86,6 +86,28 @@
     },
     {
       "patterns": [
+        "agent_devtools/__init__.py",
+        "agent_devtools/__main__.py",
+        "agent_devtools/bootstrap.py",
+        "agent_devtools/changes.py",
+        "agent_devtools/changes_cli.py",
+        "agent_devtools/handoff.py",
+        "agent_devtools/handoff_cli.py",
+        "agent_devtools/onboarding.py",
+        "agent_devtools/preserve.py",
+        "agent_devtools/profiles.py",
+        "agent_devtools/self_update.py",
+        "agent_devtools/workflow.py",
+        "agent_devtools/workspace_snapshot.py",
+        "agent_devtools/workspace_snapshot_cli.py"
+      ],
+      "impact": [
+        "core"
+      ],
+      "description": "top-level Agent DevTools orchestration/runtime modules"
+    },
+    {
+      "patterns": [
         "docs/**",
         "README.md",
         "CHANGELOG.md",
