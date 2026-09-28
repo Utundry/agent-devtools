@@ -7,8 +7,8 @@ from typing import Any
 from . import __version__
 from .profiles import load_profile
 
-CLI_CONTRACT_VERSION = 8
-WORKFLOW_CONTRACT_VERSION = 4
+CLI_CONTRACT_VERSION = 9
+WORKFLOW_CONTRACT_VERSION = 5
 
 
 def workflow_contract(root: Path) -> dict[str, Any]:
@@ -30,6 +30,7 @@ def workflow_contract(root: Path) -> dict[str, Any]:
             "Agent DevTools orchestrates project-native tools; it does not replace Git, build, test, release, or domain tooling.",
             "Canonical project change discovery includes untracked files governed by the source contract; plain git diff is not a complete handoff inventory.",
             "Session state and caches are disposable; durable project knowledge is tracked in .agent-knowledge/.",
+            "Use preserve for profile-aware portable recovery state; lower-level checkpoint/workspace-snapshot commands remain available when their distinction matters.",
             "Autonomy starts after alignment: ask only about material gaps that are expensive to get wrong; propose a concrete best option and obtain explicit user approval before substantial execution when such gaps exist. If the task is already sufficiently specified, record the no-gap fast path and proceed without a user turn.",
             "Alignment must be explicit in state, not necessarily visible as friction to the user. Never ask a question merely to satisfy the gate.",
         ],
@@ -108,6 +109,7 @@ def capabilities(root: Path) -> dict[str, Any]:
                 "hardWatchdog": profile.verification_mode == "check",
             },
             "resume": True,
+            "preserve": {"create": True, "inspect": True, "restore": True, "profileAware": True, "autoDetectArtifactKind": True},
             "checkpoint": True,
             "workspaceSnapshot": {"create": not profile.development, "inspect": True, "restore": not profile.development},
             "release": profile.development,

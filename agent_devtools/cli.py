@@ -16,6 +16,7 @@ from .project import discover_project_root
 from .presets import PresetError, apply_preset, get_preset, list_presets
 from .onboarding import ensure as ensure_onboarding, status as onboarding_status
 from .profiles import ProfileError, get_profile, list_profiles, load_profile, set_profile
+from . import preserve as preserve_cli
 from .release import cli as release_cli
 from .self_update import SelfUpdateError, self_update as perform_self_update
 from .work import cli as work_cli
@@ -139,6 +140,8 @@ def parser() -> argparse.ArgumentParser:
     work_cli.configure_brief_parser(brief)
     resume = sub.add_parser("resume", help="assemble a timeout/session-recovery briefing")
     work_cli.configure_brief_parser(resume)
+    preserve = sub.add_parser("preserve", help="profile-aware portable work preservation")
+    preserve_cli.configure_parser(preserve)
     checkpoint = sub.add_parser("checkpoint", help="portable unfinished-work recovery bundles")
     work_cli.configure_checkpoint_parser(checkpoint)
     workspace_snapshot = sub.add_parser("workspace-snapshot", help="portable snapshots for non-development workspaces")
@@ -271,6 +274,8 @@ def main(argv: list[str] | None = None) -> int:
         return work_cli.main_brief(discover_project_root(), args, mode="brief")
     if args.command == "resume":
         return work_cli.main_brief(discover_project_root(), args, mode="resume")
+    if args.command == "preserve":
+        return preserve_cli.main(discover_project_root(), args)
     if args.command == "checkpoint":
         return work_cli.main_checkpoint(discover_project_root(), args)
     if args.command == "workspace-snapshot":

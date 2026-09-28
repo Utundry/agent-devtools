@@ -121,6 +121,16 @@ Do not memorize syntax from examples. `workflow show`, `capabilities --json`, an
 
 `work complete` is the preferred completion action. In development profiles it validates task/alignment/blocker and durable-knowledge gates, runs the affected verification policy, requires fresh PASS evidence, and only then closes the work session. In non-development profiles it never fabricates semantic verification: a fresh explicit verification record is still required. `work finish` remains the lower-level primitive when verification was already collected separately.
 
+### Preserving unfinished work
+
+Use one profile-aware command instead of remembering the checkpoint/snapshot distinction:
+
+```bash
+python devtools/agent/agent.py preserve create
+```
+
+Development profiles produce an unfinished-work checkpoint; research, analysis, document, and general profiles produce a portable workspace snapshot. `preserve inspect` and `preserve restore` auto-detect the artifact kind from its internal metadata. Lower-level `checkpoint` and `workspace-snapshot` commands remain available.
+
 ## Design constraints
 
 Agent DevTools deliberately keeps a small trust and resource footprint:
