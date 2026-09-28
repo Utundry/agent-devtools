@@ -18,6 +18,11 @@ from pathlib import Path
 from typing import Iterable
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from agent_devtools.changes import ChangeSetError, discover_changes
+
 VERSION_FILE = ROOT / "agent_devtools" / "__init__.py"
 README = ROOT / "README.md"
 HANDOFF = ROOT / "AGENT-START-HERE.md"
@@ -74,9 +79,30 @@ def _git_head() -> str:
     return _capture(["git", "rev-parse", "HEAD"])
 
 
+def _change_report() -> dict:
+    try:
+        report = discover_changes(ROOT)
+    except ChangeSetError as exc:
+        raise ReleaseBuilderError(f"cannot inspect release working tree: {exc}") from exc
+    if not report.get("available"):
+        raise ReleaseBuilderError(
+            "cannot inspect release working tree: " + str(report.get("reason") or "unavailable")
+        )
+    return report
+
+
 def _git_clean() -> None:
-    if _capture(["git", "status", "--porcelain"]):
-        raise ReleaseBuilderError("release preparation requires a clean Git working tree")
+    report = _change_report()
+    blocked = [
+        str(row.get("path"))
+        for row in report.get("entries", [])
+        if not bool(row.get("workspaceLocal"))
+    ]
+    if blocked:
+        raise ReleaseBuilderError(
+            "release preparation requires no unmarked Git working-tree changes; "
+            "blocked: " + ", ".join(blocked)
+        )
 
 
 def _current_branch() -> str:
@@ -177,17 +203,33 @@ def _publish_preflight(version: str, remote: str) -> tuple[str, str]:
     return branch, local_head
 
 
-def _changed_paths() -> tuple[str, ...]:
-    result: list[str] = []
-    for raw in _capture(["git", "status", "--porcelain"]).splitlines():
-        if not raw.strip():
+def _changed_paths(*, include_workspace_local: bool = False) -> tuple[str, ...]:
+    report = _change_report()
+    return tuple(
+        str(row.get("path"))
+        for row in report.get("entries", [])
+        if include_workspace_local or not bool(row.get("workspaceLocal"))
+    )
+
+
+def _workspace_local_snapshot() -> dict[Path, tuple[bytes, int]]:
+    report = _change_report()
+    snapshot: dict[Path, tuple[bytes, int]] = {}
+    for row in report.get("entries", []):
+        if not bool(row.get("workspaceLocal")):
             continue
-        value = raw[3:].strip() if len(raw) >= 4 else raw.strip()
-        if " -> " in value:
-            value = value.split(" -> ", 1)[1].strip()
-        if value:
-            result.append(value.replace("\\", "/"))
-    return tuple(result)
+        rel = str(row.get("path") or "")
+        path = ROOT / rel
+        if path.is_file():
+            snapshot[path] = (path.read_bytes(), path.stat().st_mode & 0o777)
+    return snapshot
+
+
+def _restore_workspace_local_snapshot(snapshot: dict[Path, tuple[bytes, int]]) -> None:
+    for path, (data, mode) in snapshot.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+        path.chmod(mode)
 
 
 def _assert_only_managed_release_changes() -> None:
@@ -232,7 +274,11 @@ def _remote_refs(remote: str, branch: str, version: str) -> dict[str, str]:
     return refs
 
 
-def _rollback_local_publish(original_head: str, tag: str) -> None:
+def _rollback_local_publish(
+    original_head: str,
+    tag: str,
+    workspace_local_snapshot: dict[Path, tuple[bytes, int]] | None = None,
+) -> None:
     subprocess.run(
         ["git", "tag", "-d", tag],
         cwd=ROOT,
@@ -247,6 +293,8 @@ def _rollback_local_publish(original_head: str, tag: str) -> None:
         stderr=subprocess.DEVNULL,
         check=False,
     )
+    if workspace_local_snapshot:
+        _restore_workspace_local_snapshot(workspace_local_snapshot)
 
 
 def _publish_release(
@@ -255,6 +303,7 @@ def _publish_release(
     remote: str,
     branch: str,
     original_head: str,
+    workspace_local_snapshot: dict[Path, tuple[bytes, int]] | None = None,
 ) -> dict[str, str]:
     tag = f"v{version}"
     _assert_only_managed_release_changes()
@@ -272,7 +321,7 @@ def _publish_release(
             f"refs/tags/{tag}:refs/tags/{tag}",
         ])
     except Exception:
-        _rollback_local_publish(original_head, tag)
+        _rollback_local_publish(original_head, tag, workspace_local_snapshot)
         raise
 
     refs = _remote_refs(remote, branch, version)
@@ -292,7 +341,7 @@ def _payload(
     *,
     publication: dict[str, str] | None = None,
 ) -> dict[str, object]:
-    changed = _capture(["git", "status", "--short"])
+    changed = _changed_paths()
     payload: dict[str, object] = {
         "format": "agent-devtools-public-release-candidate",
         "formatVersion": 2,
@@ -309,7 +358,7 @@ def _payload(
             "sha256": _sha256(KIT),
             "bytes": KIT.stat().st_size,
         },
-        "changedFiles": [line[3:] for line in changed.splitlines() if len(line) >= 4],
+        "changedFiles": list(changed),
     }
     if publication:
         payload["publication"] = publication
@@ -353,6 +402,7 @@ def main(argv: Iterable[str] | None = None) -> int:
             raise ReleaseBuilderError("--dry-run and --publish are mutually exclusive")
 
         _git_clean()
+        workspace_local_snapshot = _workspace_local_snapshot()
         previous = _current_version()
         if version == previous:
             raise ReleaseBuilderError(
@@ -388,6 +438,7 @@ def main(argv: Iterable[str] | None = None) -> int:
                         remote=str(args.remote),
                         branch=branch,
                         original_head=original_head,
+                        workspace_local_snapshot=workspace_local_snapshot,
                     )
                 payload = _payload(version, previous, publication=publication)
             except Exception:
