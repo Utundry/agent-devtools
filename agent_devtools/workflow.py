@@ -7,8 +7,8 @@ from typing import Any
 from . import __version__
 from .profiles import load_profile
 
-CLI_CONTRACT_VERSION = 4
-WORKFLOW_CONTRACT_VERSION = 1
+CLI_CONTRACT_VERSION = 5
+WORKFLOW_CONTRACT_VERSION = 2
 
 
 def workflow_contract(root: Path) -> dict[str, Any]:
@@ -30,6 +30,7 @@ def workflow_contract(root: Path) -> dict[str, Any]:
             "Agent DevTools orchestrates project-native tools; it does not replace Git, build, test, release, or domain tooling.",
             "Canonical project change discovery includes untracked files governed by the source contract; plain git diff is not a complete handoff inventory.",
             "Session state and caches are disposable; durable project knowledge is tracked in .agent-knowledge/.",
+            "Autonomy starts after alignment: ask only about material gaps that are expensive to get wrong; propose a concrete best option and obtain explicit user approval before substantial execution when such gaps exist.",
         ],
         "phases": [
             {
@@ -43,6 +44,12 @@ def workflow_contract(root: Path) -> dict[str, Any]:
                 "required": True,
                 "purpose": "Start or continue an explicit work session with a goal and next action.",
                 "commands": ["work start"],
+            },
+            {
+                "id": "align",
+                "required": True,
+                "purpose": "Resolve material task gaps before substantial execution. Ask only what is expensive to get wrong, propose concrete options, and obtain explicit user approval when material gaps exist; otherwise record that no material gaps remain.",
+                "commands": ["work align"],
             },
             {
                 "id": "work",
@@ -84,7 +91,7 @@ def capabilities(root: Path) -> dict[str, Any]:
         "commands": {
             "workflow": {"show": True},
             "capabilities": {"json": True},
-            "work": {"start": True, "status": True, "finish": True},
+            "work": {"start": True, "align": True, "status": True, "finish": True, "taskGapGate": True},
             "cognition": {"decision": True, "finding": True, "assumption": True, "requirement": not profile.development, "openQuestion": not profile.development, "evidence": not profile.development, "blocker": True, "resolveBlocker": True, "status": True},
             "knowledge": {"promote": True, "validate": True, "status": True, "researchKinds": not profile.development, "softContradictionWarnings": True},
             "source": {"add": not profile.development, "list": not profile.development},

@@ -60,6 +60,14 @@ def _base_state(goal: str) -> dict[str, Any]:
         "blockers": [],
         "changedFiles": [],
         "verification": [],
+        "taskAlignment": {
+            "status": "pending",
+            "materialGaps": [],
+            "proposal": "",
+            "resolution": "",
+            "explicitUserApproval": False,
+            "updatedAtUtc": now,
+        },
         "summary": "",
         "nextStep": "",
         "status": "active",
@@ -85,6 +93,34 @@ def validate_task_state(payload: Any) -> dict[str, Any]:
             raise TaskStateError(f"task state {key} must be an array")
         clean[key] = _strings(str(item) for item in value)
     clean["summary"] = str(clean.get("summary") or "").strip()
+    raw_alignment = clean.get("taskAlignment")
+    if raw_alignment is None:
+        # Backward compatibility for task.json created before the task-gap gate.
+        # Existing sessions must remain resumable after a runtime update.
+        raw_alignment = {
+            "status": "ready",
+            "materialGaps": [],
+            "proposal": "",
+            "resolution": "legacy task state created before task-gap alignment",
+            "explicitUserApproval": False,
+            "updatedAtUtc": str(clean.get("updatedAtUtc") or ""),
+        }
+    if not isinstance(raw_alignment, dict):
+        raise TaskStateError("task state taskAlignment must be an object")
+    alignment = dict(raw_alignment)
+    alignment_status = str(alignment.get("status") or "pending").strip()
+    if alignment_status not in {"pending", "clarification-required", "ready"}:
+        raise TaskStateError("task alignment status must be pending, clarification-required, or ready")
+    gaps = alignment.get("materialGaps", [])
+    if not isinstance(gaps, list):
+        raise TaskStateError("task alignment materialGaps must be an array")
+    alignment["status"] = alignment_status
+    alignment["materialGaps"] = _strings(str(item) for item in gaps)
+    alignment["proposal"] = str(alignment.get("proposal") or "").strip()
+    alignment["resolution"] = str(alignment.get("resolution") or "").strip()
+    alignment["explicitUserApproval"] = bool(alignment.get("explicitUserApproval", False))
+    alignment["updatedAtUtc"] = str(alignment.get("updatedAtUtc") or clean.get("updatedAtUtc") or "")
+    clean["taskAlignment"] = alignment
     status = str(clean.get("status") or "active").strip()
     if status not in {"active", "completed"}:
         raise TaskStateError("task state status must be active or completed")
@@ -92,6 +128,72 @@ def validate_task_state(payload: Any) -> dict[str, Any]:
     clean["completedAtUtc"] = clean.get("completedAtUtc") or None
     clean["nextStep"] = str(clean.get("nextStep") or "").strip()
     return clean
+
+
+def task_alignment_ready(state: dict[str, Any]) -> bool:
+    alignment = state.get("taskAlignment")
+    return isinstance(alignment, dict) and str(alignment.get("status") or "") == "ready"
+
+
+def align_task(
+    root: Path,
+    *,
+    material_gaps: Iterable[str] = (),
+    proposal: str = "",
+    user_approved: bool = False,
+    no_material_gaps: bool = False,
+    resolution: str = "",
+) -> dict[str, Any]:
+    """Resolve the lightweight task-gap gate before substantial execution."""
+    state = load_task_state(root)
+    if state is None:
+        raise TaskStateError("no task state exists; use work start first")
+    gaps = _strings(material_gaps)
+    modes = int(bool(gaps)) + int(bool(user_approved)) + int(bool(no_material_gaps))
+    if modes != 1:
+        raise TaskStateError("choose exactly one alignment action: material gaps, user approval, or no material gaps")
+    now = utc_now()
+    current = dict(state.get("taskAlignment") or {})
+    if gaps:
+        proposed = proposal.strip()
+        if not proposed:
+            raise TaskStateError("material task gaps require a concrete proposal before asking the user")
+        state["taskAlignment"] = {
+            "status": "clarification-required",
+            "materialGaps": gaps,
+            "proposal": proposed,
+            "resolution": "",
+            "explicitUserApproval": False,
+            "updatedAtUtc": now,
+        }
+    elif user_approved:
+        if str(current.get("status") or "") != "clarification-required" or not current.get("materialGaps"):
+            raise TaskStateError("user approval requires previously recorded material task gaps")
+        resolved = resolution.strip()
+        if not resolved:
+            raise TaskStateError("user approval requires a compact resolution summary")
+        current.update({
+            "status": "ready",
+            "resolution": resolved,
+            "explicitUserApproval": True,
+            "updatedAtUtc": now,
+        })
+        state["taskAlignment"] = current
+    else:
+        resolved = resolution.strip()
+        if not resolved:
+            raise TaskStateError("no-material-gaps alignment requires a compact rationale")
+        state["taskAlignment"] = {
+            "status": "ready",
+            "materialGaps": [],
+            "proposal": "",
+            "resolution": resolved,
+            "explicitUserApproval": False,
+            "updatedAtUtc": now,
+        }
+    state["updatedAtUtc"] = now
+    atomic_json_write(task_state_path(root), state)
+    return validate_task_state(state)
 
 
 def load_task_state(root: Path) -> dict[str, Any] | None:
@@ -154,7 +256,16 @@ def update_task(
         value = goal.strip()
         if not value:
             raise TaskStateError("task goal cannot be empty")
-        state["goal"] = value
+        if value != state.get("goal"):
+            state["goal"] = value
+            state["taskAlignment"] = {
+                "status": "pending",
+                "materialGaps": [],
+                "proposal": "",
+                "resolution": "goal changed after prior alignment",
+                "explicitUserApproval": False,
+                "updatedAtUtc": utc_now(),
+            }
     additions = {
         "scope": add_scope,
         "constraints": add_constraints,
@@ -197,6 +308,8 @@ def complete_task(root: Path, *, summary: str | None = None) -> dict[str, Any]:
         raise TaskStateError("no task state exists; use task start first")
     if state.get("blockers"):
         raise TaskStateError("cannot finish task with unresolved blockers")
+    if not task_alignment_ready(state):
+        raise TaskStateError("cannot finish task before the task-gap alignment gate is ready")
     if summary is not None:
         state["summary"] = summary.strip()
     state["status"] = "completed"

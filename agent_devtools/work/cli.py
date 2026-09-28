@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .brief import _latest_run, build_brief, render_brief
 from .checkpoint import CheckpointError, create_checkpoint, inspect_checkpoint, restore_checkpoint
-from .state import TaskStateError, clear_task, complete_task, load_task_state, start_task, update_task
+from .state import TaskStateError, align_task, clear_task, complete_task, load_task_state, start_task, update_task
 from .knowledge import KnowledgeError, conflicts as knowledge_conflicts, effective_statuses, load_records as load_knowledge_records, promote as promote_knowledge, validate_knowledge, soft_contradictions
 from .verification import VerificationError, latest_verification, record_verification, verification_status, record_research_bundle
 from .sources import SourceError, add_source, list_sources
@@ -172,6 +172,15 @@ def configure_work_parser(parser: argparse.ArgumentParser) -> None:
     start.add_argument("--budget", type=int, default=1400)
     start.add_argument("--json", action="store_true", dest="json_output")
 
+    align = sub.add_parser("align", help="resolve material task gaps before substantial execution")
+    action = align.add_mutually_exclusive_group(required=True)
+    action.add_argument("--gap", action="append", default=[], help="material ambiguity that is expensive to get wrong; repeat as needed")
+    action.add_argument("--user-approved", action="store_true", help="record explicit user approval after clarification")
+    action.add_argument("--no-material-gaps", action="store_true", help="record that the task is already sufficiently specified")
+    align.add_argument("--proposal", default="", help="recommended concrete option(s) presented to the user")
+    align.add_argument("--summary", default="", help="approval/resolution summary or no-gap rationale")
+    align.add_argument("--json", action="store_true", dest="json_output")
+
     status = sub.add_parser("status", help="show cognition + context + check-plan briefing")
     status.add_argument("--budget", type=int, default=1400)
     status.add_argument("--before", type=Path, default=None)
@@ -189,6 +198,22 @@ def main_work(root: Path, args: argparse.Namespace) -> int:
             start_task(root, goal=args.goal, scope=args.scope, constraints=args.constraint,
                        definition_of_done=args.done, next_step=args.next_action, replace=args.replace)
             payload = build_brief(root, mode="work", budget=args.budget, include_context=True)
+        elif args.work_command == "align":
+            state = align_task(
+                root,
+                material_gaps=args.gap,
+                proposal=args.proposal,
+                user_approved=args.user_approved,
+                no_material_gaps=args.no_material_gaps,
+                resolution=args.summary,
+            )
+            payload = {
+                "format": "agent-devtools-work-alignment",
+                "formatVersion": 1,
+                "taskId": state.get("taskId"),
+                "goal": state.get("goal"),
+                "taskAlignment": state.get("taskAlignment"),
+            }
         elif args.work_command == "status":
             payload = build_brief(root, mode="work", budget=args.budget,
                                   include_context=not args.no_context, before_root=args.before)
@@ -219,6 +244,15 @@ def main_work(root: Path, args: argparse.Namespace) -> int:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     elif args.work_command == "finish":
         print(f"PASS: work completed · {payload['task']['goal']}")
+    elif args.work_command == "align":
+        alignment = payload["taskAlignment"]
+        print(f"Task alignment: {alignment['status']}")
+        if alignment.get("materialGaps"):
+            print("Material gaps: " + "; ".join(alignment["materialGaps"]))
+        if alignment.get("proposal"):
+            print("Proposal: " + alignment["proposal"])
+        if alignment.get("resolution"):
+            print("Resolution: " + alignment["resolution"])
     else:
         print(render_brief(payload))
     return 0
