@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -8,7 +10,10 @@ from agent_devtools.check.config import CheckConfig, CheckConfigError, load_chec
 from agent_devtools.core.pathmatch import matches_any
 
 CHANGESET_FORMAT = "agent-devtools-change-set"
-CHANGESET_VERSION = 1
+CHANGESET_VERSION = 2
+LOCAL_MARKS_FORMAT = "agent-devtools-workspace-local-changes"
+LOCAL_MARKS_VERSION = 1
+LOCAL_MARKS_FILE = "agent-devtools-local-changes.json"
 
 
 class ChangeSetError(RuntimeError):
@@ -39,6 +44,132 @@ def _normalize(path: str) -> str:
     return value
 
 
+
+def _local_marks_path(root: Path) -> Path:
+    return root / ".git" / LOCAL_MARKS_FILE
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _safe_rel(raw: str) -> str:
+    rel = _normalize(str(raw).strip())
+    candidate = Path(rel)
+    if not rel or candidate.is_absolute() or ".." in candidate.parts:
+        raise ChangeSetError(f"workspace-local path must stay inside the project root: {raw!r}")
+    return rel
+
+
+def load_workspace_local_marks(root: Path) -> dict[str, dict[str, str]]:
+    path = _local_marks_path(root.resolve())
+    if not path.exists():
+        return {}
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ChangeSetError(f"workspace-local mark file is unreadable: {exc}") from exc
+    if not isinstance(raw, dict) or raw.get("format") != LOCAL_MARKS_FORMAT or raw.get("formatVersion") != LOCAL_MARKS_VERSION:
+        raise ChangeSetError("workspace-local mark file has an unsupported format")
+    items = raw.get("paths", {})
+    if not isinstance(items, dict):
+        raise ChangeSetError("workspace-local mark file paths must be an object")
+    result: dict[str, dict[str, str]] = {}
+    for raw_rel, value in items.items():
+        rel = _safe_rel(str(raw_rel))
+        if not isinstance(value, dict):
+            raise ChangeSetError(f"workspace-local mark for {rel} must be an object")
+        sha = str(value.get("sha256") or "").strip().lower()
+        if len(sha) != 64 or any(ch not in "0123456789abcdef" for ch in sha):
+            raise ChangeSetError(f"workspace-local mark for {rel} has invalid sha256")
+        result[rel] = {"sha256": sha, "reason": str(value.get("reason") or "").strip()}
+    return result
+
+
+def _write_workspace_local_marks(root: Path, marks: dict[str, dict[str, str]]) -> None:
+    path = _local_marks_path(root.resolve())
+    payload = {
+        "format": LOCAL_MARKS_FORMAT,
+        "formatVersion": LOCAL_MARKS_VERSION,
+        "paths": {key: marks[key] for key in sorted(marks)},
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_suffix(path.suffix + ".tmp")
+    temp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    temp.replace(path)
+
+
+def mark_workspace_local(root: Path, paths: list[str] | tuple[str, ...], *, reason: str = "") -> dict[str, Any]:
+    root = root.resolve()
+    if not (root / ".git").exists():
+        raise ChangeSetError("workspace-local marks require a Git working tree")
+    marks = load_workspace_local_marks(root)
+    marked: list[str] = []
+    for raw in paths:
+        rel = _safe_rel(raw)
+        path = root / rel
+        if not path.is_file():
+            raise ChangeSetError(f"workspace-local path is not a regular file: {rel}")
+        marks[rel] = {"sha256": _sha256_file(path), "reason": str(reason).strip()}
+        marked.append(rel)
+    _write_workspace_local_marks(root, marks)
+    return {"format": LOCAL_MARKS_FORMAT, "formatVersion": LOCAL_MARKS_VERSION, "marked": sorted(marked), "path": str(_local_marks_path(root))}
+
+
+def unmark_workspace_local(root: Path, paths: list[str] | tuple[str, ...]) -> dict[str, Any]:
+    root = root.resolve()
+    marks = load_workspace_local_marks(root)
+    removed: list[str] = []
+    for raw in paths:
+        rel = _safe_rel(raw)
+        if rel in marks:
+            marks.pop(rel)
+            removed.append(rel)
+    _write_workspace_local_marks(root, marks)
+    return {"format": LOCAL_MARKS_FORMAT, "formatVersion": LOCAL_MARKS_VERSION, "removed": sorted(removed), "path": str(_local_marks_path(root))}
+
+
+def workspace_local_status(root: Path) -> dict[str, Any]:
+    root = root.resolve()
+    marks = load_workspace_local_marks(root)
+    rows: list[dict[str, Any]] = []
+    for rel in sorted(marks):
+        path = root / rel
+        current = _sha256_file(path) if path.is_file() else None
+        expected = marks[rel]["sha256"]
+        rows.append({
+            "path": rel,
+            "sha256": expected,
+            "reason": marks[rel].get("reason", ""),
+            "matches": current == expected,
+            "currentSha256": current,
+        })
+    return {
+        "format": LOCAL_MARKS_FORMAT,
+        "formatVersion": LOCAL_MARKS_VERSION,
+        "path": str(_local_marks_path(root)),
+        "marks": rows,
+        "count": len(rows),
+        "matching": sum(1 for row in rows if row["matches"]),
+    }
+
+
+def _workspace_local_match(root: Path, rel: str, marks: dict[str, dict[str, str]]) -> bool:
+    item = marks.get(rel)
+    if item is None:
+        return False
+    path = root / rel
+    if not path.is_file():
+        return False
+    try:
+        return _sha256_file(path) == item["sha256"]
+    except OSError:
+        return False
+
 def _canonical_path(config: CheckConfig, rel: str) -> bool:
     if config.ignore and matches_any(rel, config.ignore):
         return False
@@ -62,6 +193,7 @@ def discover_changes(root: Path, config_path: Path | None = None) -> dict[str, A
         }
     try:
         config = load_check_config(root, config_path)
+        local_marks = load_workspace_local_marks(root)
     except CheckConfigError as exc:
         raise ChangeSetError(str(exc)) from exc
 
@@ -94,11 +226,15 @@ def discover_changes(root: Path, config_path: Path | None = None) -> dict[str, A
         if not status or not rel:
             continue
         code = status[0]
-        canonical = _canonical_path(config, rel)
+        source_canonical = _canonical_path(config, rel)
+        workspace_local = _workspace_local_match(root, rel, local_marks)
+        canonical = source_canonical and not workspace_local
         rows[rel] = {
             "path": rel,
             "status": status_names.get(code, code),
             "canonical": canonical,
+            "sourceCanonical": source_canonical,
+            "workspaceLocal": workspace_local,
             "patchIncluded": canonical,
             "durableKnowledge": rel.startswith(".agent-knowledge/") and rel.endswith(".json"),
         }
@@ -107,11 +243,15 @@ def discover_changes(root: Path, config_path: Path | None = None) -> dict[str, A
         rel = _normalize(raw.strip())
         if not rel:
             continue
-        canonical = _canonical_path(config, rel)
+        source_canonical = _canonical_path(config, rel)
+        workspace_local = _workspace_local_match(root, rel, local_marks)
+        canonical = source_canonical and not workspace_local
         rows.setdefault(rel, {
             "path": rel,
             "status": "untracked",
             "canonical": canonical,
+            "sourceCanonical": source_canonical,
+            "workspaceLocal": workspace_local,
             "patchIncluded": canonical,
             "durableKnowledge": rel.startswith(".agent-knowledge/") and rel.endswith(".json"),
         })
@@ -119,6 +259,12 @@ def discover_changes(root: Path, config_path: Path | None = None) -> dict[str, A
     entries = [rows[path] for path in sorted(rows)]
     canonical = [row["path"] for row in entries if row["canonical"]]
     canonical_untracked = [row["path"] for row in entries if row["canonical"] and row["status"] == "untracked"]
+    workspace_local = [row["path"] for row in entries if row.get("workspaceLocal")]
+    changed_paths = {row["path"] for row in entries}
+    mark_mismatches = [
+        rel for rel in sorted(local_marks)
+        if rel in changed_paths and not _workspace_local_match(root, rel, local_marks)
+    ]
     knowledge = [row["path"] for row in entries if row["durableKnowledge"]]
     return {
         "format": CHANGESET_FORMAT,
@@ -128,8 +274,11 @@ def discover_changes(root: Path, config_path: Path | None = None) -> dict[str, A
         "entries": entries,
         "canonicalChangedFiles": canonical,
         "canonicalUntrackedFiles": canonical_untracked,
+        "workspaceLocalChangedFiles": workspace_local,
+        "workspaceLocalMarkMismatches": mark_mismatches,
         "knowledgeChangedFiles": knowledge,
         "canonicalUntrackedCount": len(canonical_untracked),
+        "workspaceLocalChangedCount": len(workspace_local),
         "knowledgeChangedCount": len(knowledge),
     }
 
@@ -150,10 +299,17 @@ def build_patch(root: Path, config_path: Path | None = None) -> tuple[bytes, dic
     if not report.get("available"):
         raise ChangeSetError(f"cannot build project patch: {report.get('reason')}")
 
-    tracked = _run_git(root, ["diff", "--binary", "HEAD", "--"], binary=True)
-    if tracked.returncode != 0:
-        raise ChangeSetError("git diff failed while building project patch")
-    chunks: list[bytes] = [tracked.stdout]
+    canonical_tracked = [
+        row["path"]
+        for row in report["entries"]
+        if row["canonical"] and row["status"] != "untracked"
+    ]
+    chunks: list[bytes] = []
+    if canonical_tracked:
+        tracked = _run_git(root, ["diff", "--binary", "HEAD", "--", *canonical_tracked], binary=True)
+        if tracked.returncode != 0:
+            raise ChangeSetError("git diff failed while building canonical project patch")
+        chunks.append(tracked.stdout)
 
     for rel in report["canonicalUntrackedFiles"]:
         path = root / rel

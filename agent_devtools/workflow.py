@@ -7,7 +7,7 @@ from typing import Any
 from . import __version__
 from .profiles import load_profile
 
-CLI_CONTRACT_VERSION = 13
+CLI_CONTRACT_VERSION = 14
 WORKFLOW_CONTRACT_VERSION = 8
 
 
@@ -101,7 +101,7 @@ def capabilities(root: Path) -> dict[str, Any]:
             "knowledge": {"promote": True, "validate": True, "status": True, "researchKinds": not profile.development, "softContradictionWarnings": True, "promotionRequired": False},
             "source": {"add": not profile.development, "list": not profile.development},
             "context": {"available": True, "affected": profile.development},
-            "changes": {"status": profile.development, "patch": profile.development, "canonicalUntracked": profile.development},
+            "changes": {"status": profile.development, "patch": profile.development, "canonicalUntracked": profile.development, "workspaceLocalMarks": profile.development},
             "verification": {
                 "check": profile.verification_mode == "check",
                 "record": profile.verification_mode == "record",
