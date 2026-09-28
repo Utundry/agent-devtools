@@ -70,6 +70,32 @@ class BootstrapBuilderTests(unittest.TestCase):
         self.assertEqual("b" * 64, updated["payloadFingerprint"])
         self.assertEqual("keep", updated["note"])
 
+    def test_porcelain_dirty_paths_allow_exact_generated_bootstrap_outputs(self) -> None:
+        status = (
+            " M bootstrap/AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py\n"
+            " M bootstrap/agent-devtools-bootstrap-kit.zip\n"
+        )
+        paths = builder._dirty_paths_from_porcelain(status)
+        self.assertEqual(
+            (
+                "bootstrap/AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py",
+                "bootstrap/agent-devtools-bootstrap-kit.zip",
+            ),
+            paths,
+        )
+
+    def test_porcelain_dirty_paths_expose_non_generated_source_changes(self) -> None:
+        status = (
+            " M bootstrap/AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py\n"
+            " M agent_devtools/work/state.py\n"
+        )
+        paths = builder._dirty_paths_from_porcelain(status)
+        allowed = {
+            "bootstrap/AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py",
+            "bootstrap/agent-devtools-bootstrap-kit.zip",
+        }
+        self.assertEqual(["agent_devtools/work/state.py"], [path for path in paths if path not in allowed])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -95,7 +95,29 @@ def _git_head(root: Path) -> str | None:
     return value if proc.returncode == 0 and value else None
 
 
-def _assert_clean_git(root: Path) -> None:
+def _dirty_paths_from_porcelain(text: str) -> tuple[str, ...]:
+    paths: list[str] = []
+    for raw in text.splitlines():
+        if not raw.strip():
+            continue
+        if len(raw) < 4:
+            paths.append(raw.strip())
+            continue
+        value = raw[3:]
+        if " -> " in value:
+            before, after = value.split(" -> ", 1)
+            for item in (before, after):
+                item = item.strip()
+                if item and item not in paths:
+                    paths.append(item)
+        else:
+            value = value.strip()
+            if value and value not in paths:
+                paths.append(value)
+    return tuple(paths)
+
+
+def _assert_clean_git(root: Path, *, allowed_paths: Iterable[str] = ()) -> None:
     try:
         proc = subprocess.run(
             ["git", "-C", str(root), "status", "--porcelain"],
@@ -109,10 +131,19 @@ def _assert_clean_git(root: Path) -> None:
         raise BootstrapBuildError(f"cannot inspect Git working tree: {exc}") from exc
     if proc.returncode != 0:
         raise BootstrapBuildError("cannot inspect Git working tree")
-    if proc.stdout.strip():
+    allowed = {str(item).replace("\\", "/").lstrip("./") for item in allowed_paths}
+    dirty = _dirty_paths_from_porcelain(proc.stdout)
+    unexpected = [
+        path for path in dirty
+        if path.replace("\\", "/").lstrip("./") not in allowed
+    ]
+    if unexpected:
+        preview = ", ".join(unexpected[:8])
+        suffix = f" (+{len(unexpected) - 8} more)" if len(unexpected) > 8 else ""
         raise BootstrapBuildError(
             "working tree is not clean; commit the exact source candidate before rebuilding bootstrap "
             "or pass --allow-dirty for deliberate local development"
+            f"; unexpected dirty path(s): {preview}{suffix}"
         )
 
 
@@ -481,7 +512,16 @@ def main(argv: Iterable[str] | None = None) -> int:
     args = parser().parse_args(list(argv) if argv is not None else None)
     try:
         if not args.allow_dirty:
-            _assert_clean_git(ROOT)
+            allowed_dirty = ()
+            if args.check:
+                # A normal build intentionally changes these two derived artifacts.
+                # --check must be able to validate that exact post-build state while
+                # still refusing every source/config/test change.
+                allowed_dirty = (
+                    DEFAULT_KIT.relative_to(ROOT).as_posix(),
+                    DEFAULT_INSTALLER.relative_to(ROOT).as_posix(),
+                )
+            _assert_clean_git(ROOT, allowed_paths=allowed_dirty)
         if not DEFAULT_KIT.is_file():
             raise BootstrapBuildError(f"bootstrap template kit is missing: {DEFAULT_KIT}")
         template = DEFAULT_KIT.read_bytes()
