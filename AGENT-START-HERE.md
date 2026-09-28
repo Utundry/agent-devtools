@@ -12,7 +12,7 @@
 1. Work from the intended workspace root.
 2. Download the version-pinned bootstrap below as `AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py`. **Always overwrite any existing local file with that name; never reuse a previously downloaded bootstrap merely because the filename matches.**
 
-   https://raw.githubusercontent.com/Utundry/agent-devtools/v0.8.2/bootstrap/AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py
+   https://raw.githubusercontent.com/Utundry/agent-devtools/v0.8.3/bootstrap/AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py
 
 3. Before installation/update, self-check the freshly downloaded file:
 
