@@ -111,7 +111,7 @@ Agent DevTools is intentionally a harness, not an autonomous platform. Its main 
 Typical development workflow:
 
 ```bash
-python devtools/agent/agent.py work start --goal "..." --next-action "..."
+python devtools/agent/agent.py work enter --goal "..." --next-action "..." --no-material-gaps
 python devtools/agent/agent.py context affected
 python devtools/agent/agent.py check plan --profile affected --explain
 python devtools/agent/agent.py work complete
@@ -120,6 +120,8 @@ python devtools/agent/agent.py work complete
 Do not memorize syntax from examples. `workflow show`, `capabilities --json`, and CLI `--help` are authoritative for the installed version.
 
 `work complete` is the preferred completion action. In development profiles it validates task/alignment/blocker and durable-knowledge gates, runs the affected verification policy, requires fresh PASS evidence, and only then closes the work session. In non-development profiles it never fabricates semantic verification: a fresh explicit verification record is still required. `work finish` remains the lower-level primitive when verification was already collected separately.
+
+`work enter` is the preferred lifecycle-aware entry action. With an active task it resumes and emits a fresh brief; with `--goal` it starts a new task; with `--handoff <bundle>` it restores verified transferred state. `--no-material-gaps` keeps the frictionless alignment fast path explicit rather than inferred by the runtime.
 
 ### Preserving unfinished work
 

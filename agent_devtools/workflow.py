@@ -7,8 +7,8 @@ from typing import Any
 from . import __version__
 from .profiles import load_profile
 
-CLI_CONTRACT_VERSION = 10
-WORKFLOW_CONTRACT_VERSION = 6
+CLI_CONTRACT_VERSION = 11
+WORKFLOW_CONTRACT_VERSION = 7
 
 
 def workflow_contract(root: Path) -> dict[str, Any]:
@@ -32,6 +32,7 @@ def workflow_contract(root: Path) -> dict[str, Any]:
             "Session state and caches are disposable; durable project knowledge is tracked in .agent-knowledge/.",
             "Use preserve for profile-aware portable recovery state; lower-level checkpoint/workspace-snapshot commands remain available when their distinction matters.",
             "Use handoff to transfer unfinished work across chats or agents as one manifest-verified bundle containing both recoverable state and a resume briefing.",
+            "Use work enter as the preferred lifecycle-aware entrypoint: resume active work, start an explicit new goal, or restore a handoff without recreating ceremony.",
             "Autonomy starts after alignment: ask only about material gaps that are expensive to get wrong; propose a concrete best option and obtain explicit user approval before substantial execution when such gaps exist. If the task is already sufficiently specified, record the no-gap fast path and proceed without a user turn.",
             "Alignment must be explicit in state, not necessarily visible as friction to the user. Never ask a question merely to satisfy the gate.",
         ],
@@ -40,13 +41,13 @@ def workflow_contract(root: Path) -> dict[str, Any]:
                 "id": "orient",
                 "required": True,
                 "purpose": "Recover project/task context and existing durable knowledge before substantial work.",
-                "commands": ["handoff resume", "resume", "work status", "knowledge status"],
+                "commands": ["work enter", "handoff resume", "resume", "work status", "knowledge status"],
             },
             {
                 "id": "start",
                 "required": True,
                 "purpose": "Start or continue an explicit work session with a goal and next action.",
-                "commands": ["work start"],
+                "commands": ["work enter", "work start"],
             },
             {
                 "id": "align",
@@ -95,7 +96,7 @@ def capabilities(root: Path) -> dict[str, Any]:
             "workflow": {"show": True},
             "capabilities": {"json": True},
             "selfUpdate": {"available": True, "latestDiscovery": True, "explicitVersion": True, "checkOnly": True, "freshDownload": True, "identityVerified": True},
-            "work": {"start": True, "align": True, "status": True, "complete": True, "finish": True, "oneActionCompletion": True, "taskGapGate": True, "noGapFastPath": True},
+            "work": {"enter": True, "start": True, "align": True, "status": True, "complete": True, "finish": True, "oneActionEntry": True, "handoffEntry": True, "oneActionCompletion": True, "taskGapGate": True, "noGapFastPath": True},
             "cognition": {"decision": True, "finding": True, "assumption": True, "requirement": not profile.development, "openQuestion": not profile.development, "evidence": not profile.development, "blocker": True, "resolveBlocker": True, "status": True},
             "knowledge": {"promote": True, "validate": True, "status": True, "researchKinds": not profile.development, "softContradictionWarnings": True, "promotionRequired": False},
             "source": {"add": not profile.development, "list": not profile.development},

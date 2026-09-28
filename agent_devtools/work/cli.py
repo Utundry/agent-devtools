@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .brief import _latest_run, build_brief, render_brief
 from .completion import complete_work
+from .entry import WorkEntryError, enter_work
 from .checkpoint import CheckpointError, create_checkpoint, inspect_checkpoint, restore_checkpoint
 from .state import TaskStateError, align_task, clear_task, complete_task, load_task_state, start_task, update_task
 from .knowledge import KnowledgeError, conflicts as knowledge_conflicts, effective_statuses, load_records as load_knowledge_records, promote as promote_knowledge, validate_knowledge, soft_contradictions
@@ -163,6 +164,20 @@ def main_cognition(root: Path, args: argparse.Namespace) -> int:
 
 def configure_work_parser(parser: argparse.ArgumentParser) -> None:
     sub = parser.add_subparsers(dest="work_command", required=True)
+    enter = sub.add_parser("enter", help="start, resume, or restore work through one lifecycle-aware entrypoint")
+    enter.add_argument("--goal")
+    enter.add_argument("--scope", action="append", default=[])
+    enter.add_argument("--constraint", action="append", default=[])
+    enter.add_argument("--done", action="append", default=[])
+    enter.add_argument("--next-action", default="")
+    enter.add_argument("--no-material-gaps", action="store_true")
+    enter.add_argument("--replace", action="store_true")
+    enter.add_argument("--handoff", type=Path, default=None)
+    enter.add_argument("--force", action="store_true", help="allow divergent restore only with --handoff")
+    enter.add_argument("--budget", type=int, default=1400)
+    enter.add_argument("--no-context", action="store_true")
+    enter.add_argument("--json", action="store_true", dest="json_output")
+
     start = sub.add_parser("start", help="start work and emit an orientation briefing")
     start.add_argument("--goal", required=True)
     start.add_argument("--scope", action="append", default=[])
@@ -201,7 +216,22 @@ def configure_work_parser(parser: argparse.ArgumentParser) -> None:
 
 def main_work(root: Path, args: argparse.Namespace) -> int:
     try:
-        if args.work_command == "start":
+        if args.work_command == "enter":
+            payload = enter_work(
+                root,
+                goal=args.goal,
+                scope=args.scope,
+                constraints=args.constraint,
+                definition_of_done=args.done,
+                next_action=args.next_action,
+                no_material_gaps=bool(args.no_material_gaps),
+                replace=bool(args.replace),
+                handoff=args.handoff,
+                force=bool(args.force),
+                budget=args.budget,
+                include_context=not args.no_context,
+            )
+        elif args.work_command == "start":
             start_task(root, goal=args.goal, scope=args.scope, constraints=args.constraint,
                        definition_of_done=args.done, next_step=args.next_action, replace=args.replace)
             payload = build_brief(root, mode="work", budget=args.budget, include_context=True)
@@ -237,7 +267,7 @@ def main_work(root: Path, args: argparse.Namespace) -> int:
             payload["format"] = "agent-devtools-work-finish"
         else:
             return 2
-    except TaskStateError as exc:
+    except (TaskStateError, WorkEntryError) as exc:
         print(f"agent work: {exc}")
         return 2
     if args.json_output:
@@ -247,6 +277,12 @@ def main_work(root: Path, args: argparse.Namespace) -> int:
         if args.work_command == "complete" and payload.get("verificationPerformed"):
             print("  verification: affected checks executed")
         print(f"  knowledge: {'PASS' if payload['knowledgeValidation']['ok'] else 'RECONCILE'}")
+    elif args.work_command == "enter":
+        print(
+            f"ENTER: {payload['action']} · "
+            f"alignment={'ready' if payload['alignmentReady'] else 'pending'}"
+        )
+        print(render_brief(payload["brief"]))
     elif args.work_command == "align":
         alignment = payload["taskAlignment"]
         print(f"Task alignment: {alignment['status']}")
