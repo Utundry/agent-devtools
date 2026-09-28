@@ -36,6 +36,17 @@ def pid_alive(pid: int) -> bool:
         return True
     except OSError:
         return False
+    if os.name == "posix":
+        stat_path = Path(f"/proc/{pid}/stat")
+        if stat_path.is_file():
+            try:
+                raw = stat_path.read_text(encoding="utf-8", errors="replace")
+                close = raw.rfind(")")
+                fields = raw[close + 1:].strip().split() if close >= 0 else []
+                if fields and fields[0] == "Z":
+                    return False
+            except OSError:
+                pass
     return True
 
 
@@ -61,6 +72,46 @@ def prune_runs(work_root: Path, *, keep_runs: int = 20) -> None:
     runs = sorted((p for p in runs_root.iterdir() if p.is_dir()), key=lambda p: p.stat().st_mtime, reverse=True)
     for old in runs[keep_runs:]:
         shutil.rmtree(old, ignore_errors=True)
+
+
+def _lock_owner(path: Path) -> int:
+    try:
+        return int(path.read_text(encoding="utf-8").strip() or "0")
+    except Exception:
+        return 0
+
+
+def recover_stale_run_state(root: Path) -> dict[str, Any]:
+    work_root = default_work_root(root)
+    lock_path = work_root / "run.lock"
+    active_path = work_root / "active.json"
+    active_removed = False
+    lock_removed = False
+    active_pid = 0
+    active_live = False
+
+    if active_path.is_file():
+        try:
+            payload = json.loads(active_path.read_text(encoding="utf-8"))
+            active_pid = int(payload.get("pid") or 0) if isinstance(payload, dict) else 0
+        except Exception:
+            active_pid = 0
+        active_live = bool(active_pid and pid_alive(active_pid))
+        if not active_live:
+            active_path.unlink(missing_ok=True)
+            active_removed = True
+
+    if lock_path.is_file():
+        owner = _lock_owner(lock_path)
+        if not active_live and (owner <= 0 or not pid_alive(owner)):
+            lock_path.unlink(missing_ok=True)
+            lock_removed = True
+
+    return {
+        "activeRemoved": active_removed,
+        "lockRemoved": lock_removed,
+        "activePid": active_pid or None,
+    }
 
 
 class RunWorkspace:
@@ -94,6 +145,12 @@ class RunWorkspace:
         self.persist()
 
     def _acquire_lock(self) -> None:
+        recover_stale_run_state(self.root)
+        active = active_status(self.root)
+        if active is not None and int(active.get("pid") or 0) != os.getpid():
+            raise WorkspaceError(
+                f"another Agent DevTools run is active (pid {int(active.get('pid') or 0)})"
+            )
         for _ in range(2):
             try:
                 fd = os.open(self.lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
@@ -101,10 +158,7 @@ class RunWorkspace:
                     handle.write(str(os.getpid()) + "\n")
                 return
             except FileExistsError:
-                try:
-                    owner = int(self.lock_path.read_text(encoding="utf-8").strip() or "0")
-                except Exception:
-                    owner = 0
+                owner = _lock_owner(self.lock_path)
                 if owner and pid_alive(owner):
                     raise WorkspaceError(f"another Agent DevTools run is active (pid {owner})")
                 self.lock_path.unlink(missing_ok=True)
@@ -186,6 +240,7 @@ class RunWorkspace:
 
 
 def active_status(root: Path) -> dict[str, Any] | None:
+    recover_stale_run_state(root)
     path = default_work_root(root) / "active.json"
     if not path.is_file():
         return None

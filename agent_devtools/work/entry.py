@@ -38,7 +38,7 @@ def _fast_align_if_requested(root: Path, state: dict[str, Any], requested: bool)
     return align_task(
         root,
         no_material_gaps=True,
-        resolution="Work entry fast path: caller confirmed no material task gaps",
+        resolution="Work entry routine fast path: no material task gaps declared",
     )
 
 
@@ -51,6 +51,7 @@ def enter_work(
     definition_of_done: Iterable[str] = (),
     next_action: str = "",
     no_material_gaps: bool = False,
+    alignment_pending: bool = False,
     replace: bool = False,
     handoff: Path | None = None,
     force: bool = False,
@@ -60,6 +61,8 @@ def enter_work(
     root = root.resolve()
     if budget < 128:
         raise WorkEntryError("--budget must be >= 128")
+    if no_material_gaps and alignment_pending:
+        raise WorkEntryError("--no-material-gaps and --alignment-pending are mutually exclusive")
 
     clean_goal = str(goal or "").strip()
     scopes = _values(scope)
@@ -162,7 +165,11 @@ def enter_work(
         next_step=next_clean,
         replace=bool(state is not None or replace),
     )
-    state = _fast_align_if_requested(root, state, no_material_gaps)
+    state = _fast_align_if_requested(
+        root,
+        state,
+        not alignment_pending,
+    )
     brief = build_brief(
         root,
         mode="work",

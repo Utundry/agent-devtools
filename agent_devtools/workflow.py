@@ -7,8 +7,8 @@ from typing import Any
 from . import __version__
 from .profiles import load_profile
 
-CLI_CONTRACT_VERSION = 11
-WORKFLOW_CONTRACT_VERSION = 7
+CLI_CONTRACT_VERSION = 12
+WORKFLOW_CONTRACT_VERSION = 8
 
 
 def workflow_contract(root: Path) -> dict[str, Any]:
@@ -34,7 +34,7 @@ def workflow_contract(root: Path) -> dict[str, Any]:
             "Use handoff to transfer unfinished work across chats or agents as one manifest-verified bundle containing both recoverable state and a resume briefing.",
             "Use work enter as the preferred lifecycle-aware entrypoint: resume active work, start an explicit new goal, or restore a handoff without recreating ceremony.",
             "Autonomy starts after alignment: ask only about material gaps that are expensive to get wrong; propose a concrete best option and obtain explicit user approval before substantial execution when such gaps exist. If the task is already sufficiently specified, record the no-gap fast path and proceed without a user turn.",
-            "Alignment must be explicit in state, not necessarily visible as friction to the user. Never ask a question merely to satisfy the gate.",
+            "Alignment must be explicit in state, not necessarily visible as friction to the user. A newly created high-level work enter uses the routine no-gap fast path by default; use --alignment-pending when material-gap assessment is genuinely needed. Never ask a question merely to satisfy the gate.",
         ],
         "phases": [
             {
@@ -96,7 +96,7 @@ def capabilities(root: Path) -> dict[str, Any]:
             "workflow": {"show": True},
             "capabilities": {"json": True},
             "selfUpdate": {"available": True, "latestDiscovery": True, "explicitVersion": True, "checkOnly": True, "freshDownload": True, "identityVerified": True},
-            "work": {"enter": True, "start": True, "align": True, "status": True, "complete": True, "finish": True, "oneActionEntry": True, "handoffEntry": True, "oneActionCompletion": True, "taskGapGate": True, "noGapFastPath": True},
+            "work": {"enter": True, "start": True, "align": True, "status": True, "complete": True, "finish": True, "oneActionEntry": True, "handoffEntry": True, "routineEntryFastPath": True, "alignmentPendingOptOut": True, "oneActionCompletion": True, "taskGapGate": True, "noGapFastPath": True},
             "cognition": {"decision": True, "finding": True, "assumption": True, "requirement": not profile.development, "openQuestion": not profile.development, "evidence": not profile.development, "blocker": True, "resolveBlocker": True, "status": True},
             "knowledge": {"promote": True, "validate": True, "status": True, "researchKinds": not profile.development, "softContradictionWarnings": True, "promotionRequired": False},
             "source": {"add": not profile.development, "list": not profile.development},

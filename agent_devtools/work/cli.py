@@ -10,7 +10,7 @@ from .completion import complete_work
 from .entry import WorkEntryError, enter_work
 from .checkpoint import CheckpointError, create_checkpoint, inspect_checkpoint, restore_checkpoint
 from .state import TaskStateError, align_task, clear_task, complete_task, load_task_state, start_task, update_task
-from .knowledge import KnowledgeError, conflicts as knowledge_conflicts, effective_statuses, load_records as load_knowledge_records, promote as promote_knowledge, validate_knowledge, soft_contradictions
+from .knowledge import KnowledgeError, conflicts as knowledge_conflicts, effective_statuses, knowledge_status, load_records as load_knowledge_records, promote as promote_knowledge, validate_knowledge, soft_contradictions
 from .verification import VerificationError, latest_verification, record_verification, verification_status, record_research_bundle
 from .sources import SourceError, add_source, list_sources
 from agent_devtools.profiles import ProfileError, load_profile
@@ -170,7 +170,9 @@ def configure_work_parser(parser: argparse.ArgumentParser) -> None:
     enter.add_argument("--constraint", action="append", default=[])
     enter.add_argument("--done", action="append", default=[])
     enter.add_argument("--next-action", default="")
-    enter.add_argument("--no-material-gaps", action="store_true")
+    alignment_mode = enter.add_mutually_exclusive_group()
+    alignment_mode.add_argument("--no-material-gaps", action="store_true", help="explicitly confirm the routine fast path; retained for compatibility")
+    alignment_mode.add_argument("--alignment-pending", action="store_true", help="keep a new task pending for explicit material-gap assessment")
     enter.add_argument("--replace", action="store_true")
     enter.add_argument("--handoff", type=Path, default=None)
     enter.add_argument("--force", action="store_true", help="allow divergent restore only with --handoff")
@@ -225,6 +227,7 @@ def main_work(root: Path, args: argparse.Namespace) -> int:
                 definition_of_done=args.done,
                 next_action=args.next_action,
                 no_material_gaps=bool(args.no_material_gaps),
+                alignment_pending=bool(args.alignment_pending),
                 replace=bool(args.replace),
                 handoff=args.handoff,
                 force=bool(args.force),
@@ -315,6 +318,8 @@ def configure_knowledge_parser(parser: argparse.ArgumentParser) -> None:
     listing.add_argument("--kind", choices=("decision", "finding", "assumption", "requirement", "open_question", "evidence", "source"))
     listing.add_argument("--subject")
     listing.add_argument("--json", action="store_true", dest="json_output")
+    status = sub.add_parser("status", help="show durable knowledge counts and reconciliation health")
+    status.add_argument("--json", action="store_true", dest="json_output")
     validate = sub.add_parser("validate", help="validate durable knowledge and report unresolved decision conflicts")
     validate.add_argument("--json", action="store_true", dest="json_output")
     conflicts_cmd = sub.add_parser("conflicts", help="show conflicting active decisions for the same subject")
@@ -336,6 +341,8 @@ def main_knowledge(root: Path, args: argparse.Namespace) -> int:
             if args.subject:
                 records = [item for item in records if item["subject"] == args.subject]
             payload = {"records": records, "count": len(records)}
+        elif args.knowledge_command == "status":
+            payload = knowledge_status(root)
         elif args.knowledge_command == "validate":
             payload = validate_knowledge(root)
         else:
@@ -352,6 +359,15 @@ def main_knowledge(root: Path, args: argparse.Namespace) -> int:
             print(f"PROMOTED {record['kind']} {record['id']} · {record['subject']}")
             for warning in payload.get("knowledgeWarnings", []):
                 print(f"KNOWLEDGE WARNING {warning['recordId']} · {warning['subject']} · {warning['statement']}")
+        elif args.knowledge_command == "status":
+            print(
+                f"knowledge: {payload['records']} records · "
+                f"{len(payload['conflicts'])} conflicts · "
+                f"{len(payload['danglingSupersedes'])} dangling · "
+                f"{'PASS' if payload['ok'] else 'RECONCILE'}"
+            )
+            if payload["byKind"]:
+                print("  kinds: " + ", ".join(f"{key}={value}" for key, value in payload["byKind"].items()))
         elif args.knowledge_command == "validate":
             print(f"knowledge: {payload['records']} records · {len(payload['conflicts'])} conflicts · {'PASS' if payload['ok'] else 'RECONCILE'}")
         elif args.knowledge_command == "conflicts":

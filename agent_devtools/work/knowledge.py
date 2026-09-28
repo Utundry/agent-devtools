@@ -271,6 +271,29 @@ def validate_knowledge(root: Path) -> dict[str, Any]:
     }
 
 
+def knowledge_status(root: Path) -> dict[str, Any]:
+    records = load_records(root)
+    statuses = effective_statuses(records)
+    by_kind: dict[str, int] = {}
+    by_status: dict[str, int] = {}
+    for item in records:
+        kind = str(item.get("kind") or "unknown")
+        status = str(statuses.get(item["id"]) or item.get("status") or "unknown")
+        by_kind[kind] = by_kind.get(kind, 0) + 1
+        by_status[status] = by_status.get(status, 0) + 1
+    validation = validate_knowledge(root)
+    return {
+        "format": "agent-devtools-knowledge-status",
+        "formatVersion": 1,
+        "records": len(records),
+        "byKind": dict(sorted(by_kind.items())),
+        "byEffectiveStatus": dict(sorted(by_status.items())),
+        "conflicts": validation["conflicts"],
+        "danglingSupersedes": validation["danglingSupersedes"],
+        "ok": validation["ok"],
+    }
+
+
 def knowledge_fingerprint(root: Path) -> str:
     from agent_devtools.core.hashing import stable_fingerprint
     records = sorted(load_records(root), key=lambda item: item["id"])
