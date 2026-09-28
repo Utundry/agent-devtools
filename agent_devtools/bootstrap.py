@@ -331,6 +331,23 @@ def _iter_vendor_files(source_root: Path):
         yield rel, path
 
 
+def _runtime_version(root: Path) -> str | None:
+    path = root / "agent_devtools" / "__init__.py"
+    if not path.is_file():
+        return None
+    try:
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if not line.startswith("__version__") or "=" not in line:
+                continue
+            value = line.split("=", 1)[1].strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+                return value[1:-1]
+    except (OSError, UnicodeDecodeError):
+        return None
+    return None
+
+
 def _tree_fingerprint(root: Path) -> tuple[str, int]:
     h = hashlib.sha256()
     count = 0
@@ -382,8 +399,10 @@ def build_plan(target: Path, *, preset_id: str | None = None, source_root: Path 
     if selected is not None:
         rendered, roots = rendered_preset(target, get_preset(selected))
 
+    source_version = _runtime_version(source_root)
     source_fp, source_count = _tree_fingerprint(source_root)
     vendor_root = target / VENDOR_REL
+    target_version = _runtime_version(vendor_root)
     vendor_fp, vendor_count = _tree_fingerprint(vendor_root)
     if not vendor_root.exists():
         vendor_action = "create"
@@ -411,6 +430,8 @@ def build_plan(target: Path, *, preset_id: str | None = None, source_root: Path 
         "vendor": {
             "path": VENDOR_REL.as_posix(),
             "action": vendor_action,
+            "sourceVersion": source_version,
+            "targetVersion": target_version,
             "sourceFingerprint": source_fp,
             "sourceFiles": source_count,
             "targetFingerprint": vendor_fp or None,
@@ -491,15 +512,20 @@ def bootstrap_neutral_workspace(target: Path, *, profile_id: str = "general", so
     _copy_vendor(source_root, vendor)
     (target / ".agent-cache").mkdir(parents=True, exist_ok=True)
     (target / ".agent-work").mkdir(parents=True, exist_ok=True)
+    source_version = _runtime_version(source_root)
+    installed_version = _runtime_version(vendor)
     source_fp, source_count = _tree_fingerprint(source_root)
     vendor_fp, vendor_count = _tree_fingerprint(vendor)
     if source_fp != vendor_fp or source_count != vendor_count:
         raise BootstrapError("Neutral workspace runtime verification failed")
+    if not source_version or installed_version != source_version:
+        raise BootstrapError("Neutral workspace runtime version does not match source kit")
     return {
         "format": "agent-devtools-neutral-workspace-bootstrap", "formatVersion": 1,
         "status": "applied", "target": str(target), "profile": profile_id,
         "projectType": "non-development", "config": "agent-tools.json",
-        "policyCreated": False, "runtimeFiles": vendor_count, "runtimeFingerprint": vendor_fp,
+        "policyCreated": False, "runtimeVersion": installed_version,
+        "runtimeFiles": vendor_count, "runtimeFingerprint": vendor_fp,
         "gitignore": gitignore_action, "onboarding": onboarding_action
     }
 
@@ -593,6 +619,7 @@ def upgrade_runtime(target: Path, *, source_root: Path | None = None) -> dict[st
     map_path = target / "agent-context.map.json"
     before_map = map_path.read_bytes() if map_path.is_file() else None
 
+    source_version = _runtime_version(source_root)
     source_fp, source_count = _tree_fingerprint(source_root)
     vendor = target / VENDOR_REL
     current_fp, current_count = _tree_fingerprint(vendor)
@@ -614,6 +641,9 @@ def upgrade_runtime(target: Path, *, source_root: Path | None = None) -> dict[st
     after_fp, after_count = _tree_fingerprint(vendor)
     if after_fp != source_fp or after_count != source_count:
         raise BootstrapError("Runtime update verification failed: installed payload fingerprint does not match source kit")
+    installed_version = _runtime_version(vendor)
+    if not source_version or installed_version != source_version:
+        raise BootstrapError("Runtime update verification failed: installed runtime version does not match source kit")
 
     return {
         "format": "agent-devtools-runtime-upgrade",
@@ -624,6 +654,8 @@ def upgrade_runtime(target: Path, *, source_root: Path | None = None) -> dict[st
         "beforeRuntimeFiles": current_count,
         "afterFingerprint": after_fp,
         "afterRuntimeFiles": after_count,
+        "sourceVersion": source_version,
+        "installedVersion": installed_version,
         "projectConfigPreserved": True,
         "profile": profile_id,
         "developmentPolicyPresent": policy_path.is_file(),
@@ -631,7 +663,7 @@ def upgrade_runtime(target: Path, *, source_root: Path | None = None) -> dict[st
         "gitignore": gitignore_action,
         "onboarding": onboarding_action,
         "inspection": inspection,
-        "verification": {"configParsed": True, "policyParsed": (True if development else None), "runtimeFingerprintMatched": True},
+        "verification": {"configParsed": True, "policyParsed": (True if development else None), "runtimeFingerprintMatched": True, "runtimeVersionMatched": True},
     }
 
 def apply_plan(target: Path, *, preset_id: str | None = None, source_root: Path | None = None, force: bool = False) -> dict[str, Any]:
@@ -679,6 +711,10 @@ def apply_plan(target: Path, *, preset_id: str | None = None, source_root: Path 
     # Cheap post-apply verification: parse both declarative contracts. Do not run consumer tests.
     config = load_check_config(target)
     load_policy(config.policy_path)
+    source_version = _runtime_version(source_root)
+    installed_version = _runtime_version(vendor)
+    if not source_version or installed_version != source_version:
+        raise BootstrapError("Bootstrap verification failed: installed runtime version does not match source kit")
     applied = build_plan(target, preset_id=str(plan["selectedPreset"]), source_root=source_root)
     applied["status"] = "applied"
     applied["performed"] = {
@@ -690,6 +726,8 @@ def apply_plan(target: Path, *, preset_id: str | None = None, source_root: Path 
     applied["verification"] = {
         "configParsed": True,
         "policyParsed": True,
+        "runtimeVersionMatched": True,
+        "installedVersion": installed_version,
         "consumerTestsRun": False,
     }
     return applied

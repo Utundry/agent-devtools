@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import tempfile
 import unittest
 import zipfile
@@ -41,6 +42,27 @@ class BootstrapBuilderTests(unittest.TestCase):
         self.assertEqual("agent-devtools-integration-update-0.8.0-minimal.zip", name)
         self.assertEqual(builder.sha256_bytes(kit), digest)
         self.assertEqual(kit, embedded)
+
+    def test_single_file_self_check_fails_closed_on_wrong_expected_version(self) -> None:
+        installer = builder._single_file_installer("0.8.2", b"synthetic payload")
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "bootstrap.py"
+            path.write_bytes(installer)
+            ok = subprocess.run(
+                [sys.executable, str(path), "--self-check", "--expect-version", "0.8.2", "--json"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False,
+            )
+            self.assertEqual(0, ok.returncode)
+            payload = json.loads(ok.stdout)
+            self.assertEqual("0.8.2", payload["releaseVersion"])
+            bad = subprocess.run(
+                [sys.executable, str(path), "--self-check", "--expect-version", "0.8.1", "--json"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False,
+            )
+            self.assertEqual(2, bad.returncode)
+            mismatch = json.loads(bad.stdout)
+            self.assertEqual("fail", mismatch["status"])
+            self.assertEqual("0.8.1", mismatch["expectedVersion"])
 
     def test_deterministic_zip_is_byte_stable(self) -> None:
         entries = {"z.txt": b"z", "a.txt": b"a"}

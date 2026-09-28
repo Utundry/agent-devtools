@@ -10,28 +10,36 @@
 ## Required initialization flow
 
 1. Work from the intended workspace root.
-2. Download the version-pinned bootstrap below as `AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py`:
+2. Download the version-pinned bootstrap below as `AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py`. **Always overwrite any existing local file with that name; never reuse a previously downloaded bootstrap merely because the filename matches.**
 
    https://raw.githubusercontent.com/Utundry/agent-devtools/v0.8.1/bootstrap/AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py
 
-3. Execute it with the workspace's Python interpreter:
+3. Before installation/update, self-check the freshly downloaded file:
+
+   ```bash
+   python AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py --self-check --json
+   ```
+
+   The reported `embeddedKit`/release identity must match the version pinned in the URL above. If it does not, stop instead of executing a stale local installer.
+
+4. Execute that same freshly checked file with the workspace's Python interpreter:
 
    ```bash
    python AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py
    ```
 
-4. If bootstrap asks what will be done or discussed, answer using the user's actual goal. Do not invent a software-development task when the workspace is for research, analysis, documents, or general work.
-5. After bootstrap completes, read the generated `AGENTS.md`.
-6. Query the installed runtime instead of relying on remembered syntax:
+5. If bootstrap asks what will be done or discussed, answer using the user's actual goal. Do not invent a software-development task when the workspace is for research, analysis, documents, or general work.
+6. After bootstrap completes, read the generated `AGENTS.md`.
+7. Query the installed runtime instead of relying on remembered syntax and confirm its `toolVersion` matches the intended release:
 
    ```bash
    python devtools/agent/agent.py workflow show
    python devtools/agent/agent.py capabilities --json
    ```
 
-7. Start or resume substantial work through the managed workflow described by the installed runtime and `AGENTS.md`.
-8. Before substantial execution, resolve material task gaps. Ask only about choices that would materially change the result or cause expensive rework. If the task is already sufficiently specified, record `--no-material-gaps` and proceed immediately without a user turn; never ask a question merely to satisfy the gate. If material gaps exist, present concrete options and a recommended choice instead of an open-ended questionnaire, then wait for explicit user approval/clarification before implementing. Cheap reversible choices may be made autonomously and recorded as assumptions/decisions.
-9. Continue the user's original task. Agent DevTools is infrastructure for that task, not the task itself.
+8. Start or resume substantial work through the managed workflow described by the installed runtime and `AGENTS.md`.
+9. Before substantial execution, resolve material task gaps. Ask only about choices that would materially change the result or cause expensive rework. If the task is already sufficiently specified, record `--no-material-gaps` and proceed immediately without a user turn; never ask a question merely to satisfy the gate. If material gaps exist, present concrete options and a recommended choice instead of an open-ended questionnaire, then wait for explicit user approval/clarification before implementing. Cheap reversible choices may be made autonomously and recorded as assumptions/decisions.
+10. Continue the user's original task. Agent DevTools is infrastructure for that task, not the task itself.
 
 The governing principles are: **autonomy starts after alignment, not instead of alignment** and **alignment should be explicit in state, not necessarily visible as friction to the user**. Ask only what is expensive to get wrong.
 

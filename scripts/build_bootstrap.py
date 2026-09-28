@@ -326,7 +326,8 @@ from __future__ import annotations
 import argparse,base64,hashlib,json,subprocess,sys,tempfile,zipfile
 from pathlib import Path
 INSTALLER_FORMAT="agent-devtools-single-file-installer"
-INSTALLER_VERSION=9
+INSTALLER_VERSION=10
+RELEASE_VERSION={version!r}
 PROJECT_AUTHOR="Nikolay Laptev"
 PROJECT_CONTACT="caveboy@yandex.ru"
 PROJECT_GITHUB="Utundry"
@@ -341,10 +342,14 @@ def _payload():
  return d
 def main(argv=None):
  ap=argparse.ArgumentParser(description={f"Agent DevTools {version} universal-first installer/update"!r})
- ap.add_argument("--self-check",action="store_true"); ap.add_argument("--target"); ap.add_argument("--preset"); ap.add_argument("--profile",choices=["development","research","analysis","document","general"]); ap.add_argument("--intent"); ap.add_argument("--stack"); ap.add_argument("--plan",action="store_true"); ap.add_argument("--json",action="store_true",dest="json_output")
+ ap.add_argument("--self-check",action="store_true"); ap.add_argument("--expect-version"); ap.add_argument("--target"); ap.add_argument("--preset"); ap.add_argument("--profile",choices=["development","research","analysis","document","general"]); ap.add_argument("--intent"); ap.add_argument("--stack"); ap.add_argument("--plan",action="store_true"); ap.add_argument("--json",action="store_true",dest="json_output")
  args=ap.parse_args(argv); data=_payload()
+ if args.expect_version and args.expect_version!=RELEASE_VERSION:
+  p={{"format":INSTALLER_FORMAT,"formatVersion":INSTALLER_VERSION,"status":"fail","releaseVersion":RELEASE_VERSION,"expectedVersion":args.expect_version,"error":"installer release version mismatch"}}
+  print(json.dumps(p,ensure_ascii=False,indent=2) if args.json_output else f"FAIL: installer release {{RELEASE_VERSION}} != expected {{args.expect_version}}")
+  return 2
  if args.self_check:
-  p={{"format":INSTALLER_FORMAT,"formatVersion":INSTALLER_VERSION,"status":"pass","embeddedKit":EMBEDDED_KIT_FILENAME,"embeddedKitSha256":EMBEDDED_KIT_SHA256,"embeddedBytes":len(data),"author":PROJECT_AUTHOR,"contact":PROJECT_CONTACT,"github":PROJECT_GITHUB}}; print(json.dumps(p,ensure_ascii=False,indent=2) if args.json_output else f"PASS: {{EMBEDDED_KIT_FILENAME}} · {{EMBEDDED_KIT_SHA256}}"); return 0
+  p={{"format":INSTALLER_FORMAT,"formatVersion":INSTALLER_VERSION,"status":"pass","releaseVersion":RELEASE_VERSION,"embeddedKit":EMBEDDED_KIT_FILENAME,"embeddedKitSha256":EMBEDDED_KIT_SHA256,"embeddedBytes":len(data),"author":PROJECT_AUTHOR,"contact":PROJECT_CONTACT,"github":PROJECT_GITHUB}}; print(json.dumps(p,ensure_ascii=False,indent=2) if args.json_output else f"PASS: Agent DevTools {{RELEASE_VERSION}} · {{EMBEDDED_KIT_FILENAME}} · {{EMBEDDED_KIT_SHA256}}"); return 0
  with tempfile.TemporaryDirectory(prefix="agent-devtools-bootstrap-") as td:
   r=Path(td); a=r/EMBEDDED_KIT_FILENAME; a.write_bytes(data)
   with zipfile.ZipFile(a) as z: z.extractall(r/'kit')
@@ -444,6 +449,9 @@ def verify_generated(result: BuildResult) -> None:
     name, expected_sha, embedded = _embedded_kit(result.installer_bytes)
     if name != f"agent-devtools-integration-update-{result.version}-minimal.zip":
         raise BootstrapBuildError(f"unexpected embedded kit filename: {name}")
+    installer_text = result.installer_bytes.decode("utf-8")
+    if f"RELEASE_VERSION={result.version!r}" not in installer_text:
+        raise BootstrapBuildError("single-file installer records the wrong release version")
     if expected_sha != result.kit_sha256:
         raise BootstrapBuildError("single-file installer records the wrong kit sha256")
     if embedded != result.kit_bytes:

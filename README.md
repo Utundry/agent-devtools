@@ -154,6 +154,16 @@ python -m compileall -q agent_devtools tests scripts
 python bootstrap/AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py --self-check --json
 ```
 
+For the public bootstrap release path, one command prepares and qualifies a new release candidate from a clean tree:
+
+```bash
+python scripts/build_release.py --version 0.8.2
+```
+
+It bumps the runtime/public version references, refreshes the pinned handoff URL, deterministically rebuilds the bootstrap kit and single-file installer, checks installer release identity, runs the complete unittest suite and compileall, and leaves the resulting release candidate in the working tree for explicit review/commit/tag. It does not push or tag automatically.
+
+When installing from the public handoff, always overwrite a same-named local bootstrap and self-check the freshly downloaded file before execution. A successful runtime update also verifies that the installed runtime version matches the source kit version, not only that their file fingerprints match.
+
 Release-level qualification may additionally run cold certification, exact replay, package verification, and clean-room onboarding scenarios.
 
 ## Clean-room acceptance

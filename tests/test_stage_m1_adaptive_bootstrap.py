@@ -6,7 +6,8 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from agent_devtools.bootstrap import classify_intent, detect_project, detect_stack
+from agent_devtools import __version__
+from agent_devtools.bootstrap import bootstrap_neutral_workspace, classify_intent, detect_project, detect_stack, upgrade_runtime
 
 
 class AdaptiveBootstrapTests(unittest.TestCase):
@@ -86,6 +87,28 @@ class AdaptiveBootstrapTests(unittest.TestCase):
         self.assertIn("What stack are you planning to use (language, framework, tests/build tools)?", source)
         self.assertNotIn("Что планируется делать или обсуждать в этом проекте?", source)
         self.assertNotIn("Какой стек планируется", source)
+
+    def test_bootstrap_records_and_verifies_installed_runtime_version(self) -> None:
+        source_root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            result = bootstrap_neutral_workspace(root, source_root=source_root)
+            self.assertEqual(__version__, result["runtimeVersion"])
+            installed = root / "devtools" / "agent" / "agent_devtools" / "__init__.py"
+            self.assertIn(f'__version__ = "{__version__}"', installed.read_text(encoding="utf-8"))
+
+    def test_runtime_upgrade_replaces_stale_version_and_reports_identity(self) -> None:
+        source_root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            bootstrap_neutral_workspace(root, source_root=source_root)
+            installed = root / "devtools" / "agent" / "agent_devtools" / "__init__.py"
+            installed.write_text('"""test"""\n\n__version__ = "0.0.0"\n', encoding="utf-8")
+            result = upgrade_runtime(root, source_root=source_root)
+            self.assertEqual("replace", result["action"])
+            self.assertEqual(__version__, result["sourceVersion"])
+            self.assertEqual(__version__, result["installedVersion"])
+            self.assertTrue(result["verification"]["runtimeVersionMatched"])
 
 
 if __name__ == "__main__":
