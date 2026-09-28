@@ -12,7 +12,7 @@
 1. Work from the intended workspace root.
 2. Download the version-pinned bootstrap below as `AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py`:
 
-   https://raw.githubusercontent.com/Utundry/agent-devtools/v0.8.0/bootstrap/AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py
+   https://raw.githubusercontent.com/Utundry/agent-devtools/v0.8.1/bootstrap/AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py
 
 3. Execute it with the workspace's Python interpreter:
 

@@ -34,7 +34,7 @@ https://github.com/Utundry/agent-devtools
 
 For manual or automation-oriented installation, the current version-pinned bootstrap is:
 
-https://raw.githubusercontent.com/Utundry/agent-devtools/v0.8.0/bootstrap/AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py
+https://raw.githubusercontent.com/Utundry/agent-devtools/v0.8.1/bootstrap/AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py
 
 The raw Python bootstrap is an installer URL; the `AGENT-START-HERE.md` URL is the preferred **agent handoff** URL. If the environment cannot access the network, attach the bootstrap file instead.
 
