@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Prepare and qualify a public Agent DevTools release candidate in one command.
+"""Prepare, qualify, and optionally publish Agent DevTools in one command.
 
-This is intentionally a builder, not a publisher. It updates version-facing source
-metadata, rebuilds deterministic bootstrap artifacts, runs local qualification and
-leaves the exact candidate in the working tree for human review/commit/tag.
+Without --publish this leaves a qualified local release candidate.
+With --publish it also commits, tags, atomically pushes branch+tag, and verifies
+the remote refs. The publish path starts only from a clean named branch exactly
+synchronized with the selected remote.
 """
 from __future__ import annotations
 
@@ -26,6 +27,7 @@ KIT = ROOT / "bootstrap" / "agent-devtools-bootstrap-kit.zip"
 MANAGED_FILES = (VERSION_FILE, README, HANDOFF, PUBLIC_VERSION, INSTALLER, KIT)
 SAFE_VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][A-Za-z0-9._-]+)?$")
 PINNED_URL = "https://raw.githubusercontent.com/Utundry/agent-devtools/v{version}/bootstrap/AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py"
+DEFAULT_REMOTE = "origin"
 
 
 class ReleaseBuilderError(RuntimeError):
@@ -49,19 +51,39 @@ def _run(argv: Iterable[str]) -> None:
     subprocess.run(cmd, cwd=ROOT, check=True)
 
 
-def _git_clean() -> None:
+def _capture(argv: Iterable[str], *, check: bool = True) -> str:
+    cmd = [str(item) for item in argv]
     proc = subprocess.run(
-        ["git", "status", "--porcelain"],
+        cmd,
         cwd=ROOT,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
         check=False,
     )
-    if proc.returncode != 0:
-        raise ReleaseBuilderError("cannot inspect Git working tree")
-    if proc.stdout.strip():
+    if check and proc.returncode != 0:
+        detail = proc.stderr.strip() or proc.stdout.strip()
+        raise ReleaseBuilderError(
+            f"command failed ({proc.returncode}): {' '.join(cmd)}"
+            + (f": {detail}" if detail else "")
+        )
+    return proc.stdout.strip()
+
+
+def _git_head() -> str:
+    return _capture(["git", "rev-parse", "HEAD"])
+
+
+def _git_clean() -> None:
+    if _capture(["git", "status", "--porcelain"]):
         raise ReleaseBuilderError("release preparation requires a clean Git working tree")
+
+
+def _current_branch() -> str:
+    branch = _capture(["git", "symbolic-ref", "--quiet", "--short", "HEAD"])
+    if not branch:
+        raise ReleaseBuilderError("release publishing requires a named Git branch, not detached HEAD")
+    return branch
 
 
 def _current_version() -> str:
@@ -76,7 +98,9 @@ def _replace_once(path: Path, old: str, new: str) -> None:
     text = path.read_text(encoding="utf-8")
     count = text.count(old)
     if count != 1:
-        raise ReleaseBuilderError(f"expected exactly one occurrence in {_display_path(path)}: {old!r}; found {count}")
+        raise ReleaseBuilderError(
+            f"expected exactly one occurrence in {_display_path(path)}: {old!r}; found {count}"
+        )
     path.write_text(text.replace(old, new, 1), encoding="utf-8")
 
 
@@ -84,7 +108,9 @@ def _replace_all_required(path: Path, old: str, new: str) -> int:
     text = path.read_text(encoding="utf-8")
     count = text.count(old)
     if count < 1:
-        raise ReleaseBuilderError(f"expected release reference not found in {_display_path(path)}: {old!r}")
+        raise ReleaseBuilderError(
+            f"expected release reference not found in {_display_path(path)}: {old!r}"
+        )
     path.write_text(text.replace(old, new), encoding="utf-8")
     return count
 
@@ -113,18 +139,64 @@ def _restore(snapshot: dict[Path, bytes | None]) -> None:
 
 
 def _tag_must_not_exist(version: str) -> None:
+    if _capture(["git", "tag", "--list", f"v{version}"]):
+        raise ReleaseBuilderError(f"tag v{version} already exists")
+
+
+def _remote_tag_exists(remote: str, version: str) -> bool:
     proc = subprocess.run(
-        ["git", "tag", "--list", f"v{version}"],
+        ["git", "ls-remote", "--exit-code", "--tags", remote, f"refs/tags/v{version}"],
         cwd=ROOT,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
         check=False,
     )
-    if proc.returncode != 0:
-        raise ReleaseBuilderError("cannot inspect Git tags")
-    if proc.stdout.strip():
-        raise ReleaseBuilderError(f"tag v{version} already exists")
+    if proc.returncode == 0:
+        return True
+    if proc.returncode == 2:
+        return False
+    detail = proc.stderr.strip() or proc.stdout.strip()
+    raise ReleaseBuilderError(
+        f"cannot inspect remote tag v{version} on {remote}: {detail or 'git ls-remote failed'}"
+    )
+
+
+def _publish_preflight(version: str, remote: str) -> tuple[str, str]:
+    branch = _current_branch()
+    _run(["git", "fetch", "--prune", remote, branch])
+    local_head = _git_head()
+    remote_head = _capture(["git", "rev-parse", f"refs/remotes/{remote}/{branch}"])
+    if local_head != remote_head:
+        raise ReleaseBuilderError(
+            f"local {branch} is not exactly synchronized with {remote}/{branch}: "
+            f"{local_head} != {remote_head}"
+        )
+    if _remote_tag_exists(remote, version):
+        raise ReleaseBuilderError(f"remote tag v{version} already exists on {remote}")
+    return branch, local_head
+
+
+def _changed_paths() -> tuple[str, ...]:
+    result: list[str] = []
+    for raw in _capture(["git", "status", "--porcelain"]).splitlines():
+        if not raw.strip():
+            continue
+        value = raw[3:].strip() if len(raw) >= 4 else raw.strip()
+        if " -> " in value:
+            value = value.split(" -> ", 1)[1].strip()
+        if value:
+            result.append(value.replace("\\", "/"))
+    return tuple(result)
+
+
+def _assert_only_managed_release_changes() -> None:
+    allowed = {str(path.relative_to(ROOT)).replace("\\", "/") for path in MANAGED_FILES}
+    unexpected = [path for path in _changed_paths() if path not in allowed]
+    if unexpected:
+        raise ReleaseBuilderError(
+            "release builder produced unexpected working-tree changes: " + ", ".join(unexpected)
+        )
 
 
 def _qualification(version: str) -> None:
@@ -137,19 +209,94 @@ def _qualification(version: str) -> None:
     _run(["git", "diff", "--check"])
 
 
-def _payload(version: str, previous: str) -> dict[str, object]:
-    proc = subprocess.run(
-        ["git", "status", "--short"],
+def _post_commit_qualification(version: str) -> None:
+    py = sys.executable
+    _git_clean()
+    _run([py, "scripts/build_bootstrap.py", "--version", version, "--check"])
+    _run([py, str(INSTALLER.relative_to(ROOT)), "--self-check", "--expect-version", version, "--json"])
+
+
+def _remote_refs(remote: str, branch: str, version: str) -> dict[str, str]:
+    tag = f"refs/tags/v{version}"
+    output = _capture([
+        "git", "ls-remote", remote,
+        f"refs/heads/{branch}",
+        tag,
+        tag + "^{}",
+    ])
+    refs: dict[str, str] = {}
+    for raw in output.splitlines():
+        parts = raw.split(None, 1)
+        if len(parts) == 2:
+            refs[parts[1].strip()] = parts[0].strip()
+    return refs
+
+
+def _rollback_local_publish(original_head: str, tag: str) -> None:
+    subprocess.run(
+        ["git", "tag", "-d", tag],
         cwd=ROOT,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
     )
-    return {
+    subprocess.run(
+        ["git", "reset", "--hard", original_head],
+        cwd=ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+
+
+def _publish_release(
+    *,
+    version: str,
+    remote: str,
+    branch: str,
+    original_head: str,
+) -> dict[str, str]:
+    tag = f"v{version}"
+    _assert_only_managed_release_changes()
+    paths = [str(path.relative_to(ROOT)) for path in MANAGED_FILES]
+    try:
+        _run(["git", "add", "--", *paths])
+        _run(["git", "diff", "--cached", "--check"])
+        _run(["git", "commit", "-m", f"Release {version}"])
+        commit = _git_head()
+        _run(["git", "tag", "-a", tag, "-m", f"Agent DevTools {version}"])
+        _post_commit_qualification(version)
+        _run([
+            "git", "push", "--atomic", remote,
+            f"HEAD:refs/heads/{branch}",
+            f"refs/tags/{tag}:refs/tags/{tag}",
+        ])
+    except Exception:
+        _rollback_local_publish(original_head, tag)
+        raise
+
+    refs = _remote_refs(remote, branch, version)
+    remote_branch = refs.get(f"refs/heads/{branch}")
+    remote_tag_commit = refs.get(f"refs/tags/{tag}^{{}}")
+    if remote_branch != commit or remote_tag_commit != commit:
+        raise ReleaseBuilderError(
+            "atomic push reported success but remote verification does not match the release commit; "
+            f"local={commit}, remoteBranch={remote_branch}, remoteTagCommit={remote_tag_commit}"
+        )
+    return {"commit": commit, "tag": tag, "remote": remote, "branch": branch}
+
+
+def _payload(
+    version: str,
+    previous: str,
+    *,
+    publication: dict[str, str] | None = None,
+) -> dict[str, object]:
+    changed = _capture(["git", "status", "--short"])
+    payload: dict[str, object] = {
         "format": "agent-devtools-public-release-candidate",
-        "formatVersion": 1,
-        "status": "ready",
+        "formatVersion": 2,
+        "status": "published" if publication else "ready",
         "previousVersion": previous,
         "version": version,
         "installer": {
@@ -162,57 +309,100 @@ def _payload(version: str, previous: str) -> dict[str, object]:
             "sha256": _sha256(KIT),
             "bytes": KIT.stat().st_size,
         },
-        "changedFiles": [line[3:] for line in proc.stdout.splitlines() if len(line) >= 4],
-        "publishCommands": [
-            f"git add {' '.join(str(p.relative_to(ROOT)) for p in MANAGED_FILES)}",
-            f'git commit -m "Release {version}"',
-            f'git tag -a v{version} -m "Agent DevTools {version}"',
-            "git push",
-            f"git push origin v{version}",
-        ],
+        "changedFiles": [line[3:] for line in changed.splitlines() if len(line) >= 4],
     }
+    if publication:
+        payload["publication"] = publication
+    return payload
 
 
 def parser() -> argparse.ArgumentParser:
-    ap = argparse.ArgumentParser(description="Prepare and qualify a public Agent DevTools release candidate")
-    ap.add_argument("--version", required=True, help="new public version, e.g. 0.8.2")
+    ap = argparse.ArgumentParser(
+        description="Prepare, qualify, and optionally publish Agent DevTools"
+    )
+    ap.add_argument("--version", required=True, help="new public version, e.g. 0.8.3")
+    ap.add_argument(
+        "--publish",
+        action="store_true",
+        help="commit, create annotated tag, atomically push branch+tag, and verify remote refs",
+    )
+    ap.add_argument(
+        "--remote",
+        default=DEFAULT_REMOTE,
+        help="Git remote used by --publish (default: origin)",
+    )
     ap.add_argument("--json", action="store_true", dest="json_output")
-    ap.add_argument("--dry-run", action="store_true", help="validate preconditions and show the planned version transition without writing")
+    ap.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="validate preconditions and show the planned version transition without writing",
+    )
     return ap
 
 
 def main(argv: Iterable[str] | None = None) -> int:
     args = parser().parse_args(list(argv) if argv is not None else None)
     version = str(args.version).strip()
+    original_head: str | None = None
     try:
         if not SAFE_VERSION.fullmatch(version):
-            raise ReleaseBuilderError("version must look like 0.8.2 or a safe prerelease variant")
+            raise ReleaseBuilderError(
+                "version must look like 0.8.3 or a safe prerelease variant"
+            )
+        if args.dry_run and args.publish:
+            raise ReleaseBuilderError("--dry-run and --publish are mutually exclusive")
+
         _git_clean()
         previous = _current_version()
         if version == previous:
-            raise ReleaseBuilderError("requested version already matches current source version")
+            raise ReleaseBuilderError(
+                "requested version already matches current source version"
+            )
         _tag_must_not_exist(version)
+
+        branch: str | None = None
+        original_head = _git_head()
+        if args.publish:
+            branch, original_head = _publish_preflight(version, str(args.remote))
+
         if args.dry_run:
-            payload = {
+            payload: dict[str, object] = {
                 "format": "agent-devtools-public-release-candidate",
-                "formatVersion": 1,
+                "formatVersion": 2,
                 "status": "plan",
                 "previousVersion": previous,
                 "version": version,
-                "writes": [str(p.relative_to(ROOT)) for p in MANAGED_FILES],
+                "writes": [str(path.relative_to(ROOT)) for path in MANAGED_FILES],
+                "publish": bool(args.publish),
             }
         else:
             snapshot = _snapshot()
             try:
                 _set_version(previous, version)
                 _qualification(version)
-                payload = _payload(version, previous)
+                publication = None
+                if args.publish:
+                    assert branch is not None
+                    publication = _publish_release(
+                        version=version,
+                        remote=str(args.remote),
+                        branch=branch,
+                        original_head=original_head,
+                    )
+                payload = _payload(version, previous, publication=publication)
             except Exception:
-                _restore(snapshot)
+                if original_head and _git_head() == original_head:
+                    _restore(snapshot)
                 raise
     except (ReleaseBuilderError, OSError, subprocess.CalledProcessError) as exc:
+        failure = {
+            "format": "agent-devtools-public-release-candidate",
+            "formatVersion": 2,
+            "status": "fail",
+            "error": str(exc),
+        }
         if getattr(args, "json_output", False):
-            print(json.dumps({"format": "agent-devtools-public-release-candidate", "formatVersion": 1, "status": "fail", "error": str(exc)}, ensure_ascii=False, indent=2))
+            print(json.dumps(failure, ensure_ascii=False, indent=2))
         else:
             print(f"FAIL: {exc}", file=sys.stderr)
         return 1
@@ -221,11 +411,19 @@ def main(argv: Iterable[str] | None = None) -> int:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     elif payload["status"] == "plan":
         print(f"PLAN: Agent DevTools {previous} -> {version}")
+    elif payload["status"] == "published":
+        pub = payload["publication"]
+        print(f"PUBLISHED: Agent DevTools {version}")
+        print(f"  commit: {pub['commit']}")
+        print(f"  tag: {pub['tag']}")
+        print(f"  remote: {pub['remote']}/{pub['branch']}")
+        print(f"  installer: {payload['installer']['sha256']} · {payload['installer']['bytes']} bytes")
+        print(f"  kit: {payload['kit']['sha256']} · {payload['kit']['bytes']} bytes")
     else:
         print(f"READY: Agent DevTools {version}")
         print(f"  installer: {payload['installer']['sha256']} · {payload['installer']['bytes']} bytes")
         print(f"  kit: {payload['kit']['sha256']} · {payload['kit']['bytes']} bytes")
-        print("  review/commit/tag explicitly; nothing was pushed")
+        print("  local candidate only; add --publish next time for zero-manual-Git release")
     return 0
 
 
