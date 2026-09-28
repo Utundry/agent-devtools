@@ -114,11 +114,12 @@ Typical development workflow:
 python devtools/agent/agent.py work start --goal "..." --next-action "..."
 python devtools/agent/agent.py context affected
 python devtools/agent/agent.py check plan --profile affected --explain
-python devtools/agent/agent.py check run --profile affected
-python devtools/agent/agent.py work finish
+python devtools/agent/agent.py work complete
 ```
 
 Do not memorize syntax from examples. `workflow show`, `capabilities --json`, and CLI `--help` are authoritative for the installed version.
+
+`work complete` is the preferred completion action. In development profiles it validates task/alignment/blocker and durable-knowledge gates, runs the affected verification policy, requires fresh PASS evidence, and only then closes the work session. In non-development profiles it never fabricates semantic verification: a fresh explicit verification record is still required. `work finish` remains the lower-level primitive when verification was already collected separately.
 
 ## Design constraints
 

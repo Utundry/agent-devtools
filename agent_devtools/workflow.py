@@ -7,8 +7,8 @@ from typing import Any
 from . import __version__
 from .profiles import load_profile
 
-CLI_CONTRACT_VERSION = 7
-WORKFLOW_CONTRACT_VERSION = 3
+CLI_CONTRACT_VERSION = 8
+WORKFLOW_CONTRACT_VERSION = 4
 
 
 def workflow_contract(root: Path) -> dict[str, Any]:
@@ -73,8 +73,8 @@ def workflow_contract(root: Path) -> dict[str, Any]:
             {
                 "id": "finish",
                 "required": True,
-                "purpose": "Finish only after blockers are resolved or explicitly retained and verification passes.",
-                "commands": ["work finish"],
+                "purpose": "Prefer one-action completion: validate gates and durable knowledge, run deterministic verification when available, then finish only on fresh PASS evidence.",
+                "commands": ["work complete", "work finish"],
             },
         ],
     }
@@ -93,7 +93,7 @@ def capabilities(root: Path) -> dict[str, Any]:
             "workflow": {"show": True},
             "capabilities": {"json": True},
             "selfUpdate": {"available": True, "latestDiscovery": True, "explicitVersion": True, "checkOnly": True, "freshDownload": True, "identityVerified": True},
-            "work": {"start": True, "align": True, "status": True, "finish": True, "taskGapGate": True, "noGapFastPath": True},
+            "work": {"start": True, "align": True, "status": True, "complete": True, "finish": True, "oneActionCompletion": True, "taskGapGate": True, "noGapFastPath": True},
             "cognition": {"decision": True, "finding": True, "assumption": True, "requirement": not profile.development, "openQuestion": not profile.development, "evidence": not profile.development, "blocker": True, "resolveBlocker": True, "status": True},
             "knowledge": {"promote": True, "validate": True, "status": True, "researchKinds": not profile.development, "softContradictionWarnings": True, "promotionRequired": False},
             "source": {"add": not profile.development, "list": not profile.development},

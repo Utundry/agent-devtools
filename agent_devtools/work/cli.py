@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from .brief import _latest_run, build_brief, render_brief
+from .completion import complete_work
 from .checkpoint import CheckpointError, create_checkpoint, inspect_checkpoint, restore_checkpoint
 from .state import TaskStateError, align_task, clear_task, complete_task, load_task_state, start_task, update_task
 from .knowledge import KnowledgeError, conflicts as knowledge_conflicts, effective_statuses, load_records as load_knowledge_records, promote as promote_knowledge, validate_knowledge, soft_contradictions
@@ -187,7 +188,13 @@ def configure_work_parser(parser: argparse.ArgumentParser) -> None:
     status.add_argument("--no-context", action="store_true")
     status.add_argument("--json", action="store_true", dest="json_output")
 
-    finish = sub.add_parser("finish", help="finish current work after a successful verification run")
+    complete = sub.add_parser("complete", help="run completion gates, verification, knowledge validation, and finish")
+    complete.add_argument("--summary")
+    complete.add_argument("--no-cache", action="store_true", help="bypass development verification cache")
+    complete.add_argument("--resume", action="store_true", help="resume compatible development verification chunks")
+    complete.add_argument("--json", action="store_true", dest="json_output")
+
+    finish = sub.add_parser("finish", help="lower-level finish after verification already exists")
     finish.add_argument("--summary")
     finish.add_argument("--json", action="store_true", dest="json_output")
 
@@ -217,24 +224,17 @@ def main_work(root: Path, args: argparse.Namespace) -> int:
         elif args.work_command == "status":
             payload = build_brief(root, mode="work", budget=args.budget,
                                   include_context=not args.no_context, before_root=args.before)
+        elif args.work_command == "complete":
+            payload = complete_work(
+                root,
+                summary=args.summary,
+                run_verification=True,
+                no_cache=bool(args.no_cache),
+                resume=bool(args.resume),
+            )
         elif args.work_command == "finish":
-            state = load_task_state(root)
-            if state is None:
-                raise TaskStateError("no task state exists; use work start first")
-            try:
-                profile = load_profile(root)
-            except ProfileError as exc:
-                raise TaskStateError(str(exc)) from exc
-            latest = _latest_run(root) if profile.verification_mode == "check" else latest_verification(root)
-            if not latest or str(latest.get("status") or "").lower() not in {"pass", "passed", "success", "ok"}:
-                noun = "Agent DevTools check run" if profile.verification_mode == "check" else "verification record"
-                raise TaskStateError(f"cannot finish work without a successful {noun}")
-            completed = str(latest.get("completedAtUtc") or "")
-            started = str(state.get("startedAtUtc") or "")
-            if not completed or (started and completed < started):
-                raise TaskStateError("cannot finish work with verification older than the current task")
-            state = complete_task(root, summary=args.summary)
-            payload = {"format": "agent-devtools-work-finish", "formatVersion": 1, "profile": profile.profile_id, "task": state, "latestVerification": latest}
+            payload = complete_work(root, summary=args.summary, run_verification=False)
+            payload["format"] = "agent-devtools-work-finish"
         else:
             return 2
     except TaskStateError as exc:
@@ -242,8 +242,11 @@ def main_work(root: Path, args: argparse.Namespace) -> int:
         return 2
     if args.json_output:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
-    elif args.work_command == "finish":
+    elif args.work_command in {"complete", "finish"}:
         print(f"PASS: work completed · {payload['task']['goal']}")
+        if args.work_command == "complete" and payload.get("verificationPerformed"):
+            print("  verification: affected checks executed")
+        print(f"  knowledge: {'PASS' if payload['knowledgeValidation']['ok'] else 'RECONCILE'}")
     elif args.work_command == "align":
         alignment = payload["taskAlignment"]
         print(f"Task alignment: {alignment['status']}")
