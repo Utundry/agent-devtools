@@ -30,10 +30,10 @@
    ```
 
 7. Start or resume substantial work through the managed workflow described by the installed runtime and `AGENTS.md`.
-8. Before substantial execution, resolve material task gaps. Ask only about choices that would materially change the result or cause expensive rework. Present concrete options and a recommended choice instead of an open-ended questionnaire. If material gaps exist, wait for explicit user approval/clarification before implementing; cheap reversible choices may be made autonomously and recorded as assumptions/decisions. If no material gaps exist, record that and proceed without ceremonial questions.
+8. Before substantial execution, resolve material task gaps. Ask only about choices that would materially change the result or cause expensive rework. If the task is already sufficiently specified, record `--no-material-gaps` and proceed immediately without a user turn; never ask a question merely to satisfy the gate. If material gaps exist, present concrete options and a recommended choice instead of an open-ended questionnaire, then wait for explicit user approval/clarification before implementing. Cheap reversible choices may be made autonomously and recorded as assumptions/decisions.
 9. Continue the user's original task. Agent DevTools is infrastructure for that task, not the task itself.
 
-The governing principle is: **autonomy starts after alignment, not instead of alignment**. Ask only what is expensive to get wrong.
+The governing principles are: **autonomy starts after alignment, not instead of alignment** and **alignment should be explicit in state, not necessarily visible as friction to the user**. Ask only what is expensive to get wrong.
 
 ## Existing projects
 

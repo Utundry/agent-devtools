@@ -176,9 +176,9 @@ def configure_work_parser(parser: argparse.ArgumentParser) -> None:
     action = align.add_mutually_exclusive_group(required=True)
     action.add_argument("--gap", action="append", default=[], help="material ambiguity that is expensive to get wrong; repeat as needed")
     action.add_argument("--user-approved", action="store_true", help="record explicit user approval after clarification")
-    action.add_argument("--no-material-gaps", action="store_true", help="record that the task is already sufficiently specified")
+    action.add_argument("--no-material-gaps", action="store_true", help="frictionless fast path when the task is already sufficiently specified; no user turn is required")
     align.add_argument("--proposal", default="", help="recommended concrete option(s) presented to the user")
-    align.add_argument("--summary", default="", help="approval/resolution summary or no-gap rationale")
+    align.add_argument("--summary", default="", help="approval/resolution summary; optional for --no-material-gaps")
     align.add_argument("--json", action="store_true", dest="json_output")
 
     status = sub.add_parser("status", help="show cognition + context + check-plan briefing")

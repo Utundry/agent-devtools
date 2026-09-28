@@ -180,9 +180,9 @@ def align_task(
         })
         state["taskAlignment"] = current
     else:
-        resolved = resolution.strip()
-        if not resolved:
-            raise TaskStateError("no-material-gaps alignment requires a compact rationale")
+        resolved = resolution.strip() or (
+            "No material task gaps identified; proceed without user clarification"
+        )
         state["taskAlignment"] = {
             "status": "ready",
             "materialGaps": [],

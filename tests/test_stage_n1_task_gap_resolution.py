@@ -58,6 +58,13 @@ class TaskGapResolutionTests(unittest.TestCase):
         self.assertEqual("completed", complete_task(self.root)["status"])
 
     def test_no_material_gaps_avoids_ceremonial_question(self) -> None:
+        start_task(self.root, goal="Fix a concrete regression")
+        state = align_task(self.root, no_material_gaps=True)
+        self.assertTrue(task_alignment_ready(state))
+        self.assertFalse(state["taskAlignment"]["explicitUserApproval"])
+        self.assertIn("without user clarification", state["taskAlignment"]["resolution"])
+
+    def test_no_material_gaps_accepts_optional_explicit_rationale(self) -> None:
         start_task(self.root, goal="Apply the exact supplied patch")
         state = align_task(
             self.root,
@@ -96,18 +103,25 @@ class TaskGapResolutionTests(unittest.TestCase):
         self.assertTrue(task_alignment_ready(state))
         self.assertIn("legacy", state["taskAlignment"]["resolution"])
 
-    def test_workflow_and_capabilities_expose_required_alignment_phase(self) -> None:
+    def test_workflow_and_capabilities_expose_frictionless_alignment(self) -> None:
         contract = workflow_contract(self.root)
         phase_ids = [item["id"] for item in contract["phases"]]
         self.assertEqual(["orient", "start", "align", "work", "verify", "knowledge", "finish"], phase_ids)
-        self.assertTrue(capabilities(self.root)["commands"]["work"]["taskGapGate"])
-        self.assertIn("Autonomy starts after alignment", " ".join(contract["principles"]))
+        caps = capabilities(self.root)
+        self.assertTrue(caps["commands"]["work"]["taskGapGate"])
+        self.assertTrue(caps["commands"]["work"]["noGapFastPath"])
+        self.assertFalse(caps["commands"]["knowledge"]["promotionRequired"])
+        principles = " ".join(contract["principles"])
+        self.assertIn("Autonomy starts after alignment", principles)
+        self.assertIn("Never ask a question merely to satisfy the gate", principles)
 
     def test_agents_contract_requires_gap_resolution_without_questionnaire_ceremony(self) -> None:
         block = managed_block()
         self.assertIn("Task Gap Resolution Gate", block)
         self.assertIn("expensive rework", block)
         self.assertIn("concrete options", block)
+        self.assertIn("without a user turn", block)
+        self.assertIn("zero promotions", block)
 
 
 if __name__ == "__main__":
