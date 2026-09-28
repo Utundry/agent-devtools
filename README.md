@@ -12,7 +12,7 @@ requirement → research/context → finding/assumption → decision → verific
 
 Agent DevTools keeps that chain close to the project, with Python standard library + SQLite only, no mandatory cloud service, daemon, embeddings, vector database, or external Python package.
 
-Current version: **0.8.0**.
+Current version: **0.8.1**.
 
 ## 60-second start
 
