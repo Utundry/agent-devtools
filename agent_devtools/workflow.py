@@ -7,7 +7,7 @@ from typing import Any
 from . import __version__
 from .profiles import load_profile
 
-CLI_CONTRACT_VERSION = 12
+CLI_CONTRACT_VERSION = 13
 WORKFLOW_CONTRACT_VERSION = 8
 
 
@@ -93,7 +93,7 @@ def capabilities(root: Path) -> dict[str, Any]:
         "toolVersion": __version__,
         "profile": asdict(profile),
         "commands": {
-            "workflow": {"show": True},
+            "workflow": {"show": True, "validate": True},
             "capabilities": {"json": True},
             "selfUpdate": {"available": True, "latestDiscovery": True, "explicitVersion": True, "checkOnly": True, "freshDownload": True, "identityVerified": True},
             "work": {"enter": True, "start": True, "align": True, "status": True, "complete": True, "finish": True, "oneActionEntry": True, "handoffEntry": True, "routineEntryFastPath": True, "alignmentPendingOptOut": True, "oneActionCompletion": True, "taskGapGate": True, "noGapFastPath": True},

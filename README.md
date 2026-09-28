@@ -89,8 +89,11 @@ After bootstrap, the agent should read `AGENTS.md` and use the installed runtime
 
 ```bash
 python devtools/agent/agent.py workflow show
+python devtools/agent/agent.py workflow validate
 python devtools/agent/agent.py capabilities --json
 ```
+
+`workflow validate` checks every command advertised by the workflow contract against the real argparse command tree. Machine-readable capabilities also expose `cliCommands`, derived from that same parser rather than from a second command registry.
 
 ## What it gives an agent
 

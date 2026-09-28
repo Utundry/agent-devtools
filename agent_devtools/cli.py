@@ -72,6 +72,53 @@ def _not_implemented(name: str) -> int:
     return 2
 
 
+
+def _command_inventory(cli_parser: argparse.ArgumentParser) -> tuple[str, ...]:
+    commands: set[str] = set()
+
+    def walk(current: argparse.ArgumentParser, prefix: tuple[str, ...]) -> None:
+        for action in current._actions:
+            if not isinstance(action, argparse._SubParsersAction):
+                continue
+            for name, child in action.choices.items():
+                path = (*prefix, str(name))
+                commands.add(" ".join(path))
+                walk(child, path)
+
+    walk(cli_parser, ())
+    return tuple(sorted(commands))
+
+
+def _validate_workflow_commands(
+    contract: dict[str, object],
+    cli_commands: tuple[str, ...] | list[str],
+) -> dict[str, object]:
+    available = set(cli_commands)
+    advertised = sorted({
+        str(command)
+        for phase in contract.get("phases", [])
+        if isinstance(phase, dict)
+        for command in phase.get("commands", [])
+        if str(command).strip()
+    })
+    missing = [command for command in advertised if command not in available]
+    return {
+        "format": "agent-devtools-workflow-validation",
+        "formatVersion": 1,
+        "status": "pass" if not missing else "fail",
+        "advertised": len(advertised),
+        "available": len(available),
+        "missing": missing,
+    }
+
+
+def _capabilities_payload(root: Path, cli_parser: argparse.ArgumentParser) -> dict[str, object]:
+    payload = workflow_capabilities(root)
+    payload["cliCommands"] = list(_command_inventory(cli_parser))
+    return payload
+
+
+
 def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="agent", description="Portable agent work toolbox")
     p.add_argument("--version", action="version", version=__version__)
@@ -94,6 +141,8 @@ def parser() -> argparse.ArgumentParser:
     workflow_sub = workflow.add_subparsers(dest="workflow_command", required=True)
     workflow_show = workflow_sub.add_parser("show", help="show the mandatory workflow for the active profile")
     workflow_show.add_argument("--json", action="store_true", dest="json_output")
+    workflow_validate = workflow_sub.add_parser("validate", help="verify advertised workflow commands against the real CLI")
+    workflow_validate.add_argument("--json", action="store_true", dest="json_output")
     capabilities = sub.add_parser("capabilities", help="machine-readable CLI/profile capability discovery")
     capabilities.add_argument("--json", action="store_true", dest="json_output")
     onboarding = sub.add_parser("onboarding", help="shared cross-agent project onboarding contract")
@@ -153,7 +202,8 @@ def parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = parser().parse_args(argv)
+    cli_parser = parser()
+    args = cli_parser.parse_args(argv)
     if args.command == "bootstrap":
         try:
             payload = (
@@ -205,7 +255,20 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "workflow":
         root = discover_project_root()
-        payload = workflow_contract(root)
+        contract = workflow_contract(root)
+        if args.workflow_command == "validate":
+            payload = _validate_workflow_commands(contract, _command_inventory(cli_parser))
+            if args.json_output:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+            else:
+                print(
+                    f"workflow validation: {payload['status'].upper()} · "
+                    f"advertised={payload['advertised']} · available={payload['available']}"
+                )
+                for missing in payload["missing"]:
+                    print(f"  missing: {missing}")
+            return 0 if payload["status"] == "pass" else 1
+        payload = contract
         if args.json_output:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
@@ -217,7 +280,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "capabilities":
         root = discover_project_root()
-        payload = workflow_capabilities(root)
+        payload = _capabilities_payload(root, cli_parser)
         if args.json_output:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
