@@ -67,7 +67,7 @@ def _capture(argv: Iterable[str], *, check: bool = True) -> str:
             f"command failed ({proc.returncode}): {' '.join(cmd)}"
             + (f": {detail}" if detail else "")
         )
-    return proc.stdout.strip()
+    return proc.stdout.rstrip("\r\n")
 
 
 def _git_head() -> str:

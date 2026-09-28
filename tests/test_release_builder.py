@@ -82,5 +82,28 @@ class ReleaseBuilderTests(unittest.TestCase):
             self.assertFalse(b.exists())
 
 
+    def test_changed_paths_preserves_porcelain_leading_space(self) -> None:
+        import shutil
+        import subprocess
+        if not shutil.which("git"):
+            self.skipTest("git is required")
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            subprocess.run(["git","init","-q","-b","main",str(root)], check=True)
+            subprocess.run(["git","-C",str(root),"config","user.name","Test"], check=True)
+            subprocess.run(["git","-C",str(root),"config","user.email","test@example.invalid"], check=True)
+            path = root / "AGENT-START-HERE.md"
+            path.write_text("before\n", encoding="utf-8")
+            subprocess.run(["git","-C",str(root),"add","AGENT-START-HERE.md"], check=True)
+            subprocess.run(["git","-C",str(root),"commit","-q","-m","base"], check=True)
+            path.write_text("after\n", encoding="utf-8")
+            original = builder.ROOT
+            try:
+                builder.ROOT = root
+                self.assertEqual(("AGENT-START-HERE.md",), builder._changed_paths())
+            finally:
+                builder.ROOT = original
+
+
 if __name__ == "__main__":
     unittest.main()
