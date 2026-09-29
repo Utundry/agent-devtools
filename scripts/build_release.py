@@ -112,6 +112,25 @@ def _current_branch() -> str:
     return branch
 
 
+def _git_is_ancestor(ancestor: str, descendant: str) -> bool:
+    proc = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", ancestor, descendant],
+        cwd=ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=False,
+    )
+    if proc.returncode == 0:
+        return True
+    if proc.returncode == 1:
+        return False
+    detail = proc.stderr.strip()
+    raise ReleaseBuilderError(
+        "cannot compare release branch ancestry: " + (detail or "git merge-base failed")
+    )
+
+
 def _current_version() -> str:
     text = VERSION_FILE.read_text(encoding="utf-8")
     match = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']\s*$', text, re.MULTILINE)
@@ -193,23 +212,49 @@ def _publish_preflight(version: str, remote: str) -> tuple[str, str]:
     _run(["git", "fetch", "--prune", remote, branch])
     local_head = _git_head()
     remote_head = _capture(["git", "rev-parse", f"refs/remotes/{remote}/{branch}"])
-    if local_head != remote_head:
+    if local_head != remote_head and not _git_is_ancestor(remote_head, local_head):
         raise ReleaseBuilderError(
-            f"local {branch} is not exactly synchronized with {remote}/{branch}: "
-            f"{local_head} != {remote_head}"
+            f"local {branch} is not a fast-forward publication of {remote}/{branch}: "
+            f"remote={remote_head}, local={local_head}"
         )
     if _remote_tag_exists(remote, version):
         raise ReleaseBuilderError(f"remote tag v{version} already exists on {remote}")
     return branch, local_head
 
 
+def _raw_changed_paths() -> tuple[str, ...]:
+    # Keep this low-level helper independent of Agent DevTools project config.
+    # Release-specific callers may layer workspace-local semantics on top, while
+    # generic Git parsing remains usable in minimal repositories and tests.
+    result: list[str] = []
+    for raw in _capture(["git", "status", "--porcelain"]).splitlines():
+        if not raw.strip():
+            continue
+        value = raw[3:].strip() if len(raw) >= 4 else raw.strip()
+        if " -> " in value:
+            value = value.split(" -> ", 1)[1].strip()
+        if value:
+            result.append(value.replace("\\", "/"))
+    return tuple(result)
+
+
 def _changed_paths(*, include_workspace_local: bool = False) -> tuple[str, ...]:
-    report = _change_report()
-    return tuple(
+    raw = _raw_changed_paths()
+    if include_workspace_local or not raw:
+        return raw
+    try:
+        report = _change_report()
+    except ReleaseBuilderError:
+        # _git_clean() itself remains fail-closed for release preparation.
+        # This compatibility fallback preserves _changed_paths() as a generic
+        # Git helper when no Agent DevTools project config exists.
+        return raw
+    workspace_local = {
         str(row.get("path"))
         for row in report.get("entries", [])
-        if include_workspace_local or not bool(row.get("workspaceLocal"))
-    )
+        if bool(row.get("workspaceLocal"))
+    }
+    return tuple(path for path in raw if path not in workspace_local)
 
 
 def _workspace_local_snapshot() -> dict[Path, tuple[bytes, int]]:
