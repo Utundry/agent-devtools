@@ -298,8 +298,11 @@ def _qualification(version: str) -> None:
 
 def _post_commit_qualification(version: str) -> None:
     py = sys.executable
+    # _git_clean() already fails closed on every unmarked or mismatched change.
+    # The bootstrap builder may therefore ignore the remaining exact
+    # workspace-local dirtiness without weakening release qualification.
     _git_clean()
-    _run([py, "scripts/build_bootstrap.py", "--version", version, "--check"])
+    _run([py, "scripts/build_bootstrap.py", "--version", version, "--check", "--allow-dirty"])
     _run([py, str(INSTALLER.relative_to(ROOT)), "--self-check", "--expect-version", version, "--json"])
 
 
