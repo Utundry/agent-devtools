@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from agent_devtools import __version__
+from agent_devtools.core.archive import ArchiveSafetyError, read_zip_bounded
 from agent_devtools.core.workspace import default_work_root
 from agent_devtools.preserve import (
     PreserveError,
@@ -149,28 +150,22 @@ def _read_handoff(path: Path) -> tuple[dict[str, Any], dict[str, bytes]]:
     if not path.is_file():
         raise HandoffError(f"handoff not found: {path}")
     try:
-        with zipfile.ZipFile(path, "r") as zf:
-            ordered_names = [name for name in zf.namelist() if not name.endswith("/")]
-            if len(ordered_names) != len(set(ordered_names)):
-                raise HandoffError("handoff contains duplicate archive entries")
-            names = set(ordered_names)
-            required = {
-                "handoff.json",
-                "brief.json",
-                "brief.txt",
-                "preservation.zip",
-                "MANIFEST.sha256",
-            }
-            missing = sorted(required - names)
-            if missing:
-                raise HandoffError(
-                    "handoff is missing required entries: " + ", ".join(missing)
-                )
-            payloads = {name: zf.read(name) for name in ordered_names}
-    except HandoffError:
-        raise
-    except (OSError, zipfile.BadZipFile, KeyError) as exc:
-        raise HandoffError(f"cannot read handoff: {exc}") from exc
+        payloads = read_zip_bounded(path)
+    except ArchiveSafetyError as exc:
+        raise HandoffError(str(exc)) from exc
+    names = set(payloads)
+    required = {
+        "handoff.json",
+        "brief.json",
+        "brief.txt",
+        "preservation.zip",
+        "MANIFEST.sha256",
+    }
+    missing = sorted(required - names)
+    if missing:
+        raise HandoffError(
+            "handoff is missing required entries: " + ", ".join(missing)
+        )
 
     try:
         manifest = payloads["MANIFEST.sha256"].decode("utf-8")

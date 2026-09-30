@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable
 
+from agent_devtools.core.archive import ArchiveSafetyError, extract_zip_bounded, read_zip_bounded
 from agent_devtools.core.hashing import sha256_file, stable_fingerprint
 from agent_devtools.core.pathmatch import matches_any
 
@@ -78,11 +79,8 @@ def _safe_zip_name(name: str) -> PurePosixPath:
 
 def _extract_zip_safely(archive_path: Path, destination: Path) -> None:
     try:
-        with zipfile.ZipFile(archive_path) as archive:
-            for info in archive.infolist():
-                _safe_zip_name(info.filename)
-            archive.extractall(destination)
-    except (OSError, zipfile.BadZipFile) as exc:
+        extract_zip_bounded(archive_path, destination)
+    except ArchiveSafetyError as exc:
         raise ReplayError(f"cannot extract base snapshot {archive_path}: {exc}") from exc
 
 
@@ -233,9 +231,9 @@ def create_exact_bundle(
 
 def read_bundle_manifest(bundle_path: Path) -> dict[str, Any]:
     try:
-        with zipfile.ZipFile(bundle_path) as archive:
-            raw = archive.read("replay-manifest.json")
-    except (OSError, KeyError, zipfile.BadZipFile) as exc:
+        payloads = read_zip_bounded(bundle_path)
+        raw = payloads["replay-manifest.json"]
+    except (ArchiveSafetyError, KeyError) as exc:
         raise ReplayError(f"invalid replay bundle {bundle_path}: {exc}") from exc
     try:
         payload = json.loads(raw.decode("utf-8"))
@@ -286,24 +284,23 @@ def apply_exact_bundle(
             parent = parent.parent
 
     try:
-        with zipfile.ZipFile(bundle_path) as archive:
-            for rel, expected_hash in sorted(payload.items()):
-                if not isinstance(rel, str) or not isinstance(expected_hash, str):
-                    raise ReplayError("replay bundle payload entries must be path/hash strings")
-                _safe_zip_name(rel)
-                archive_name = f"files/{rel}"
-                _safe_zip_name(archive_name)
-                try:
-                    data = archive.read(archive_name)
-                except KeyError as exc:
-                    raise ReplayError(f"replay bundle is missing payload bytes for {rel}") from exc
-                target = replay_root / rel
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_bytes(data)
-                if sha256_file(target) != expected_hash:
-                    raise ReplayError(f"replay bundle payload hash mismatch for {rel}")
-    except zipfile.BadZipFile as exc:
+        bundle_payloads = read_zip_bounded(bundle_path)
+    except ArchiveSafetyError as exc:
         raise ReplayError(f"invalid replay bundle: {exc}") from exc
+    for rel, expected_hash in sorted(payload.items()):
+        if not isinstance(rel, str) or not isinstance(expected_hash, str):
+            raise ReplayError("replay bundle payload entries must be path/hash strings")
+        _safe_zip_name(rel)
+        archive_name = f"files/{rel}"
+        _safe_zip_name(archive_name)
+        data = bundle_payloads.get(archive_name)
+        if data is None:
+            raise ReplayError(f"replay bundle is missing payload bytes for {rel}")
+        target = replay_root / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+        if sha256_file(target) != expected_hash:
+            raise ReplayError(f"replay bundle payload hash mismatch for {rel}")
 
     replay_inventory = canonical_source_hashes(replay_root, config)
     expected_target = str(((manifest.get("target") or {}).get("fingerprint") or ""))

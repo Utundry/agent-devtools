@@ -12,6 +12,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Iterable
 
 from agent_devtools import __version__
+from agent_devtools.core.archive import ArchiveSafetyError, read_zip_bounded
 from agent_devtools.core.hashing import sha256_file, stable_fingerprint
 from agent_devtools.core.io import atomic_json_write
 from agent_devtools.core.workspace import default_work_root
@@ -274,13 +275,11 @@ def _read_checkpoint(path: Path) -> tuple[dict[str, Any], dict[str, bytes]]:
     if not path.is_file():
         raise CheckpointError(f"checkpoint not found: {path}")
     try:
-        with zipfile.ZipFile(path, "r") as zf:
-            names = zf.namelist()
-            if "MANIFEST.sha256" not in names or "checkpoint.json" not in names:
-                raise CheckpointError("checkpoint is missing MANIFEST.sha256 or checkpoint.json")
-            payloads = {name: zf.read(name) for name in names if not name.endswith("/")}
-    except (OSError, zipfile.BadZipFile, KeyError) as exc:
-        raise CheckpointError(f"cannot read checkpoint: {exc}") from exc
+        payloads = read_zip_bounded(path)
+    except ArchiveSafetyError as exc:
+        raise CheckpointError(str(exc)) from exc
+    if "MANIFEST.sha256" not in payloads or "checkpoint.json" not in payloads:
+        raise CheckpointError("checkpoint is missing MANIFEST.sha256 or checkpoint.json")
     manifest = payloads["MANIFEST.sha256"].decode("utf-8", errors="strict")
     expected: dict[str, str] = {}
     for raw in manifest.splitlines():

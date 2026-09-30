@@ -10,6 +10,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from agent_devtools import __version__
+from agent_devtools.core.archive import ArchiveSafetyError, read_zip_bounded
 from agent_devtools.core.pathmatch import matches_any
 from agent_devtools.profiles import load_profile
 from agent_devtools.work.state import load_task_state, task_state_path
@@ -208,26 +209,47 @@ def _read_snapshot(path: Path) -> tuple[dict[str, Any], dict[str, bytes]]:
     path = path.expanduser().resolve()
     if not path.is_file():
         raise WorkspaceSnapshotError(f"snapshot not found: {path}")
-    with zipfile.ZipFile(path) as zf:
-        names = zf.namelist()
-        if "snapshot.json" not in names or "MANIFEST.sha256" not in names:
-            raise WorkspaceSnapshotError("snapshot is missing metadata/manifest")
-        manifest_lines = zf.read("MANIFEST.sha256").decode("utf-8").splitlines()
-        expected: dict[str, str] = {}
-        for line in manifest_lines:
-            if not line.strip(): continue
+    try:
+        all_payloads = read_zip_bounded(path)
+    except ArchiveSafetyError as exc:
+        raise WorkspaceSnapshotError(str(exc)) from exc
+    if "snapshot.json" not in all_payloads or "MANIFEST.sha256" not in all_payloads:
+        raise WorkspaceSnapshotError("snapshot is missing metadata/manifest")
+    try:
+        manifest_lines = all_payloads["MANIFEST.sha256"].decode("utf-8").splitlines()
+    except UnicodeDecodeError as exc:
+        raise WorkspaceSnapshotError("snapshot manifest is not UTF-8") from exc
+    expected: dict[str, str] = {}
+    for line in manifest_lines:
+        if not line.strip():
+            continue
+        try:
             digest, name = line.split("  ", 1)
-            expected[name] = digest
-        payloads: dict[str, bytes] = {}
-        for name, digest in expected.items():
-            data = zf.read(name)
-            if _sha(data) != digest:
-                raise WorkspaceSnapshotError(f"snapshot payload hash mismatch: {name}")
-            payloads[name] = data
+        except ValueError as exc:
+            raise WorkspaceSnapshotError("malformed snapshot manifest") from exc
+        if name in expected:
+            raise WorkspaceSnapshotError(f"snapshot manifest contains duplicate path: {name}")
+        expected[name] = digest
+    extras = sorted(set(all_payloads) - set(expected) - {"MANIFEST.sha256"})
+    if extras:
+        raise WorkspaceSnapshotError(
+            "snapshot contains unmanifested payload: " + ", ".join(extras[:5])
+        )
+    payloads: dict[str, bytes] = {}
+    for name, digest in expected.items():
+        data = all_payloads.get(name)
+        if data is None:
+            raise WorkspaceSnapshotError(f"snapshot manifest references missing entry: {name}")
+        if _sha(data) != digest:
+            raise WorkspaceSnapshotError(f"snapshot payload hash mismatch: {name}")
+        payloads[name] = data
+    try:
         meta = json.loads(payloads["snapshot.json"].decode("utf-8"))
-        if meta.get("format") != SNAPSHOT_FORMAT or int(meta.get("formatVersion") or 0) != SNAPSHOT_VERSION:
-            raise WorkspaceSnapshotError("unsupported snapshot format/version")
-        return meta, payloads
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise WorkspaceSnapshotError(f"invalid snapshot metadata: {exc}") from exc
+    if not isinstance(meta, dict) or meta.get("format") != SNAPSHOT_FORMAT or int(meta.get("formatVersion") or 0) != SNAPSHOT_VERSION:
+        raise WorkspaceSnapshotError("unsupported snapshot format/version")
+    return meta, payloads
 
 
 def inspect_snapshot(path: Path) -> dict[str, Any]:
