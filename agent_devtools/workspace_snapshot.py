@@ -10,7 +10,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from agent_devtools import __version__
-from agent_devtools.context.config import load_context_config
+from agent_devtools.core.pathmatch import matches_any
 from agent_devtools.profiles import load_profile
 from agent_devtools.work.state import load_task_state, task_state_path
 from agent_devtools.work.verification import verification_path
@@ -24,6 +24,27 @@ _EXCLUDE_PREFIXES = (
 )
 _EXCLUDE_NAMES = {".agent-bootstrap-report.json"}
 _EXCLUDE_PREFIX_NAMES = ("agent-devtools-bootstrap-",)
+
+_DEFAULT_PRESERVE_EXCLUDE = (
+    ".env",
+    ".env.*",
+    "**/.env",
+    "**/.env.*",
+    "credentials.json",
+    "**/credentials.json",
+    "service-account*.json",
+    "**/service-account*.json",
+    "id_rsa",
+    "**/id_rsa",
+    "id_ed25519",
+    "**/id_ed25519",
+    "*.key",
+    "**/*.key",
+    "*.p12",
+    "**/*.p12",
+    "*.pfx",
+    "**/*.pfx",
+)
 
 
 class WorkspaceSnapshotError(RuntimeError):
@@ -48,7 +69,38 @@ def _safe_rel(raw: str) -> str:
     return value
 
 
-def _excluded(rel: str) -> bool:
+def _project_preserve_exclude(root: Path) -> tuple[str, ...]:
+    config = root / "agent-tools.json"
+    if not config.is_file():
+        return ()
+    try:
+        raw = json.loads(config.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise WorkspaceSnapshotError(f"cannot read agent-tools.json preservation settings: {exc}") from exc
+    if not isinstance(raw, dict):
+        raise WorkspaceSnapshotError("agent-tools.json root must be an object")
+    preserve = raw.get("preserve") or {}
+    if not isinstance(preserve, dict):
+        raise WorkspaceSnapshotError("agent-tools.json preserve must be an object")
+    value = preserve.get("exclude", [])
+    if not isinstance(value, list):
+        raise WorkspaceSnapshotError("agent-tools.json preserve.exclude must be an array")
+    result: list[str] = []
+    for item in value:
+        if not isinstance(item, str) or not item.strip():
+            raise WorkspaceSnapshotError("agent-tools.json preserve.exclude must contain non-empty strings")
+        pattern = item.strip().replace("\\", "/")
+        candidate = PurePosixPath(pattern)
+        if candidate.is_absolute() or ".." in candidate.parts:
+            raise WorkspaceSnapshotError(
+                f"agent-tools.json preserve.exclude must stay inside the workspace: {item!r}"
+            )
+        if pattern not in result:
+            result.append(pattern)
+    return tuple(result)
+
+
+def _excluded(rel: str, preserve_exclude: tuple[str, ...]) -> bool:
     rel = rel.replace("\\", "/")
     if rel in _EXCLUDE_NAMES:
         return True
@@ -57,15 +109,15 @@ def _excluded(rel: str) -> bool:
     name = PurePosixPath(rel).name
     if any(name.startswith(prefix) and name.endswith(".py") for prefix in _EXCLUDE_PREFIX_NAMES):
         return True
-    return False
+    return matches_any(rel, (*_DEFAULT_PRESERVE_EXCLUDE, *preserve_exclude))
 
 
-def _iter_artifacts(root: Path):
+def _iter_artifacts(root: Path, preserve_exclude: tuple[str, ...]):
     for path in sorted(root.rglob("*")):
         if not path.is_file() or path.is_symlink():
             continue
         rel = path.relative_to(root).as_posix()
-        if _excluded(rel):
+        if _excluded(rel, preserve_exclude):
             continue
         yield rel, path
 
@@ -93,10 +145,11 @@ def create_snapshot(root: Path, *, out: Path | None = None, max_bytes: int = 250
     if profile.development:
         raise WorkspaceSnapshotError("workspace snapshot is intended for non-development profiles; use release/checkpoint flows for development")
 
+    preserve_exclude = _project_preserve_exclude(root)
     payloads: dict[str, bytes] = {}
     rows: list[dict[str, Any]] = []
     total = 0
-    for rel, path in _iter_artifacts(root):
+    for rel, path in _iter_artifacts(root, preserve_exclude):
         data = path.read_bytes()
         total += len(data)
         if total > max_bytes:
@@ -127,6 +180,8 @@ def create_snapshot(root: Path, *, out: Path | None = None, max_bytes: int = 250
         "artifacts": rows,
         "state": {"taskIncluded": task is not None, "verificationIncluded": verify.is_file()},
         "excluded": [".git", "devtools/agent", ".agent-cache", ".agent-work raw state", ".agent-bootstrap-report.json", "bootstrap installers"],
+        "sensitiveDefaultsExcluded": True,
+        "projectPreserveExclude": list(preserve_exclude),
     }
     payloads["snapshot.json"] = (json.dumps(metadata, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
     entries = {name: _sha(data) for name, data in payloads.items()}

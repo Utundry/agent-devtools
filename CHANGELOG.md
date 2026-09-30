@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- N4.2 portable-state safety excludes obvious credential/key material from non-development snapshots by default and adds project-specific `preserve.exclude` patterns without conflating preservation with `.gitignore`.
 - N4.1 skeptic hardening makes GitHub CI run the complete `unittest discover` suite used by release qualification instead of a manually maintained subset.
 - Reusable `fileSet` certification now binds captured generated outputs to suite-level evidence and re-executes the complete file set when those outputs are missing, stale, or tampered.
 

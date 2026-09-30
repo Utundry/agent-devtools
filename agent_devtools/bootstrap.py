@@ -489,6 +489,9 @@ def _neutral_workspace_config(profile_id: str) -> dict[str, Any]:
             "lowPriority": ["AGENTS.md", "agent-tools.json"],
             "defaultBudget": 3500
         },
+        "preserve": {
+            "exclude": []
+        },
         "sourceKinds": [
             {"glob": ".agent-knowledge/**", "kind": "knowledge", "weight": 1.35},
             {"glob": "devtools/agent/**", "kind": "tooling", "weight": 0.10}

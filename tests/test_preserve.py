@@ -54,6 +54,49 @@ class PreserveTests(unittest.TestCase):
         finally:
             tmp.cleanup()
 
+    def test_non_development_snapshot_excludes_default_sensitive_and_project_patterns(self) -> None:
+        tmp, root = self.make_root("research")
+        try:
+            config = json.loads((root / "agent-tools.json").read_text(encoding="utf-8"))
+            config["preserve"] = {"exclude": ["private/**"]}
+            (root / "agent-tools.json").write_text(json.dumps(config), encoding="utf-8")
+            (root / ".env").write_text("TOKEN=secret\n", encoding="utf-8")
+            (root / "credentials.json").write_text('{"secret":true}\n', encoding="utf-8")
+            (root / "id_ed25519").write_text("private-key\n", encoding="utf-8")
+            (root / "nested").mkdir()
+            (root / "nested/.env.local").write_text("PASSWORD=secret\n", encoding="utf-8")
+            (root / "private").mkdir()
+            (root / "private/notes.md").write_text("private\n", encoding="utf-8")
+            (root / "notes.md").write_text("keep\n", encoding="utf-8")
+
+            out = root / "snapshot.zip"
+            payload = create_preservation(root, out=out)
+            self.assertEqual("workspace-snapshot", payload["kind"])
+            with zipfile.ZipFile(out, "r") as zf:
+                names = set(zf.namelist())
+                meta = json.loads(zf.read("snapshot.json").decode("utf-8"))
+            self.assertIn("artifacts/notes.md", names)
+            self.assertNotIn("artifacts/.env", names)
+            self.assertNotIn("artifacts/credentials.json", names)
+            self.assertNotIn("artifacts/id_ed25519", names)
+            self.assertNotIn("artifacts/nested/.env.local", names)
+            self.assertNotIn("artifacts/private/notes.md", names)
+            self.assertTrue(meta["sensitiveDefaultsExcluded"])
+            self.assertEqual(["private/**"], meta["projectPreserveExclude"])
+        finally:
+            tmp.cleanup()
+
+    def test_non_development_snapshot_rejects_invalid_preserve_exclude_contract(self) -> None:
+        tmp, root = self.make_root("analysis")
+        try:
+            config = json.loads((root / "agent-tools.json").read_text(encoding="utf-8"))
+            config["preserve"] = {"exclude": "../outside"}
+            (root / "agent-tools.json").write_text(json.dumps(config), encoding="utf-8")
+            with self.assertRaisesRegex(PreserveError, "preserve.exclude must be an array"):
+                create_preservation(root)
+        finally:
+            tmp.cleanup()
+
     def test_kind_detection_is_archive_semantic_not_filename_based(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
