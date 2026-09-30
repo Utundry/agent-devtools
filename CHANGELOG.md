@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- N4.4 resolves workspace-local mark storage via `git rev-parse --git-path` so linked Git worktrees have independent exact marks.
 - N4.3 introduces one bounded archive reader/extractor for preservation and replay, rejecting duplicate/unsafe/symlink/encrypted members and enforcing uncompressed resource budgets.
 - N4.2 portable-state safety excludes obvious credential/key material from non-development snapshots by default and adds project-specific `preserve.exclude` patterns without conflating preservation with `.gitignore`.
 - N4.1 skeptic hardening makes GitHub CI run the complete `unittest discover` suite used by release qualification instead of a manually maintained subset.

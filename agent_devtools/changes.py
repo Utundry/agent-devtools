@@ -46,7 +46,18 @@ def _normalize(path: str) -> str:
 
 
 def _local_marks_path(root: Path) -> Path:
-    return root / ".git" / LOCAL_MARKS_FILE
+    root = root.resolve()
+    probe = _run_git(root, ["rev-parse", "--is-inside-work-tree"])
+    if probe.returncode != 0 or probe.stdout.strip() != "true":
+        raise ChangeSetError("workspace-local marks require a Git working tree")
+    top = _run_git(root, ["rev-parse", "--show-toplevel"])
+    if top.returncode != 0 or Path(top.stdout.strip()).resolve() != root:
+        raise ChangeSetError("workspace-local marks require the Git working-tree root")
+    git_path = _run_git(root, ["rev-parse", "--git-path", LOCAL_MARKS_FILE])
+    if git_path.returncode != 0 or not git_path.stdout.strip():
+        raise ChangeSetError("cannot resolve Git workspace-local mark storage path")
+    relative = Path(git_path.stdout.strip())
+    return (relative if relative.is_absolute() else root / relative).resolve()
 
 
 def _sha256_file(path: Path) -> str:
@@ -105,8 +116,7 @@ def _write_workspace_local_marks(root: Path, marks: dict[str, dict[str, str]]) -
 
 def mark_workspace_local(root: Path, paths: list[str] | tuple[str, ...], *, reason: str = "") -> dict[str, Any]:
     root = root.resolve()
-    if not (root / ".git").exists():
-        raise ChangeSetError("workspace-local marks require a Git working tree")
+    _local_marks_path(root)
     marks = load_workspace_local_marks(root)
     marked: list[str] = []
     for raw in paths:
@@ -180,7 +190,9 @@ def _canonical_path(config: CheckConfig, rel: str) -> bool:
 
 def discover_changes(root: Path, config_path: Path | None = None) -> dict[str, Any]:
     root = root.resolve()
-    if not (root / ".git").exists():
+    try:
+        _local_marks_path(root)
+    except ChangeSetError:
         return {
             "format": CHANGESET_FORMAT,
             "formatVersion": CHANGESET_VERSION,

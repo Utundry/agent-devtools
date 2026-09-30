@@ -93,6 +93,51 @@ class WorkspaceLocalChangeTests(unittest.TestCase):
         finally:
             tmp.cleanup()
 
+    def test_linked_worktree_marks_are_isolated_and_content_addressed(self) -> None:
+        tmp, root = self.make_project()
+        try:
+            linked = root.parent / (root.name + "-linked-checkout")
+            subprocess.run(
+                ["git", "-C", str(root), "worktree", "add", "-q", "-b", "linked-test", str(linked)],
+                check=True,
+            )
+            try:
+                self.assertTrue((linked / ".git").is_file())
+                (linked / ".gitignore").write_text(
+                    ".agent-cache/\nlinked-local/\n", encoding="utf-8"
+                )
+                marked = mark_workspace_local(linked, [".gitignore"], reason="linked worktree")
+                mark_path = Path(marked["path"])
+                self.assertTrue(mark_path.is_file())
+                self.assertNotEqual(mark_path, root / ".git" / "agent-devtools-local-changes.json")
+
+                report = discover_changes(linked)
+                self.assertEqual([".gitignore"], report["workspaceLocalChangedFiles"])
+                self.assertEqual([], report["canonicalChangedFiles"])
+
+                (root / ".gitignore").write_text(
+                    ".agent-cache/\nmain-local/\n", encoding="utf-8"
+                )
+                self.assertIn(".gitignore", discover_changes(root)["canonicalChangedFiles"])
+                self.assertEqual([], discover_changes(root)["workspaceLocalChangedFiles"])
+
+                (linked / ".gitignore").write_text(
+                    ".agent-cache/\nlinked-local/\nmodified/\n", encoding="utf-8"
+                )
+                changed = discover_changes(linked)
+                self.assertIn(".gitignore", changed["workspaceLocalMarkMismatches"])
+                self.assertIn(".gitignore", changed["canonicalChangedFiles"])
+
+                unmark_workspace_local(linked, [".gitignore"])
+                self.assertIn(".gitignore", discover_changes(linked)["canonicalChangedFiles"])
+            finally:
+                subprocess.run(
+                    ["git", "-C", str(root), "worktree", "remove", "--force", str(linked)],
+                    check=True,
+                )
+        finally:
+            tmp.cleanup()
+
     def test_unmark_restores_normal_change_semantics(self) -> None:
         tmp, root = self.make_project()
         try:
