@@ -21,46 +21,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Compile
         run: python -m compileall -q agent_devtools tests scripts
-      - name: Core, file-set and certified-evidence tests
-        run: >-
-          python -m unittest -q
-          tests.test_check_foundation
-          tests.test_smoke
-          tests.test_stage_a4_file_sets_composition
-          tests.test_stage_a5_certified_evidence
-      - name: Exact replay tests
-        run: python -m unittest -q tests.test_stage_a6_exact_replay
-      - name: Release foundation tests 1
-        run: >-
-          python -m unittest -q
-          tests.test_stage_b1_release_foundation.ReleaseFoundationTests.test_build_creates_source_runtime_replay_evidence_and_verify_passes
-          tests.test_stage_b1_release_foundation.ReleaseFoundationTests.test_source_package_embeds_deterministic_payload_manifest
-          tests.test_stage_b1_release_foundation.ReleaseFoundationTests.test_embedded_source_manifest_tamper_is_detected
-      - name: Release foundation tests 2
-        run: >-
-          python -m unittest -q
-          tests.test_stage_b1_release_foundation.ReleaseFoundationTests.test_release_artifacts_are_deterministic_for_identical_target
-          tests.test_stage_b1_release_foundation.ReleaseFoundationTests.test_source_package_is_a_valid_base_for_the_next_release
-      - name: Release foundation tests 3
-        run: >-
-          python -m unittest -q
-          tests.test_stage_b1_release_foundation.ReleaseFoundationTests.test_verify_detects_archive_tamper
-          tests.test_stage_b1_release_foundation.ReleaseFoundationTests.test_missing_required_runtime_file_is_rejected
-          tests.test_stage_b1_release_foundation.ReleaseFoundationTests.test_invalid_release_prefix_is_rejected
-      - name: Preset and context tests
-        run: >-
-          python -m unittest -q
-          tests.test_stage_b3_release_presets
-          tests.test_stage_c1_context_index
-          tests.test_stage_c2_affected_context
-          tests.test_stage_c3_context_relevance
-      - name: Work, knowledge, bootstrap and adapter tests
-        run: >-
-          python -m unittest -q
-          tests.test_stage_d11_semantic_extractor
-          tests.test_stage_d12_release_base_discovery
-          tests.test_stage_d1_work_continuity
-          tests.test_stage_m1_adaptive_bootstrap
-          tests.test_structured_adapters_presets
+      - name: Full test suite
+        run: python -m unittest discover -s tests -p 'test_*.py'
       - name: Bootstrap self-check
         run: python bootstrap/AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py --self-check --json

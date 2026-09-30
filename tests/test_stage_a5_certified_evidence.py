@@ -171,6 +171,59 @@ class CertifiedEvidenceTests(unittest.TestCase, CertificationHarness):
             self.assertEqual(1, report2["certification"]["reusedEvidence"])
             self.assertEqual(1, report2["certification"]["executedEvidence"])
 
+    def test_file_set_captured_output_tamper_forces_complete_reexecution(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "src").mkdir()
+            (root / "src/a.txt").write_text("a1\n", encoding="utf-8")
+            (root / "src/b.txt").write_text("b1\n", encoding="utf-8")
+            self.write_project(root, {
+                "build-each": {
+                    "argv": [
+                        "{python}", "-c",
+                        "import sys; from pathlib import Path; "
+                        "p=Path('executions.log'); old=p.read_text() if p.exists() else ''; "
+                        "p.write_text(old + Path(sys.argv[1]).name + '\\n'); "
+                        "d=Path('dist/out.txt'); d.parent.mkdir(exist_ok=True); "
+                        "d.write_text(''.join(x.read_text() for x in sorted(Path('src').glob('*.txt'))))",
+                        "{file}",
+                    ],
+                    "inputs": [],
+                    "fileSet": {"patterns": ["src/*.txt"], "allowEmpty": False},
+                    "resultAdapter": "exit-code",
+                    "outputs": {"required": ["dist/out.txt"], "capture": ["dist/out.txt"]},
+                }
+            })
+
+            code1, report1 = self.certify(root, cold=True)
+            self.assertEqual(0, code1, report1)
+            self.assertEqual(["a.txt", "b.txt"], (root / "executions.log").read_text().splitlines())
+            self.assertEqual("a1\nb1\n", (root / "dist/out.txt").read_text())
+
+            code2, report2 = self.certify(root)
+            self.assertEqual(0, code2, report2)
+            self.assertEqual(["a.txt", "b.txt"], (root / "executions.log").read_text().splitlines())
+            self.assertEqual(
+                ["a.txt", "b.txt"],
+                [Path(x).name for x in report2["checks"]["build-each"]["result"]["reusedFiles"]],
+            )
+            self.assertEqual([], report2["checks"]["build-each"]["result"]["executedFiles"])
+
+            (root / "dist/out.txt").write_text("tampered", encoding="utf-8")
+            code3, report3 = self.certify(root)
+            self.assertEqual(0, code3, report3)
+            self.assertEqual(
+                ["a.txt", "b.txt", "a.txt", "b.txt"],
+                (root / "executions.log").read_text().splitlines(),
+            )
+            result = report3["checks"]["build-each"]["result"]
+            self.assertEqual([], result["reusedFiles"])
+            self.assertEqual(
+                ["a.txt", "b.txt"],
+                [Path(x).name for x in result["executedFiles"]],
+            )
+            self.assertEqual("a1\nb1\n", (root / "dist/out.txt").read_text())
+
     def test_corrupt_evidence_fails_safe_to_execution_and_is_repaired(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

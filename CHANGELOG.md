@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- N4.1 skeptic hardening makes GitHub CI run the complete `unittest discover` suite used by release qualification instead of a manually maintained subset.
+- Reusable `fileSet` certification now binds captured generated outputs to suite-level evidence and re-executes the complete file set when those outputs are missing, stale, or tampered.
+
 ## 0.7.0.1-public-onboarding-hotfix
 
 - makes all default interactive bootstrap prompts English; multilingual intent parsing remains supported;
