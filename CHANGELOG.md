@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Release version edits and rollback invalidate only the version module's bytecode, preventing stale version imports during same-length bumps within a timestamp second.
+- Routine completion automatically reuses a current, integrity-checked PASS; otherwise it runs affected checks, includes task-recorded changed files, and establishes a full baseline when changes are unknown or absent. Explicit `--no-cache` still requests execution. Default `workflow show` is compact, with detailed responsibilities under `--details` (workflow v10 / CLI v16).
+- Fail-safe full selection stays full even with catch-all policy rules, and completion revalidates the actual fallback coverage before reusing a report.
 - Clean-room self-hosting removes bootstrap's eager index creation, makes its launcher editable source, and includes script/bootstrap dependencies in the project's own check identities.
 - Preserve historical 0.7.0.1 validation/evidence under `docs/archive/` and stop tracking its obsolete root package manifest, so future Git snapshots are not rejected as tampered release packages.
 - Audit hardening: machine completion validates task/config/engine identity, report SHA-256, current input/output hashes and affected-suite/group coverage. Manual attestations are explicitly distinguished from machine checks.

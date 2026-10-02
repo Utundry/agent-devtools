@@ -69,7 +69,10 @@ def validated_check_report(root: Path, state: dict[str, Any]) -> dict[str, Any]:
             raise TaskStateError("check engine/config is stale; run work complete")
         policy = load_policy(config.policy_path)
         selection = report["selection"]
-        plan = apply_selection_safety_guards(policy.plan(selection["profile"], selection["changedFiles"]), config)
+        plan = policy.plan(selection["profile"], selection["changedFiles"])
+        if selection.get("fallbackFull"):
+            plan.fallback_full = True
+        plan = apply_selection_safety_guards(plan, config)
         changed = git_changed_files(root)
         current_profile = "affected" if "affected" in policy.profiles else selection["profile"]
         current_plan = apply_selection_safety_guards(policy.plan(current_profile,

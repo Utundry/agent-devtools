@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import importlib.util
+import os
+import py_compile
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -16,6 +19,38 @@ SPEC.loader.exec_module(builder)
 
 
 class ReleaseBuilderTests(unittest.TestCase):
+    def test_same_size_version_bump_and_restore_cannot_reuse_stale_bytecode(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            package = root / "agent_devtools"
+            package.mkdir()
+            version_file = package / "__init__.py"
+            original_bytes = b'__version__ = "1.0.0"\n'
+            version_file.write_bytes(original_bytes)
+            old_url = builder.PINNED_URL.format(version="1.0.0")
+            readme = root / "README.md"
+            readme.write_text(f"Current version: **1.0.0**.\n{old_url}\n")
+            handoff = root / "AGENT-START-HERE.md"
+            handoff.write_text(old_url)
+            public = root / "VERSION"
+            public.write_text("1.0.0\n")
+            frozen_time = 1700000000
+            os.utime(version_file, (frozen_time, frozen_time))
+            py_compile.compile(str(version_file), doraise=True)
+            original = builder.VERSION_FILE, builder.README, builder.HANDOFF, builder.PUBLIC_VERSION
+            try:
+                builder.VERSION_FILE, builder.README, builder.HANDOFF, builder.PUBLIC_VERSION = version_file, readme, handoff, public
+                builder._set_version("1.0.0", "1.0.1")
+                os.utime(version_file, (frozen_time, frozen_time))
+                command = [sys.executable, "-c", "import agent_devtools; print(agent_devtools.__version__)"]
+                self.assertEqual("1.0.1", subprocess.check_output(command, cwd=root, text=True).strip())
+                py_compile.compile(str(version_file), doraise=True)
+                builder._restore({version_file: original_bytes})
+                os.utime(version_file, (frozen_time, frozen_time))
+                self.assertEqual("1.0.0", subprocess.check_output(command, cwd=root, text=True).strip())
+            finally:
+                builder.VERSION_FILE, builder.README, builder.HANDOFF, builder.PUBLIC_VERSION = original
+
     def test_safe_public_versions(self) -> None:
         self.assertIsNotNone(builder.SAFE_VERSION.fullmatch("0.8.2"))
         self.assertIsNotNone(builder.SAFE_VERSION.fullmatch("0.9.0-rc.1"))

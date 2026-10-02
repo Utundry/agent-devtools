@@ -205,9 +205,9 @@ def configure_work_parser(parser: argparse.ArgumentParser) -> None:
     status.add_argument("--no-context", action="store_true")
     status.add_argument("--json", action="store_true", dest="json_output")
 
-    complete = sub.add_parser("complete", help="run completion gates, verification, knowledge validation, and finish")
+    complete = sub.add_parser("complete", help="reuse current PASS or run required checks, then finish")
     complete.add_argument("--summary")
-    complete.add_argument("--no-cache", action="store_true", help="bypass development verification cache")
+    complete.add_argument("--no-cache", action="store_true", help="force selected checks to execute even when current PASS exists")
     complete.add_argument("--resume", action="store_true", help="resume compatible development verification chunks")
     complete.add_argument("--json", action="store_true", dest="json_output")
 
@@ -270,15 +270,17 @@ def main_work(root: Path, args: argparse.Namespace) -> int:
             payload["format"] = "agent-devtools-work-finish"
         else:
             return 2
-    except (TaskStateError, WorkEntryError) as exc:
+    except (TaskStateError, WorkEntryError, VerificationError) as exc:
         print(f"agent work: {exc}")
         return 2
     if args.json_output:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     elif args.work_command in {"complete", "finish"}:
         print(f"PASS: work completed · {payload['task']['goal']}")
-        if args.work_command == "complete" and payload.get("verificationPerformed"):
-            print("  verification: affected checks executed")
+        action = payload.get("verificationAction", "recorded")
+        print(f"  verification: {action}")
+        if payload.get("verificationPerformed") and payload.get("verificationOutput"):
+            print("  " + payload["verificationOutput"].replace("\n", "\n  "))
         print(f"  knowledge: {'PASS' if payload['knowledgeValidation']['ok'] else 'RECONCILE'}")
     elif args.work_command == "enter":
         print(

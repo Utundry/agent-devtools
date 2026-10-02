@@ -46,11 +46,24 @@ become completed verification records. This link does not replace the
 existing certification and completion gates or make manual declarations
 equivalent to machine checks.
 
-Use `work complete` when verification still needs to run. If the successful
-check already covers the current task and project state, use `work finish`.
-Do not repeat a successful check merely to perform another workflow phase.
-Repeat after changed inputs, failures, or unresolved uncertainty. Completion
-continues to require ready alignment, resolved blockers and fresh evidence.
+Use `work complete` for routine completion. It automatically validates and
+reuses current successful evidence without creating another run. When evidence
+is absent, stale, corrupted or incomplete, it runs the affected policy using
+both current Git changes and task-recorded changed files. If no changed paths
+are visible, or Git is unavailable, it verifies the baseline instead of
+accepting an empty selection. Stage cache can still reuse unchanged suites.
+
+Use `work complete --no-cache` when physical re-execution is explicitly needed,
+or `--resume` to continue compatible interrupted verification. `work finish`
+remains strict: it validates existing evidence and never runs checks. The
+routine caller no longer needs to choose between these two completion commands.
+Alignment, blockers, knowledge consistency and current evidence are still
+required. Non-development profiles still require explicit verification records.
+
+Certification, replay and release are separate tools for explicit deeper
+verification and delivery. Neither completion nor workflow discovery invokes
+them or creates a context index. `workflow show` prints only the compact route;
+`--details` exposes all responsibilities and `--json` preserves the full contract.
 
 Machine completion checks report integrity, task/config/engine identity,
 affected-suite and application-group coverage, current content hashes and

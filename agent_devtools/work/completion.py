@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from agent_devtools.check import cli as check_cli
+from agent_devtools.check.changes import git_changed_files
 from agent_devtools.profiles import ProfileError, load_profile
 from agent_devtools.check.freshness import validated_check_report
 from .knowledge import validate_knowledge
@@ -35,10 +36,13 @@ def _require_fresh_success(state: dict[str, Any], latest: dict[str, Any] | None,
     return latest
 
 def _run_development_verification(root: Path, *, no_cache: bool, resume: bool) -> tuple[int, str]:
+    changed = git_changed_files(root)
+    task = load_task_state(root) or {}
+    known = changed | set(task.get("changedFiles", [])) if changed is not None else None
     args = argparse.Namespace(
-        profile="affected", base=None, changed=[], config=None,
+        profile="affected", base=None, changed=sorted(known or []), config=None,
         no_cache=no_cache, resume=resume, max_chunks=None,
-        time_slice_seconds=None, json_output=False,
+        time_slice_seconds=None, json_output=False, minimum_baseline=known == set(),
     )
     output = io.StringIO()
     with redirect_stdout(output):
@@ -66,16 +70,31 @@ def complete_work(
 
     verification_performed = False
     verification_output = ""
+    verification_action = "recorded"
+    verification_reason = "Explicit profile-appropriate verification record"
     if profile.verification_mode == "check":
-        if run_verification:
+        latest = None
+        verification_action = "reused"
+        verification_reason = "Current successful check covers this task and project state"
+        if not run_verification or not (no_cache or resume):
+            try:
+                latest = validated_check_report(root, state)
+            except TaskStateError as exc:
+                if not run_verification:
+                    raise
+                verification_reason = str(exc)
+        else:
+            verification_reason = "Explicit verification rerun requested"
+        if latest is None:
             code, verification_output = _run_development_verification(
                 root, no_cache=no_cache, resume=resume
             )
             verification_performed = True
+            verification_action = "executed"
             if code != 0:
                 detail = f": {verification_output}" if verification_output else ""
                 raise TaskStateError(f"development verification failed with exit code {code}{detail}")
-        latest = validated_check_report(root, state)
+            latest = validated_check_report(root, state)
     else:
         latest = _require_fresh_success(state, latest_verification(root), "verification record")
 
@@ -86,6 +105,8 @@ def complete_work(
         "profile": profile.profile_id,
         "verificationMode": profile.verification_mode,
         "verificationPerformed": verification_performed,
+        "verificationAction": verification_action,
+        "verificationReason": verification_reason,
         "verificationOutput": verification_output,
         "knowledgeValidation": knowledge,
         "latestVerification": latest,

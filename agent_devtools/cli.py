@@ -141,6 +141,7 @@ def parser() -> argparse.ArgumentParser:
     workflow_sub = workflow.add_subparsers(dest="workflow_command", required=True)
     workflow_show = workflow_sub.add_parser("show", help="show the mandatory workflow for the active profile")
     workflow_show.add_argument("--json", action="store_true", dest="json_output")
+    workflow_show.add_argument("--details", action="store_true", help="include all workflow responsibilities and commands")
     workflow_validate = workflow_sub.add_parser("validate", help="verify advertised workflow commands against the real CLI")
     workflow_validate.add_argument("--json", action="store_true", dest="json_output")
     capabilities = sub.add_parser("capabilities", help="machine-readable CLI/profile capability discovery")
@@ -276,13 +277,18 @@ def main(argv: list[str] | None = None) -> int:
             route = payload.get("routineRoute")
             if route:
                 print(f"  routine: {route['entry']} -> project-native work -> {route['completion']}")
-                print(f"  already verified: {route['alreadyVerifiedCompletion']} (checks current inputs and evidence)")
+                print("  completion: reuse current PASS; otherwise run required checks")
+                print("  gates: task alignment, blockers, verification and knowledge consistency")
                 print("  context indexing and knowledge promotion: optional")
+                print("  deeper tools: certification, replay and release when explicitly needed")
+                if not args.details:
+                    print("  details: workflow show --details (or --json)")
+            if args.details:
                 print("  responsibilities (not separate mandatory calls):")
-            for phase in payload["phases"]:
-                marker = "required" if phase["required"] else "optional"
-                print(f"  {phase['id']}: {marker} · {phase['purpose']}")
-                print("    commands: " + ", ".join(phase["commands"]))
+                for phase in payload["phases"]:
+                    marker = "required" if phase["required"] else "optional"
+                    print(f"  {phase['id']}: {marker} · {phase['purpose']}")
+                    print("    commands: " + ", ".join(phase["commands"]))
         return 0
     if args.command == "capabilities":
         root = discover_project_root()

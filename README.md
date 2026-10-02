@@ -115,14 +115,15 @@ Typical development workflow:
 
 ```bash
 python devtools/agent/agent.py work enter --goal "..." --next-action "..."
-python devtools/agent/agent.py context affected
-python devtools/agent/agent.py check plan --profile affected --explain
+# Do the work with the project's normal tools.
 python devtools/agent/agent.py work complete
 ```
 
 Do not memorize syntax from examples. `workflow show`, `capabilities --json`, and CLI `--help` are authoritative for the installed version.
 
-`work complete` is the preferred completion action. In development profiles it validates task/alignment/blocker and durable-knowledge gates, runs the affected verification policy, requires fresh PASS evidence, and only then closes the work session. In non-development profiles it never fabricates semantic verification: a fresh explicit verification record is still required. `work finish` remains the lower-level primitive when verification was already collected separately.
+`work complete` is the normal completion action. It validates task/alignment/blocker and durable-knowledge gates, then reuses a successful check only after verifying report integrity, task identity, current inputs/outputs and coverage. Otherwise it runs the affected policy; a clean or unknown tree without usable evidence receives a baseline check. It closes the session only with current PASS evidence. Use `--no-cache` to explicitly request a new execution. Certification, replay and release remain separate tools for deeper validation and delivery. In non-development profiles a fresh explicit verification record is still required. `work finish` is the strict no-execution primitive; routine work does not require choosing it manually.
+
+`workflow show` displays the compact route by default. Use `workflow show --details` for all responsibilities or `--json` for the complete machine-readable contract.
 
 `work enter` is the preferred lifecycle-aware entry action. With an active task it resumes and emits a fresh brief; with `--goal` it starts a new task and uses the routine no-material-gaps fast path by default; with `--handoff <bundle>` it restores verified transferred state. Use `--alignment-pending` for genuinely ambiguous new work. Existing active/restored alignment is preserved unless changed explicitly.
 

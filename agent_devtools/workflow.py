@@ -7,8 +7,8 @@ from typing import Any
 from . import __version__
 from .profiles import load_profile
 
-CLI_CONTRACT_VERSION = 15
-WORKFLOW_CONTRACT_VERSION = 9
+CLI_CONTRACT_VERSION = 16
+WORKFLOW_CONTRACT_VERSION = 10
 
 
 def workflow_contract(root: Path) -> dict[str, Any]:
@@ -27,7 +27,7 @@ def workflow_contract(root: Path) -> dict[str, Any]:
         },
         "principles": [
             "Phases describe responsibilities, not seven separate command invocations. Routine work uses work enter, project-native execution, and work complete; work enter covers orientation, session start and routine alignment.",
-            "Do not repeat successful checks without changed inputs, a prior failure, or unresolved uncertainty. If current-state verification already exists, use work finish; use work complete when verification still needs to run.",
+            "Use work complete for routine completion: reuse a successful check only after validating its current inputs, outputs, task identity and coverage; otherwise run the affected policy. No visible changes and no reusable evidence require a baseline check. work finish is the strict no-execution primitive; work complete --no-cache explicitly requests physical execution.",
             "Read relevant durable knowledge when needed; promote only new reusable knowledge and reuse exact existing statements instead of creating duplicates.",
             "AGENTS.md defines the mandatory project workflow; the CLI is authoritative for current syntax and capabilities.",
             "Agent DevTools orchestrates project-native tools; it does not replace Git, build, test, release, or domain tooling.",
@@ -44,6 +44,9 @@ def workflow_contract(root: Path) -> dict[str, Any]:
             "execution": "Use project-native tools; record only meaningful new findings or decisions.",
             "completion": "work complete",
             "alreadyVerifiedCompletion": "work finish",
+            "automaticVerificationReuse": True,
+            "explicitExecution": "work complete --no-cache",
+            "deepVerification": "Explicit certification, replay or release; not part of routine completion.",
             "contextIndex": "Optional; created only by explicit context operations, reused by briefings when present.",
             "knowledgePromotion": "Optional; zero new records is valid.",
         },
@@ -87,7 +90,7 @@ def workflow_contract(root: Path) -> dict[str, Any]:
             {
                 "id": "finish",
                 "required": True,
-                "purpose": "Prefer one-action completion: validate gates and durable knowledge, run deterministic verification when available, then finish only on fresh PASS evidence.",
+                "purpose": "Complete in one action: validate gates, reuse fresh PASS or run the minimum sufficient checks, and finish only with current evidence.",
                 "commands": ["work complete", "work finish"],
             },
         ],
@@ -107,7 +110,7 @@ def capabilities(root: Path) -> dict[str, Any]:
             "workflow": {"show": True, "validate": True},
             "capabilities": {"json": True},
             "selfUpdate": {"available": True, "latestDiscovery": True, "explicitVersion": True, "checkOnly": True, "freshDownload": True, "identityVerified": True},
-            "work": {"enter": True, "start": True, "align": True, "status": True, "complete": True, "finish": True, "oneActionEntry": True, "handoffEntry": True, "routineEntryFastPath": True, "alignmentPendingOptOut": True, "oneActionCompletion": True, "taskGapGate": True, "noGapFastPath": True},
+            "work": {"enter": True, "start": True, "align": True, "status": True, "complete": True, "finish": True, "oneActionEntry": True, "handoffEntry": True, "routineEntryFastPath": True, "alignmentPendingOptOut": True, "oneActionCompletion": True, "automaticVerificationReuse": True, "baselineWhenUnverified": True, "taskGapGate": True, "noGapFastPath": True},
             "cognition": {"decision": True, "finding": True, "assumption": True, "requirement": not profile.development, "openQuestion": not profile.development, "evidence": not profile.development, "blocker": True, "resolveBlocker": True, "status": True},
             "knowledge": {"promote": True, "validate": True, "status": True, "researchKinds": not profile.development, "softContradictionWarnings": True, "promotionRequired": False},
             "source": {"add": not profile.development, "list": not profile.development},

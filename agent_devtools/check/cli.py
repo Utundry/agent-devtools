@@ -90,6 +90,12 @@ def _selection(root: Path, args: argparse.Namespace) -> tuple[CheckConfig, Selec
     config = load_check_config(root, args.config)
     explicit = {str(item).replace("\\", "/") for item in (args.changed or []) if str(item).strip()}
     changed = explicit if explicit else git_changed_files(root, args.base)
+    if getattr(args, "minimum_baseline", False):
+        return config, None, _fail_safe_payload(
+            config, profile=args.profile, base=args.base,
+            reasons=["no reusable check and no known changed paths; verify the baseline"],
+            changed=sorted(changed or []),
+        )
     if changed is None:
         return config, None, _fail_safe_payload(
             config,
@@ -147,10 +153,12 @@ def command_run(root: Path, args: argparse.Namespace) -> int:
     if fallback is not None:
         try:
             policy = load_policy(config.policy_path)
-            # Full-fallback execution deliberately uses a policy plan only as a container,
-            # then safety guards force the configured complete suite order.
-            changed = fallback.get("changedFiles") or ["__agent_devtools_unknown_change__"]
-            plan = apply_selection_safety_guards(policy.plan(args.profile, changed), config)
+            # The policy plan is a container; fallback must remain full even
+            # when a catch-all rule would classify a synthetic unknown path.
+            plan = policy.plan(args.profile, fallback.get("changedFiles") or [])
+            plan.fallback_full = True
+            plan.fallback_reasons = tuple(fallback["fallbackReasons"])
+            plan = apply_selection_safety_guards(plan, config)
         except PolicyError as exc:
             print(f"agent check run: cannot construct fail-safe plan: {exc}")
             return 2

@@ -168,6 +168,14 @@ def _set_version(current: str, requested: str) -> None:
     _replace_all_required(README, old_url, new_url)
     _replace_all_required(HANDOFF, old_url, new_url)
     PUBLIC_VERSION.write_text(requested + "\n", encoding="utf-8")
+    _invalidate_version_bytecode()
+
+
+def _invalidate_version_bytecode() -> None:
+    # A same-size version edit within one timestamp second can otherwise keep
+    # the old __version__ in child interpreters. Only this module is invalidated.
+    for path in (VERSION_FILE.parent / "__pycache__").glob("__init__.*.pyc"):
+        path.unlink(missing_ok=True)
 
 
 def _snapshot() -> dict[Path, bytes | None]:
@@ -181,6 +189,7 @@ def _restore(snapshot: dict[Path, bytes | None]) -> None:
         else:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
+    _invalidate_version_bytecode()
 
 
 def _tag_must_not_exist(version: str) -> None:
