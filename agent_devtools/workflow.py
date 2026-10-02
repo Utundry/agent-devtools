@@ -7,8 +7,8 @@ from typing import Any
 from . import __version__
 from .profiles import load_profile
 
-CLI_CONTRACT_VERSION = 14
-WORKFLOW_CONTRACT_VERSION = 8
+CLI_CONTRACT_VERSION = 15
+WORKFLOW_CONTRACT_VERSION = 9
 
 
 def workflow_contract(root: Path) -> dict[str, Any]:
@@ -26,6 +26,9 @@ def workflow_contract(root: Path) -> dict[str, Any]:
             "changeDiscovery": profile.change_discovery,
         },
         "principles": [
+            "Phases describe responsibilities, not seven separate command invocations. Routine work uses work enter, project-native execution, and work complete; work enter covers orientation, session start and routine alignment.",
+            "Do not repeat successful checks without changed inputs, a prior failure, or unresolved uncertainty. If current-state verification already exists, use work finish; use work complete when verification still needs to run.",
+            "Read relevant durable knowledge when needed; promote only new reusable knowledge and reuse exact existing statements instead of creating duplicates.",
             "AGENTS.md defines the mandatory project workflow; the CLI is authoritative for current syntax and capabilities.",
             "Agent DevTools orchestrates project-native tools; it does not replace Git, build, test, release, or domain tooling.",
             "Canonical project change discovery includes untracked files governed by the source contract; plain git diff is not a complete handoff inventory.",
@@ -36,6 +39,14 @@ def workflow_contract(root: Path) -> dict[str, Any]:
             "Autonomy starts after alignment: ask only about material gaps that are expensive to get wrong; propose a concrete best option and obtain explicit user approval before substantial execution when such gaps exist. If the task is already sufficiently specified, record the no-gap fast path and proceed without a user turn.",
             "Alignment must be explicit in state, not necessarily visible as friction to the user. A newly created high-level work enter uses the routine no-gap fast path by default; use --alignment-pending when material-gap assessment is genuinely needed. Never ask a question merely to satisfy the gate.",
         ],
+        "routineRoute": {
+            "entry": "work enter",
+            "execution": "Use project-native tools; record only meaningful new findings or decisions.",
+            "completion": "work complete",
+            "alreadyVerifiedCompletion": "work finish",
+            "contextIndex": "Optional; created only by explicit context operations, reused by briefings when present.",
+            "knowledgePromotion": "Optional; zero new records is valid.",
+        },
         "phases": [
             {
                 "id": "orient",
@@ -53,7 +64,7 @@ def workflow_contract(root: Path) -> dict[str, Any]:
                 "id": "align",
                 "required": True,
                 "purpose": "Resolve material task gaps before substantial execution. When none exist, use the frictionless no-gap fast path and continue immediately without asking the user; when material gaps do exist, propose concrete options and obtain explicit approval.",
-                "commands": ["work align"],
+                "commands": ["work enter", "work align"],
             },
             {
                 "id": "work",
@@ -109,6 +120,10 @@ def capabilities(root: Path) -> dict[str, Any]:
                 "resumableChunks": profile.verification_mode == "check",
                 "idleWatchdog": profile.verification_mode == "check",
                 "hardWatchdog": profile.verification_mode == "check",
+                "machineCompletionBinding": profile.verification_mode == "check",
+                "inheritedEnvironmentIdentity": profile.verification_mode == "check",
+                "explicitCacheEnv": profile.verification_mode == "check",
+                "reuseProvenance": profile.verification_mode == "check",
             },
             "resume": True,
             "handoff": {"create": True, "inspect": True, "resume": True, "profileAware": True, "manifestVerified": True, "freshResumeBrief": True},

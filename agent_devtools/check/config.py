@@ -87,6 +87,7 @@ class SuiteCommand:
     cache: bool = True
     cwd: str | None = None
     env: dict[str, str] = field(default_factory=dict)
+    cache_env: tuple[str, ...] | None = None
     adapter: ResultAdapterSpec = field(default_factory=ResultAdapterSpec)
     requires: tuple[str, ...] = ()
     file_set: FileSetSpec | None = None
@@ -123,6 +124,7 @@ class CheckConfig:
     ignore: tuple[str, ...] = ()
     certification: CertificationConfig = field(default_factory=CertificationConfig)
     replay: ReplayConfig = field(default_factory=ReplayConfig)
+    config_path: Path | None = None
 
 
 def _string_list(value: Any, field: str, *, allow_empty: bool = True) -> tuple[str, ...]:
@@ -357,6 +359,7 @@ def load_check_config(root: Path, config_path: Path | None = None) -> CheckConfi
             cache=bool(item.get("cache", True)),
             cwd=cwd,
             env=env,
+            cache_env=(_string_list(item["cacheEnv"], f"check.commands.{suite}.cacheEnv") if "cacheEnv" in item else None),
             adapter=ResultAdapterSpec(kind=adapter_kind, options=adapter_options),
             requires=requires,
             file_set=file_set,
@@ -415,6 +418,7 @@ def load_check_config(root: Path, config_path: Path | None = None) -> CheckConfi
 
     return CheckConfig(
         root=root,
+        config_path=path,
         policy_path=(root / policy_rel).resolve(),
         suite_order=suite_order,
         guards=tuple(guards),

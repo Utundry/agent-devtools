@@ -5,13 +5,16 @@ import json
 import os
 import stat
 import tempfile
+import shutil
+from contextlib import contextmanager
+from agent_devtools.core.hashing import sha256_file
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
 from agent_devtools import __version__
-from agent_devtools.core.archive import ArchiveSafetyError, read_zip_bounded
+from agent_devtools.core.archive import ArchiveSafetyError, verified_zip, read_metadata
 from agent_devtools.core.workspace import default_work_root
 from agent_devtools.preserve import (
     PreserveError,
@@ -70,18 +73,13 @@ def create_handoff(
         raise HandoffError("--budget must be >= 128")
 
     brief = build_brief(root, mode="resume", budget=budget, include_context=include_context)
-    with tempfile.TemporaryDirectory(prefix="agent-devtools-handoff-") as td:
-        preservation_path = Path(td) / "preservation.zip"
-        try:
-            preservation = create_preservation(
-                root,
-                out=preservation_path,
-                include=include,
-                max_bytes=max_bytes,
-            )
-        except PreserveError as exc:
-            raise HandoffError(str(exc)) from exc
-        preservation_bytes = preservation_path.read_bytes()
+    preservation_temp = tempfile.TemporaryDirectory(prefix="agent-devtools-handoff-")
+    preservation_path = Path(preservation_temp.name) / "preservation.zip"
+    try:
+        preservation = create_preservation(root, out=preservation_path, include=include, max_bytes=max_bytes)
+    except PreserveError as exc:
+        preservation_temp.cleanup()
+        raise HandoffError(str(exc)) from exc
 
     handoff = {
         "format": HANDOFF_FORMAT,
@@ -98,7 +96,7 @@ def create_handoff(
         },
         "workingStateFingerprint": brief.get("workingStateFingerprint"),
         "preservationKind": preservation.get("kind"),
-        "preservationSha256": _sha(preservation_bytes),
+        "preservationSha256": sha256_file(preservation_path),
         "briefIncluded": True,
         "preservationIncluded": True,
     }
@@ -111,7 +109,6 @@ def create_handoff(
             json.dumps(brief, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
         ).encode("utf-8"),
         "brief.txt": (render_brief(brief) + "\n").encode("utf-8"),
-        "preservation.zip": preservation_bytes,
         "HANDOFF.txt": (
             "AGENT DEVTOOLS HANDOFF\n\n"
             "This bundle contains a profile-aware preservation artifact and a resume briefing.\n"
@@ -120,7 +117,7 @@ def create_handoff(
         ).encode("utf-8"),
     }
     payloads["MANIFEST.sha256"] = _manifest(
-        {name: _sha(data) for name, data in payloads.items()}
+        {**{name: _sha(data) for name, data in payloads.items()}, "preservation.zip": sha256_file(preservation_path)}
     )
 
     target = (out or _default_path(root)).expanduser()
@@ -128,15 +125,23 @@ def create_handoff(
         target = (root / target).resolve()
     target.parent.mkdir(parents=True, exist_ok=True)
     temp = target.with_suffix(target.suffix + ".tmp")
-    with zipfile.ZipFile(temp, "w") as zf:
-        for name in sorted(payloads):
-            _zip_write(zf, name, payloads[name])
-    os.replace(temp, target)
+    try:
+        with zipfile.ZipFile(temp, "w") as zf:
+            for name in sorted(payloads):
+                _zip_write(zf, name, payloads[name])
+            info = zipfile.ZipInfo("preservation.zip", (1980, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            with preservation_path.open("rb") as source, zf.open(info, "w") as sink:
+                shutil.copyfileobj(source, sink, length=1024 * 1024)
+        os.replace(temp, target)
+    finally:
+        temp.unlink(missing_ok=True)
+        preservation_temp.cleanup()
 
     return {
         "status": "pass",
         "path": str(target),
-        "sha256": _sha(target.read_bytes()),
+        "sha256": sha256_file(target),
         "kind": preservation.get("kind"),
         "profile": handoff["project"]["profile"],
         "workingStateFingerprint": handoff["workingStateFingerprint"],
@@ -145,88 +150,43 @@ def create_handoff(
     }
 
 
-def _read_handoff(path: Path) -> tuple[dict[str, Any], dict[str, bytes]]:
-    path = path.expanduser().resolve()
-    if not path.is_file():
-        raise HandoffError(f"handoff not found: {path}")
+@contextmanager
+def _read_handoff(path: Path):
     try:
-        payloads = read_zip_bounded(path)
-    except ArchiveSafetyError as exc:
+        with verified_zip(path) as (archive, members, expected), tempfile.TemporaryDirectory(prefix="agent-devtools-handoff-read-") as td:
+            required = {"handoff.json", "brief.json", "brief.txt", "preservation.zip", "MANIFEST.sha256"}
+            missing = required - set(members)
+            if missing:
+                raise HandoffError("handoff is missing required entries: " + ", ".join(sorted(missing)))
+            payloads = {name: read_metadata(archive, members[name]) for name in ("handoff.json", "brief.json", "brief.txt")}
+            meta = json.loads(payloads["handoff.json"].decode("utf-8"))
+            brief = json.loads(payloads["brief.json"].decode("utf-8"))
+            if (not isinstance(meta, dict) or meta.get("format") != HANDOFF_FORMAT
+                    or int(meta.get("formatVersion") or 0) != HANDOFF_VERSION):
+                raise HandoffError("unsupported handoff format/version")
+            if not isinstance(brief, dict):
+                raise HandoffError("handoff brief must be a JSON object")
+            if expected["preservation.zip"] != meta.get("preservationSha256"):
+                raise HandoffError("handoff preservation hash does not match metadata")
+            preserved = Path(td) / "preservation.zip"
+            with archive.open(members["preservation.zip"]) as source, preserved.open("wb") as sink:
+                shutil.copyfileobj(source, sink, length=1024 * 1024)
+            yield meta, payloads, preserved
+    except (ArchiveSafetyError, ValueError, UnicodeDecodeError) as exc:
         raise HandoffError(str(exc)) from exc
-    names = set(payloads)
-    required = {
-        "handoff.json",
-        "brief.json",
-        "brief.txt",
-        "preservation.zip",
-        "MANIFEST.sha256",
-    }
-    missing = sorted(required - names)
-    if missing:
-        raise HandoffError(
-            "handoff is missing required entries: " + ", ".join(missing)
-        )
-
-    try:
-        manifest = payloads["MANIFEST.sha256"].decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise HandoffError("handoff manifest is not UTF-8") from exc
-
-    expected: dict[str, str] = {}
-    for raw in manifest.splitlines():
-        if not raw.strip():
-            continue
-        try:
-            digest, name = raw.split("  ", 1)
-        except ValueError as exc:
-            raise HandoffError("malformed handoff manifest") from exc
-        expected[name] = digest
-
-    for name, digest in expected.items():
-        data = payloads.get(name)
-        if data is None:
-            raise HandoffError(f"handoff manifest references missing entry: {name}")
-        if _sha(data) != digest:
-            raise HandoffError(f"handoff payload hash mismatch: {name}")
-
-    extras = sorted(set(payloads) - set(expected) - {"MANIFEST.sha256"})
-    if extras:
-        raise HandoffError(
-            "handoff contains unmanifested payload: " + ", ".join(extras[:5])
-        )
-
-    try:
-        meta = json.loads(payloads["handoff.json"].decode("utf-8"))
-        brief = json.loads(payloads["brief.json"].decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise HandoffError(f"invalid handoff metadata: {exc}") from exc
-
-    if (
-        not isinstance(meta, dict)
-        or meta.get("format") != HANDOFF_FORMAT
-        or int(meta.get("formatVersion") or 0) != HANDOFF_VERSION
-    ):
-        raise HandoffError("unsupported handoff format/version")
-    if not isinstance(brief, dict):
-        raise HandoffError("handoff brief must be a JSON object")
-    if _sha(payloads["preservation.zip"]) != str(meta.get("preservationSha256") or ""):
-        raise HandoffError("handoff preservation hash does not match metadata")
-    return meta, payloads
 
 
 def inspect_handoff(path: Path) -> dict[str, Any]:
-    meta, payloads = _read_handoff(path)
-    with tempfile.TemporaryDirectory(prefix="agent-devtools-handoff-inspect-") as td:
-        preserved = Path(td) / "preservation.zip"
-        preserved.write_bytes(payloads["preservation.zip"])
+    with _read_handoff(path) as (meta, payloads, preserved):
         try:
             preservation = inspect_preservation(preserved)
         except PreserveError as exc:
             raise HandoffError(str(exc)) from exc
+
     return {
         "status": "pass",
         "path": str(path.expanduser().resolve()),
-        "sha256": _sha(path.expanduser().resolve().read_bytes()),
+        "sha256": sha256_file(path.expanduser().resolve()),
         "createdAtUtc": meta.get("createdAtUtc"),
         "toolVersion": meta.get("toolVersion"),
         "profile": (
@@ -252,19 +212,10 @@ def resume_handoff(
 ) -> dict[str, Any]:
     if budget < 128:
         raise HandoffError("--budget must be >= 128")
-    meta, payloads = _read_handoff(path)
     destination = (target or root).expanduser().resolve()
-
-    with tempfile.TemporaryDirectory(prefix="agent-devtools-handoff-resume-") as td:
-        preserved = Path(td) / "preservation.zip"
-        preserved.write_bytes(payloads["preservation.zip"])
+    with _read_handoff(path) as (meta, payloads, preserved):
         try:
-            restored = restore_preservation(
-                destination,
-                preserved,
-                target=destination,
-                force=force,
-            )
+            restored = restore_preservation(destination, preserved, target=destination, force=force)
         except PreserveError as exc:
             raise HandoffError(str(exc)) from exc
 

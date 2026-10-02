@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import shutil
 import stat
 import zipfile
+from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
 
 MAX_ARCHIVE_ENTRIES = 10_000
@@ -20,7 +22,10 @@ def _safe_name(name: str) -> str:
     item = PurePosixPath(value)
     if not value or item.is_absolute() or ".." in item.parts:
         raise ArchiveSafetyError(f"unsafe archive path: {name!r}")
-    return value
+    normalized = item.as_posix()
+    if normalized in {".", ""} or item.drive or (item.parts and ":" in item.parts[0]):
+        raise ArchiveSafetyError(f"unsafe archive path: {name!r}")
+    return normalized
 
 
 def _validate_infos(
@@ -36,12 +41,18 @@ def _validate_infos(
             f"archive contains too many entries: {len(files)} > {max_entries}"
         )
     seen: set[str] = set()
+    directories: set[str] = set()
     total = 0
     for info in files:
         name = _safe_name(info.filename)
-        if name in seen:
+        comparison = os.path.normcase(name)
+        if comparison in seen:
             raise ArchiveSafetyError(f"archive contains duplicate archive entries: {name}")
-        seen.add(name)
+        parents = [os.path.normcase(parent.as_posix()) for parent in PurePosixPath(name).parents if parent.as_posix() != "."]
+        if comparison in directories or any(parent in seen for parent in parents):
+            raise ArchiveSafetyError(f"archive file/directory collision: {name}")
+        seen.add(comparison)
+        directories.update(parents)
         if info.flag_bits & 0x1:
             raise ArchiveSafetyError(f"encrypted archive entry is not supported: {name}")
         if info.file_size < 0 or info.file_size > max_entry_bytes:
@@ -139,3 +150,48 @@ def extract_zip_bounded(
         raise
     except (OSError, zipfile.BadZipFile, RuntimeError) as exc:
         raise ArchiveSafetyError(f"cannot extract archive {path}: {exc}") from exc
+
+
+@contextmanager
+def verified_zip(path: Path):
+    """Validate a manifest in streaming passes before any consumer writes files."""
+    try:
+        with zipfile.ZipFile(path, "r") as archive:
+            infos = _validate_infos(archive.infolist(), max_entries=MAX_ARCHIVE_ENTRIES,
+                                    max_entry_bytes=MAX_ARCHIVE_ENTRY_BYTES, max_total_bytes=MAX_ARCHIVE_TOTAL_BYTES)
+            members = {_safe_name(info.filename): info for info in infos}
+            manifest = members.get("MANIFEST.sha256")
+            if manifest is None or manifest.file_size > 8 * 1024 * 1024:
+                raise ArchiveSafetyError("archive is missing a bounded manifest")
+            expected = {}
+            for line in archive.read(manifest).decode("utf-8").splitlines():
+                if not line.strip():
+                    continue
+                digest, raw = line.split("  ", 1)
+                name = _safe_name(raw)
+                if name in expected:
+                    raise ArchiveSafetyError(f"archive manifest contains duplicate path: {name}")
+                expected[name] = digest
+            extras = set(members) - set(expected) - {"MANIFEST.sha256"}
+            if extras:
+                raise ArchiveSafetyError("archive contains unmanifested payload: " + ", ".join(sorted(extras)[:5]))
+            for name, digest in expected.items():
+                if name not in members:
+                    raise ArchiveSafetyError(f"archive manifest references missing entry: {name}")
+                calculated = hashlib.sha256()
+                with archive.open(members[name]) as stream:
+                    for block in iter(lambda: stream.read(1024 * 1024), b""):
+                        calculated.update(block)
+                if calculated.hexdigest() != digest:
+                    raise ArchiveSafetyError(f"archive payload hash mismatch: {name}")
+            yield archive, members, expected
+    except ArchiveSafetyError:
+        raise
+    except (OSError, zipfile.BadZipFile, RuntimeError, ValueError, UnicodeDecodeError) as exc:
+        raise ArchiveSafetyError(f"cannot validate archive: {exc}") from exc
+
+
+def read_metadata(archive, info, max_bytes=8 * 1024 * 1024) -> bytes:
+    if info.file_size > max_bytes:
+        raise ArchiveSafetyError(f"archive metadata exceeds limit: {info.filename}")
+    return archive.read(info)

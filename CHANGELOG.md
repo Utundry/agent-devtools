@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Clean-room self-hosting removes bootstrap's eager index creation, makes its launcher editable source, and includes script/bootstrap dependencies in the project's own check identities.
+- Preserve historical 0.7.0.1 validation/evidence under `docs/archive/` and stop tracking its obsolete root package manifest, so future Git snapshots are not rejected as tampered release packages.
+- Audit hardening: machine completion validates task/config/engine identity, report SHA-256, current input/output hashes and affected-suite/group coverage. Manual attestations are explicitly distinguished from machine checks.
+- Cache and certification identity now hashes inherited environment by default; optional per-command `cacheEnv` names/patterns narrow that contract without storing environment values. Hard deadlines participate in execution identity. Reused results carry the originating report reference and integrity status.
+- Shared, pruned file discovery fixes zero-directory `**/` matching across selection, cache, context, output contracts, replay and release. Executed stages invalidate the in-memory inventory; no persistent content database is required for checks.
+- Snapshot/handoff payloads are streamed, size limits are checked before reading large files, repeated snapshots exclude their own output, restore preflights task/verification conflicts, and canonical archive aliases/file-directory collisions are rejected before extraction.
+- Research briefings refresh an existing index; briefing metadata fingerprints are named explicitly. Fast process completion avoids the former 100 ms polling floor, and business/research intents no longer imply a software stack from generic words.
+- Small-project overhead: briefings no longer create context indexes implicitly; context scanning retains safety exclusions, excludes the installed runtime and prunes ignored directories. `context.includeRuntime` supports deliberate runtime investigation.
+- Completed CLI checks and certification now link verification records to the concrete report, SHA-256 and check completion time.
+- Exact repeated knowledge promotion reuses the current record; explicit successors retain separate provenance. Workflow contract v9 and onboarding describe the compact route and discourage redundant checks.
+
 - N4.4 resolves workspace-local mark storage via `git rev-parse --git-path` so linked Git worktrees have independent exact marks.
 - N4.3 introduces one bounded archive reader/extractor for preservation and replay, rejecting duplicate/unsafe/symlink/encrypted members and enforcing uncompressed resource budgets.
 - N4.2 portable-state safety excludes obvious credential/key material from non-development snapshots by default and adds project-specific `preserve.exclude` patterns without conflating preservation with `.gitignore`.

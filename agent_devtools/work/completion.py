@@ -8,7 +8,7 @@ from typing import Any
 
 from agent_devtools.check import cli as check_cli
 from agent_devtools.profiles import ProfileError, load_profile
-from .brief import _latest_run
+from agent_devtools.check.freshness import validated_check_report
 from .knowledge import validate_knowledge
 from .state import TaskStateError, complete_task, load_task_state, task_alignment_ready
 from .verification import latest_verification
@@ -75,7 +75,7 @@ def complete_work(
             if code != 0:
                 detail = f": {verification_output}" if verification_output else ""
                 raise TaskStateError(f"development verification failed with exit code {code}{detail}")
-        latest = _require_fresh_success(state, _latest_run(root), "Agent DevTools check run")
+        latest = validated_check_report(root, state)
     else:
         latest = _require_fresh_success(state, latest_verification(root), "verification record")
 

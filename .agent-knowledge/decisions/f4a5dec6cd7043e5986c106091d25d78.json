@@ -1,0 +1,16 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "f4a5dec6cd7043e5986c106091d25d78",
+  "kind": "decision",
+  "subject": "Machine verification freshness and environment identity",
+  "status": "active",
+  "statement": "Machine check completion validates report integrity, task/config identity, coverage and current suite keys; inherited environment is hashed conservatively by default, with explicit cacheEnv declarations for stable minimal keys.",
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "taskId": "f34dbe94-68fd-42f4-8d69-532cc794ec13",
+  "taskGoal": "Fix audit A01-A13 with self-hosted Agent DevTools; preserve lightweight stdlib architecture",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-02T08:18:47Z"
+}

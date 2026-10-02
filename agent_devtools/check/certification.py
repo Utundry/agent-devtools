@@ -13,6 +13,9 @@ import time
 
 from .adapters import evaluate_suite_result
 from .cache import matching_input_hashes
+from .freshness import begin_binding, suite_key
+from agent_devtools.core.files import FileInventory
+from agent_devtools.core.provenance import seal_origins, origin_status
 from .config import CheckConfig, SuiteCommand
 from .contracts import cached_outputs_match, evaluate_outputs, missing_required
 from .policy import SelectionPlan
@@ -171,6 +174,7 @@ def _certify_file_set(
                 "durationSeconds": 0.0,
                 "certifiedEvidence": "reused",
                 "certifiedAtUtc": entry.get("completedAtUtc"),
+                "executionEvidence": origin_status(root, entry),
             })
             file_results[rel] = stats
             reused_files.append(rel)
@@ -259,6 +263,7 @@ def certify_plan(
     root = root.resolve()
     workspace = RunWorkspace(root, "check-certify")
     store = CertifiedEvidenceStore((root / config.certification.evidence_path).resolve())
+    store.entries = {key: entry for key, entry in store.entries.items() if not origin_status(root, entry).get("integrityMismatch")}
     process = ManagedProcessRunner(root=root, log_dir=workspace.run_dir / "logs")
     budget: dict[str, Any] | None = None
     if max_chunks is not None or time_slice_seconds is not None:
@@ -266,11 +271,14 @@ def certify_plan(
             "remaining": None if max_chunks is None else max(0, int(max_chunks)),
             "deadline": None if time_slice_seconds is None else time.monotonic() + max(0.01, float(time_slice_seconds)),
         }
+    workspace.report["verificationBinding"] = begin_binding(root, config)
+    inventory = FileInventory(root, config.ignore)
     workspace.report["selection"] = plan.to_dict()
     workspace.report["resumable"] = True
     workspace.report["resumeRequested"] = bool(resume)
     metrics = _metrics(workspace, cold=cold, store=store)
-    global_hashes = matching_input_hashes(root, config.certification.global_inputs, config.ignore)
+    global_hashes = inventory.hashes(config.certification.global_inputs)
+    workspace.report["verificationBinding"]["globalInputs"] = global_hashes
     reusable_suites = set(config.certification.reusable_suites)
 
     try:
@@ -289,10 +297,8 @@ def certify_plan(
             if spec.file_set is not None and not file_paths and not spec.file_set.allow_empty:
                 raise CheckRunError(suite, "fileSet matched no files")
 
-            input_hashes = matching_input_hashes(root, spec.inputs, config.ignore)
-            for path in file_paths:
-                input_hashes[path.relative_to(root).as_posix()] = sha256_file(path)
-            input_hashes = dict(sorted(input_hashes.items()))
+            input_hashes = inventory.hashes(spec.inputs, file_paths)
+            workspace.report["verificationBinding"]["suites"][suite] = suite_key(root, config, plan, suite, input_hashes)
 
             if spec.file_set is None:
                 input_fingerprint = _suite_input_fingerprint(
@@ -322,6 +328,7 @@ def certify_plan(
                         "durationSeconds": 0.0,
                         "resultAdapter": spec.adapter.kind,
                         "result": result_payload,
+                        "executionEvidence": origin_status(root, entry),
                         "certifiedEvidence": {
                             "status": "reused",
                             "inputFingerprint": input_fingerprint,
@@ -356,6 +363,7 @@ def certify_plan(
                         resume_source=resume_source,
                         budget=budget,
                     )
+                    inventory.invalidate()
                     if partial:
                         workspace.stage_finished(suite, {
                             "status": "partial",
@@ -422,6 +430,7 @@ def certify_plan(
                     idle_timeout_seconds=spec.idle_timeout_seconds,
                     on_process_started=workspace.process_started,
                 )
+                inventory.invalidate()
                 evaluation = evaluate_suite_result(
                     result,
                     root=root,
@@ -522,6 +531,8 @@ def certify_plan(
                 reusable=reusable,
                 cold=file_set_cold,
             )
+            if evaluation_result.get("executedFiles"):
+                inventory.invalidate()
             outputs_ok, outputs_payload, output_diagnostics = evaluate_outputs(root, spec.outputs)
             evaluation_result = dict(evaluation_result)
             if spec.outputs.required or spec.outputs.capture:
@@ -572,9 +583,10 @@ def certify_plan(
                 )
 
         # Critical invariant: pending PASS facts are promoted only after the entire certify run passed.
-        store.flush()
-        metrics["evidenceStateAfter"] = store.state
+        metrics["evidenceStateAfter"] = "ready"
         workspace.finalize("pass")
+        seal_origins(store.updates, root, workspace.run_dir / "report.json")
+        store.flush()
         return 0, workspace.report
     except (CheckRunError, WorkspaceError) as exc:
         # Intentionally do not flush queued evidence on failure/interruption.

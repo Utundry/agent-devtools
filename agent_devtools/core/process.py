@@ -148,7 +148,14 @@ class ManagedProcessRunner:
                         self.terminate_process_tree(proc)
                         returncode = int(proc.returncode if proc.returncode is not None else 124)
                         break
-                    time.sleep(0.1)
+                    interval = 0.01 if now - started < 0.1 else 0.1
+                    remaining = min(interval, timeout - (now - started))
+                    if idle_timeout is not None:
+                        remaining = min(remaining, idle_timeout - (now - last_activity))
+                    try:
+                        proc.wait(timeout=max(0.001, remaining))
+                    except subprocess.TimeoutExpired:
+                        pass
                 log.flush()
         except OSError as exc:
             data = f"{type(exc).__name__}: {exc}\n".encode("utf-8", errors="replace")

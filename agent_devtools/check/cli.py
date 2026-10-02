@@ -10,6 +10,8 @@ from pathlib import Path
 
 from agent_devtools.core.workspace import WorkspaceError, active_status, cancel_active, default_work_root
 
+from agent_devtools.work.verification import record_check_report
+
 from .changes import git_changed_files
 from .config import CheckConfig, CheckConfigError, load_check_config
 from .policy import PolicyError, SelectionPlan, load_policy
@@ -172,6 +174,7 @@ def command_run(root: Path, args: argparse.Namespace) -> int:
     except WorkspaceError as exc:
         print(f"agent check run: {exc}")
         return 2
+    record_check_report(root, report)
     if args.json_output:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:
@@ -223,6 +226,7 @@ def command_certify(root: Path, args: argparse.Namespace) -> int:
         print(f"agent check certify: {exc}")
         return 2
 
+    record_check_report(root, report)
     if args.json_output:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:

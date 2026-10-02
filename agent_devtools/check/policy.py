@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import fnmatch
 import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from agent_devtools.core.pathmatch import matches_pattern
 from typing import Any, Iterable
 
 GENERIC_POLICY_FORMAT = "agent-devtools-check-policy"
@@ -167,7 +167,7 @@ class CheckPolicy:
             rel = str(raw).replace("\\", "/").lstrip("./")
             names: set[str] = set()
             for rule in self.sources:
-                if any(fnmatch.fnmatchcase(rel, pattern) for pattern in rule.patterns):
+                if any(matches_pattern(rel, pattern) for pattern in rule.patterns):
                     names.update(rule.impact)
             if not names:
                 names.add(RESERVED_UNKNOWN)

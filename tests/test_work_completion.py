@@ -58,7 +58,7 @@ class WorkCompletionTests(unittest.TestCase):
                 "agent_devtools.work.completion._run_development_verification",
                 return_value=(0, "PASS"),
             ) as run_check, patch(
-                "agent_devtools.work.completion._latest_run",
+                "agent_devtools.work.completion.validated_check_report",
                 return_value=latest,
             ):
                 payload = complete_work(root, no_cache=True, resume=True)

@@ -159,6 +159,17 @@ def promote(
     missing_sources = [item for item in source_ids if item not in existing or existing[item].get("kind") != "source"]
     if missing_sources:
         raise KnowledgeError("unknown source knowledge id(s): " + ", ".join(missing_sources))
+    anchor_values = _strings(anchors)
+    superseded_existing = {target for item in existing.values() for target in item.get("supersedes", [])}
+    if not supersedes_ids:
+        for item in existing.values():
+            if (item["id"] not in superseded_existing
+                    and item["status"] == _default_status(kind)
+                    and item["kind"] == kind and item["subject"] == subject
+                    and item["statement"] == text
+                    and item.get("anchors", []) == anchor_values
+                    and item.get("sourceRefs", []) == source_ids):
+                return item
     record_id = uuid.uuid4().hex
     now = utc_now()
     created_by = {
@@ -178,7 +189,7 @@ def promote(
         "subject": subject,
         "status": _default_status(kind),
         "statement": text,
-        "anchors": _strings(anchors),
+        "anchors": anchor_values,
         "supersedes": supersedes_ids,
         "sourceRefs": source_ids,
         "taskId": state.get("taskId"),

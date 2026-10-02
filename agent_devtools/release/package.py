@@ -9,6 +9,7 @@ from typing import Iterable
 
 from agent_devtools.check.config import CheckConfig
 from agent_devtools.check.replay import canonical_source_hashes
+from agent_devtools.core.files import iter_paths
 from agent_devtools.core.hashing import sha256_file, stable_fingerprint
 from agent_devtools.core.pathmatch import matches_any
 
@@ -35,7 +36,7 @@ class PackageInventory:
 
 def _files_inventory(root: Path, spec: PackageSpec) -> PackageInventory:
     hashes: dict[str, str] = {}
-    for path in sorted(root.rglob("*")):
+    for path in iter_paths(root, spec.include, exclude=spec.exclude, files_only=False):
         rel = path.relative_to(root).as_posix()
         if path.is_symlink():
             if matches_any(rel, spec.include) and not matches_any(rel, spec.exclude):

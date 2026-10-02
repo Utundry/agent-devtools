@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import fnmatch
 from dataclasses import dataclass
+
+from agent_devtools.core.pathmatch import matches_pattern
 
 from .config import CheckConfig
 from .policy import PolicyError, SelectionPlan
@@ -53,7 +54,7 @@ def apply_selection_safety_guards(
 
     for rel in plan.changed_files:
         for guard in config.guards:
-            if any(fnmatch.fnmatchcase(rel, pattern) for pattern in guard.patterns):
+            if any(matches_pattern(rel, pattern) for pattern in guard.patterns):
                 reason = f"safety guard: runner/test source changed ({rel})"
                 _force_selected_suite(plan, guard.suite, reason, config.suite_order)
                 if guard.select_all_application_groups:

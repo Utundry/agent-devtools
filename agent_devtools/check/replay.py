@@ -10,6 +10,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Iterable
 
 from agent_devtools.core.archive import ArchiveSafetyError, extract_zip_bounded, read_zip_bounded
+from agent_devtools.core.files import iter_paths
 from agent_devtools.core.hashing import sha256_file, stable_fingerprint
 from agent_devtools.core.pathmatch import matches_any
 
@@ -45,7 +46,7 @@ def canonical_source_hashes(root: Path, config: CheckConfig) -> SourceInventory:
     include = config.replay.source_include
     exclude = (*config.ignore, *config.replay.source_exclude)
     hashes: dict[str, str] = {}
-    for path in sorted(root.rglob("*")):
+    for path in iter_paths(root, include, exclude=exclude, files_only=False):
         rel = path.relative_to(root).as_posix()
         if exclude and matches_any(rel, exclude):
             continue

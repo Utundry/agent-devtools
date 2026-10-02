@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import stat
 import zipfile
 from datetime import datetime, timezone
@@ -10,7 +11,9 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from agent_devtools import __version__
-from agent_devtools.core.archive import ArchiveSafetyError, read_zip_bounded
+from agent_devtools.core.archive import ArchiveSafetyError, verified_zip, read_metadata
+from agent_devtools.core.hashing import sha256_file
+from agent_devtools.core.files import iter_paths
 from agent_devtools.core.pathmatch import matches_any
 from agent_devtools.profiles import load_profile
 from agent_devtools.work.state import load_task_state, task_state_path
@@ -113,12 +116,12 @@ def _excluded(rel: str, preserve_exclude: tuple[str, ...]) -> bool:
     return matches_any(rel, (*_DEFAULT_PRESERVE_EXCLUDE, *preserve_exclude))
 
 
-def _iter_artifacts(root: Path, preserve_exclude: tuple[str, ...]):
-    for path in sorted(root.rglob("*")):
-        if not path.is_file() or path.is_symlink():
+def _iter_artifacts(root: Path, preserve_exclude: tuple[str, ...], skip: tuple[Path, ...] = ()):
+    for path in iter_paths(root, exclude=(*[prefix.rstrip("/") + "/**" for prefix in _EXCLUDE_PREFIXES], *preserve_exclude)):
+        if path.is_symlink() or path.resolve() in skip:
             continue
         rel = path.relative_to(root).as_posix()
-        if _excluded(rel, preserve_exclude):
+        if _excluded(rel, preserve_exclude) or path.name.endswith((".agent-workspace-snapshot.zip", ".agent-handoff.zip", ".agent-checkpoint.zip")):
             continue
         yield rel, path
 
@@ -145,142 +148,130 @@ def create_snapshot(root: Path, *, out: Path | None = None, max_bytes: int = 250
     profile = load_profile(root)
     if profile.development:
         raise WorkspaceSnapshotError("workspace snapshot is intended for non-development profiles; use release/checkpoint flows for development")
-
-    preserve_exclude = _project_preserve_exclude(root)
-    payloads: dict[str, bytes] = {}
-    rows: list[dict[str, Any]] = []
-    total = 0
-    for rel, path in _iter_artifacts(root, preserve_exclude):
-        data = path.read_bytes()
-        total += len(data)
-        if total > max_bytes:
-            raise WorkspaceSnapshotError(f"workspace snapshot exceeds max bytes ({max_bytes})")
-        name = f"artifacts/{rel}"
-        payloads[name] = data
-        rows.append({"path": rel, "bytes": len(data), "sha256": _sha(data), "mode": stat.S_IMODE(path.stat().st_mode)})
-
-    task = load_task_state(root)
-    if task is not None:
-        payloads["state/task.json"] = task_state_path(root).read_bytes()
-    verify = verification_path(root)
-    if verify.is_file():
-        payloads["state/verification.json"] = verify.read_bytes()
-
-    corpus_hash = hashlib.sha256()
-    for row in sorted(rows, key=lambda x: x["path"]):
-        corpus_hash.update(row["path"].encode("utf-8")); corpus_hash.update(b"\0")
-        corpus_hash.update(row["sha256"].encode("ascii")); corpus_hash.update(b"\n")
-
-    metadata = {
-        "format": SNAPSHOT_FORMAT,
-        "formatVersion": SNAPSHOT_VERSION,
-        "toolVersion": __version__,
-        "createdAtUtc": _utc_now(),
-        "workspace": {"name": root.name, "profile": profile.profile_id},
-        "corpusFingerprint": corpus_hash.hexdigest(),
-        "artifacts": rows,
-        "state": {"taskIncluded": task is not None, "verificationIncluded": verify.is_file()},
-        "excluded": [".git", "devtools/agent", ".agent-cache", ".agent-work raw state", ".agent-bootstrap-report.json", "bootstrap installers"],
-        "sensitiveDefaultsExcluded": True,
-        "projectPreserveExclude": list(preserve_exclude),
-    }
-    payloads["snapshot.json"] = (json.dumps(metadata, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
-    entries = {name: _sha(data) for name, data in payloads.items()}
-    payloads["MANIFEST.sha256"] = _manifest(entries)
-
     target = (out or _default_path(root)).expanduser()
-    if not target.is_absolute():
-        target = (root / target).resolve()
-    target.parent.mkdir(parents=True, exist_ok=True)
+    target = target.resolve() if target.is_absolute() else (root / target).resolve()
     temp = target.with_suffix(target.suffix + ".tmp")
-    with zipfile.ZipFile(temp, "w") as zf:
-        for name in sorted(payloads):
-            mode = 0o644
-            if name.startswith("artifacts/"):
-                rel = name[len("artifacts/"):]
-                row = next((x for x in rows if x["path"] == rel), None)
-                if row: mode = int(row["mode"])
-            _zip_write(zf, name, payloads[name], mode)
-    os.replace(temp, target)
-    return {"status": "pass", "path": str(target), "sha256": _sha(target.read_bytes()), "profile": profile.profile_id, "artifacts": len(rows), "bytes": total, "corpusFingerprint": metadata["corpusFingerprint"]}
+    target.parent.mkdir(parents=True, exist_ok=True)
+    rows, entries = [], {}
+    total = 0
+    preserve_exclude = _project_preserve_exclude(root)
+    try:
+        with zipfile.ZipFile(temp, "w") as archive:
+            def add_file(path, name):
+                nonlocal total
+                size = path.stat().st_size
+                if total + size > max_bytes:
+                    raise WorkspaceSnapshotError(f"workspace snapshot exceeds max bytes ({max_bytes})")
+                info = zipfile.ZipInfo(name, (1980, 1, 1, 0, 0, 0))
+                info.compress_type = zipfile.ZIP_DEFLATED
+                mode = stat.S_IMODE(path.stat().st_mode)
+                info.external_attr = (stat.S_IFREG | mode) << 16
+                digest, actual = hashlib.sha256(), 0
+                with path.open("rb") as source, archive.open(info, "w") as sink:
+                    for block in iter(lambda: source.read(1024 * 1024), b""):
+                        actual += len(block)
+                        if total + actual > max_bytes:
+                            raise WorkspaceSnapshotError(f"workspace snapshot exceeds max bytes ({max_bytes})")
+                        digest.update(block)
+                        sink.write(block)
+                total += actual
+                entries[name] = digest.hexdigest()
+                return actual, mode, digest.hexdigest()
+            for rel, path in _iter_artifacts(root, preserve_exclude, (target, temp)):
+                count, mode, digest = add_file(path, "artifacts/" + rel)
+                rows.append({"path": rel, "bytes": count, "sha256": digest, "mode": mode})
+            task = load_task_state(root)
+            if task is not None:
+                add_file(task_state_path(root), "state/task.json")
+            verify = verification_path(root)
+            if verify.is_file():
+                add_file(verify, "state/verification.json")
+            corpus = hashlib.sha256()
+            for row in sorted(rows, key=lambda item: item["path"]):
+                corpus.update(row["path"].encode()); corpus.update(b"\0")
+                corpus.update(row["sha256"].encode()); corpus.update(b"\n")
+            metadata = {"format": SNAPSHOT_FORMAT, "formatVersion": SNAPSHOT_VERSION,
+                "toolVersion": __version__, "createdAtUtc": _utc_now(),
+                "workspace": {"name": root.name, "profile": profile.profile_id},
+                "corpusFingerprint": corpus.hexdigest(), "artifacts": rows,
+                "state": {"taskIncluded": task is not None, "verificationIncluded": verify.is_file()},
+                "excluded": ["runtime/cache", "snapshot/handoff/checkpoint outputs", "bootstrap installers"],
+                "sensitiveDefaultsExcluded": True, "projectPreserveExclude": list(preserve_exclude)}
+            data = (json.dumps(metadata, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode()
+            _zip_write(archive, "snapshot.json", data)
+            entries["snapshot.json"] = _sha(data)
+            _zip_write(archive, "MANIFEST.sha256", _manifest(entries))
+        os.replace(temp, target)
+    finally:
+        temp.unlink(missing_ok=True)
+    return {"status": "pass", "path": str(target), "sha256": sha256_file(target), "profile": profile.profile_id,
+            "artifacts": len(rows), "bytes": sum(row["bytes"] for row in rows), "corpusFingerprint": metadata["corpusFingerprint"]}
 
 
-def _read_snapshot(path: Path) -> tuple[dict[str, Any], dict[str, bytes]]:
-    path = path.expanduser().resolve()
-    if not path.is_file():
-        raise WorkspaceSnapshotError(f"snapshot not found: {path}")
+def _metadata(archive, members):
+    if "snapshot.json" not in members:
+        raise WorkspaceSnapshotError("snapshot is missing metadata")
     try:
-        all_payloads = read_zip_bounded(path)
-    except ArchiveSafetyError as exc:
-        raise WorkspaceSnapshotError(str(exc)) from exc
-    if "snapshot.json" not in all_payloads or "MANIFEST.sha256" not in all_payloads:
-        raise WorkspaceSnapshotError("snapshot is missing metadata/manifest")
-    try:
-        manifest_lines = all_payloads["MANIFEST.sha256"].decode("utf-8").splitlines()
-    except UnicodeDecodeError as exc:
-        raise WorkspaceSnapshotError("snapshot manifest is not UTF-8") from exc
-    expected: dict[str, str] = {}
-    for line in manifest_lines:
-        if not line.strip():
-            continue
-        try:
-            digest, name = line.split("  ", 1)
-        except ValueError as exc:
-            raise WorkspaceSnapshotError("malformed snapshot manifest") from exc
-        if name in expected:
-            raise WorkspaceSnapshotError(f"snapshot manifest contains duplicate path: {name}")
-        expected[name] = digest
-    extras = sorted(set(all_payloads) - set(expected) - {"MANIFEST.sha256"})
-    if extras:
-        raise WorkspaceSnapshotError(
-            "snapshot contains unmanifested payload: " + ", ".join(extras[:5])
-        )
-    payloads: dict[str, bytes] = {}
-    for name, digest in expected.items():
-        data = all_payloads.get(name)
-        if data is None:
-            raise WorkspaceSnapshotError(f"snapshot manifest references missing entry: {name}")
-        if _sha(data) != digest:
-            raise WorkspaceSnapshotError(f"snapshot payload hash mismatch: {name}")
-        payloads[name] = data
-    try:
-        meta = json.loads(payloads["snapshot.json"].decode("utf-8"))
+        meta = json.loads(read_metadata(archive, members["snapshot.json"]).decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise WorkspaceSnapshotError(f"invalid snapshot metadata: {exc}") from exc
     if not isinstance(meta, dict) or meta.get("format") != SNAPSHOT_FORMAT or int(meta.get("formatVersion") or 0) != SNAPSHOT_VERSION:
         raise WorkspaceSnapshotError("unsupported snapshot format/version")
-    return meta, payloads
+    return meta
 
 
 def inspect_snapshot(path: Path) -> dict[str, Any]:
-    meta, _ = _read_snapshot(path)
+    try:
+        with verified_zip(path) as (archive, members, _expected):
+            meta = _metadata(archive, members)
+    except ArchiveSafetyError as exc:
+        raise WorkspaceSnapshotError(str(exc)) from exc
     return {"status": "pass", "path": str(path.expanduser().resolve()), **meta}
 
 
 def restore_snapshot(path: Path, target: Path, *, force: bool = False) -> dict[str, Any]:
-    meta, payloads = _read_snapshot(path)
     target = target.expanduser().resolve()
-    target.mkdir(parents=True, exist_ok=True)
-    conflicts: list[str] = []
-    for name, data in payloads.items():
-        if not name.startswith("artifacts/"): continue
-        rel = _safe_rel(name[len("artifacts/"):])
-        dest = (target / rel).resolve()
-        try: dest.relative_to(target)
-        except ValueError as exc: raise WorkspaceSnapshotError(f"snapshot path escapes target: {rel}") from exc
-        if dest.is_file() and dest.read_bytes() != data and not force:
-            conflicts.append(rel)
-    if conflicts:
-        raise WorkspaceSnapshotError("restore conflicts; rerun with --force only after review: " + ", ".join(conflicts[:20]))
-
-    restored = 0
-    for name, data in payloads.items():
-        if not name.startswith("artifacts/"): continue
-        rel = _safe_rel(name[len("artifacts/"):])
-        dest = target / rel; dest.parent.mkdir(parents=True, exist_ok=True); dest.write_bytes(data); restored += 1
-    state_root = target / ".agent-work"; state_root.mkdir(parents=True, exist_ok=True)
-    if "state/task.json" in payloads:
-        (state_root / "task.json").write_bytes(payloads["state/task.json"])
-    if "state/verification.json" in payloads:
-        (state_root / "verification.json").write_bytes(payloads["state/verification.json"])
-    return {"status": "pass", "target": str(target), "profile": meta["workspace"]["profile"], "restoredArtifacts": restored, "taskRestored": "state/task.json" in payloads, "verificationRestored": "state/verification.json" in payloads, "corpusFingerprint": meta["corpusFingerprint"]}
+    try:
+        with verified_zip(path) as (archive, members, expected):
+            meta = _metadata(archive, members)
+            conflicts, writes = [], []
+            destinations = set()
+            modes = {row["path"]: row.get("mode", 0o644) for row in meta.get("artifacts", [])}
+            for name, info in members.items():
+                if name.startswith("artifacts/"):
+                    rel = _safe_rel(name[len("artifacts/"):])
+                elif name in {"state/task.json", "state/verification.json"}:
+                    rel = ".agent-work/" + name[len("state/"):]
+                else:
+                    continue
+                dest = (target / rel).resolve()
+                try:
+                    dest.relative_to(target)
+                except ValueError as exc:
+                    raise WorkspaceSnapshotError(f"snapshot path escapes target: {rel}") from exc
+                if dest in destinations:
+                    raise WorkspaceSnapshotError(f"duplicate snapshot destination: {rel}")
+                destinations.add(dest)
+                if any(parent.exists() and not parent.is_dir() for parent in dest.parents if parent != target and target in parent.parents):
+                    conflicts.append(rel)
+                if dest.exists() and (not dest.is_file() or sha256_file(dest) != expected[name]) and not force:
+                    conflicts.append(rel)
+                writes.append((dest, info, modes.get(rel, 0o644)))
+            if conflicts:
+                raise WorkspaceSnapshotError("restore conflicts; rerun with --force only after review: " + ", ".join(conflicts[:20]))
+            for dest, info, mode in writes:
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                temp = dest.with_name(dest.name + ".agent-restore.tmp")
+                try:
+                    with archive.open(info) as source, temp.open("wb") as sink:
+                        shutil.copyfileobj(source, sink, length=1024 * 1024)
+                    os.chmod(temp, int(mode))
+                    os.replace(temp, dest)
+                finally:
+                    temp.unlink(missing_ok=True)
+            return {"status": "pass", "target": str(target), "profile": meta["workspace"]["profile"],
+                    "restoredArtifacts": sum(info.filename.startswith("artifacts/") for _, info, _ in writes),
+                    "taskRestored": "state/task.json" in members, "verificationRestored": "state/verification.json" in members,
+                    "corpusFingerprint": meta["corpusFingerprint"]}
+    except ArchiveSafetyError as exc:
+        raise WorkspaceSnapshotError(str(exc)) from exc

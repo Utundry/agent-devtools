@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import fnmatch
 import json
 from pathlib import Path
 from typing import Any, Iterable
 
+from agent_devtools.core.files import iter_paths
+from agent_devtools.core.pathmatch import matches_any
 from agent_devtools.core.hashing import sha256_file, stable_fingerprint
 from agent_devtools.core.identity import engine_fingerprint
 from agent_devtools.core.io import atomic_json_write
@@ -15,23 +16,10 @@ CACHE_VERSION = 1
 MAX_CACHE_ENTRIES = 512
 
 
-def _matches(path: str, patterns: Iterable[str]) -> bool:
-    return any(fnmatch.fnmatchcase(path, pattern) for pattern in patterns)
-
-
 def matching_input_hashes(root: Path, patterns: tuple[str, ...], ignore: tuple[str, ...]) -> dict[str, str]:
-    if not patterns:
-        return {}
-    result: dict[str, str] = {}
-    for path in root.rglob("*"):
-        if not path.is_file():
-            continue
-        rel = path.relative_to(root).as_posix()
-        if ignore and _matches(rel, ignore):
-            continue
-        if _matches(rel, patterns):
-            result[rel] = sha256_file(path)
-    return dict(sorted(result.items()))
+    return dict(sorted((path.relative_to(root).as_posix(), sha256_file(path))
+                       for path in iter_paths(root, patterns, exclude=ignore)
+                       if not path.is_symlink()))
 
 
 class StageCache:
@@ -54,8 +42,8 @@ class StageCache:
         except Exception:
             self.entries = {}
 
+    @staticmethod
     def key(
-        self,
         *,
         suite: str,
         argv: tuple[str, ...],

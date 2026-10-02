@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 import tempfile
 import unittest
 import zipfile
@@ -87,6 +89,25 @@ class AdaptiveBootstrapTests(unittest.TestCase):
         self.assertIn("What stack are you planning to use (language, framework, tests/build tools)?", source)
         self.assertNotIn("Что планируется делать или обсуждать в этом проекте?", source)
         self.assertNotIn("Какой стек планируется", source)
+
+    def test_distributed_bootstrap_keeps_context_index_lazy(self) -> None:
+        installer = Path(__file__).resolve().parents[1] / "bootstrap" / "AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py"
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            installed = subprocess.run(
+                [sys.executable, str(installer), '--target', str(root), '--profile', 'research',
+                 '--intent', 'Research solar radiation', '--json'],
+                cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            )
+            self.assertEqual(0, installed.returncode, installed.stdout + installed.stderr)
+            database = root / '.agent-cache/context.sqlite'
+            self.assertFalse(database.exists())
+            explicit = subprocess.run(
+                [sys.executable, str(root / 'devtools/agent/agent.py'), 'context', 'ensure', '--json'],
+                cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            )
+            self.assertEqual(0, explicit.returncode, explicit.stdout + explicit.stderr)
+            self.assertTrue(database.is_file())
 
     def test_bootstrap_records_and_verifies_installed_runtime_version(self) -> None:
         source_root = Path(__file__).resolve().parents[1]

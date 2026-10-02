@@ -389,7 +389,10 @@ def build_artifacts(root: Path, *, version: str, template_kit: bytes, source_ver
 
     entries: dict[str, bytes] = {}
     for rel in WRAPPER_REQUIRED:
-        raw = old_entries[rel]
+        # The executable wrapper is editable source; the archive is its derived
+        # distribution. Legacy source trees may still use the template wrapper.
+        wrapper = root / "bootstrap" / "BOOTSTRAP_AGENT_DEVTOOLS.py"
+        raw = wrapper.read_bytes() if rel == wrapper.name and wrapper.is_file() else old_entries[rel]
         entries[rel] = _replace_version(raw, old_version, version, rel=rel)
 
     # Refresh exact known metadata values without assuming a particular metadata schema.

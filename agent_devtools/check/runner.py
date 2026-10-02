@@ -1,18 +1,21 @@
 from __future__ import annotations
 
-import fnmatch
 import hashlib
 import json
 import os
+from fnmatch import fnmatchcase
 import sys
 import time
 from pathlib import Path
 from typing import Any
 
-from agent_devtools.core.hashing import sha256_file
+from agent_devtools.core.hashing import sha256_file, stable_fingerprint
+from agent_devtools.core.files import FileInventory
+from agent_devtools.core.provenance import seal_origins, origin_status
 from agent_devtools.core.process import ManagedProcessRunner
 from agent_devtools.core.workspace import RunWorkspace, WorkspaceError, default_work_root, utc_now
 
+from .freshness import begin_binding
 from .adapters import evaluate_suite_result
 from .cache import StageCache, matching_input_hashes
 from .config import CheckConfig, FileSetSpec, SuiteCommand
@@ -64,7 +67,17 @@ def _resolved_execution(
 
 
 def _execution_fingerprint(root: Path, spec: SuiteCommand, cwd: Path, env_overrides: dict[str, str]) -> dict[str, Any]:
+    effective_env = {**os.environ, **env_overrides}
+    if spec.cache_env is None:
+        names = sorted(effective_env)
+    else:
+        # Exact absent names remain distinct from empty values. Patterns also
+        # track newly introduced members of a declared environment family.
+        names = sorted({name for name in effective_env if any(fnmatchcase(name, pattern) for pattern in spec.cache_env)}
+                       | {name for name in spec.cache_env if not any(char in name for char in '*?[')})
     return {
+        "environmentFingerprint": stable_fingerprint({name: effective_env.get(name) for name in names}),
+        "cacheEnv": list(spec.cache_env) if spec.cache_env is not None else None,
         "cwd": cwd.relative_to(root).as_posix() if cwd != root else ".",
         "env": dict(sorted(env_overrides.items())),
         "adapter": spec.adapter.to_dict(),
@@ -72,26 +85,21 @@ def _execution_fingerprint(root: Path, spec: SuiteCommand, cwd: Path, env_overri
         "fileSet": spec.file_set.to_dict() if spec.file_set is not None else None,
         "outputs": spec.outputs.to_dict(),
         "idleTimeoutSeconds": spec.idle_timeout_seconds,
+        "timeoutSeconds": spec.timeout_seconds,
         "chunks": [chunk.to_dict() for chunk in spec.chunks],
     }
 
 
 def _file_set_paths(root: Path, file_set: FileSetSpec, ignore: tuple[str, ...]) -> list[Path]:
-    excluded = (*ignore, *file_set.exclude)
-    result: list[Path] = []
-    for path in matching_paths(root, file_set.patterns):
-        rel = path.relative_to(root).as_posix()
-        if any(fnmatch.fnmatchcase(rel, pattern) for pattern in excluded):
-            continue
-        result.append(path)
-    return result
+    return matching_paths(root, file_set.patterns, exclude=(*ignore, *file_set.exclude))
 
 
-def _input_hashes(root: Path, spec: SuiteCommand, config: CheckConfig, file_paths: list[Path]) -> dict[str, str]:
+def _input_hashes(root: Path, spec: SuiteCommand, config: CheckConfig, file_paths: list[Path], inventory: FileInventory | None = None) -> dict[str, str]:
+    if inventory is not None:
+        return inventory.hashes(spec.inputs, file_paths)
     hashes = matching_input_hashes(root, spec.inputs, config.ignore)
     for path in file_paths:
-        rel = path.relative_to(root).as_posix()
-        hashes[rel] = sha256_file(path)
+        hashes[path.relative_to(root).as_posix()] = sha256_file(path)
     return dict(sorted(hashes.items()))
 
 
@@ -119,6 +127,7 @@ def _execute_file_set(
             cwd=cwd,
             env=env,
             timeout_seconds=timeout,
+            idle_timeout_seconds=spec.idle_timeout_seconds,
             on_process_started=workspace.process_started,
         )
         total_duration += result.duration_seconds
@@ -295,12 +304,14 @@ def run_plan(
     workspace = RunWorkspace(root, f"check-{plan.profile}")
     cache = StageCache(root / ".agent-cache" / "check-stage-cache-v1.json")
     process = ManagedProcessRunner(root=root, log_dir=workspace.run_dir / "logs")
+    inventory = FileInventory(root, config.ignore)
     budget: dict[str, Any] | None = None
     if max_chunks is not None or time_slice_seconds is not None:
         budget = {
             "remaining": None if max_chunks is None else max(0, int(max_chunks)),
             "deadline": None if time_slice_seconds is None else time.monotonic() + max(0.01, float(time_slice_seconds)),
         }
+    workspace.report["verificationBinding"] = begin_binding(root, config)
     workspace.report["selection"] = plan.to_dict()
     workspace.report["resumable"] = True
     workspace.report["resumeRequested"] = bool(resume)
@@ -322,7 +333,7 @@ def run_plan(
                 raise CheckRunError(suite, "fileSet matched no files")
 
             argv, cwd, env, env_overrides = _resolved_execution(root, spec, plan)
-            input_hashes = _input_hashes(root, spec, config, file_paths)
+            input_hashes = _input_hashes(root, spec, config, file_paths, inventory)
             execution_fingerprint = _execution_fingerprint(root, spec, cwd, env_overrides)
             cache_key = cache.key(
                 suite=suite,
@@ -331,10 +342,13 @@ def run_plan(
                 input_hashes=input_hashes,
                 execution=execution_fingerprint,
             )
+            workspace.report["verificationBinding"]["suites"][suite] = cache_key
             suite_resume_key = _resume_key(suite=suite, cache_key=cache_key, spec=spec)
             workspace.report["checks"].setdefault(suite, {})["resumeKey"] = suite_resume_key
             workspace.persist()
             cached = cache.probe(cache_key, suite) if cache_enabled and spec.cache else None
+            if cached is not None and origin_status(root, cached).get("integrityMismatch"):
+                cached = None
             if cached is not None:
                 cached_result = cached.get("result") if isinstance(cached.get("result"), dict) else {}
                 if cached_outputs_match(root, spec.outputs, cached_result):
@@ -344,6 +358,7 @@ def run_plan(
                         "cache": {"status": "hit", "key": cache_key, "cachedAtUtc": cached.get("completedAtUtc")},
                         "resultAdapter": spec.adapter.kind,
                         "result": cached_result,
+                        "executionEvidence": origin_status(root, cached),
                     })
                     continue
 
@@ -440,6 +455,7 @@ def run_plan(
             if not accepted:
                 payload["diagnostics"] = list(dict.fromkeys(diagnostics))
             workspace.stage_finished(suite, payload)
+            inventory.invalidate()
             if not accepted:
                 message = "; ".join(dict.fromkeys(diagnostics)) or f"suite result rejected (exit code {exit_code})"
                 raise CheckRunError(suite, message)
@@ -452,8 +468,9 @@ def run_plan(
                     result={"inputFiles": len(input_hashes), **evaluation_result},
                 )
 
-        cache.flush()
         workspace.finalize("pass")
+        seal_origins(cache.updates, root, workspace.run_dir / "report.json")
+        cache.flush()
         return 0, workspace.report
     except (CheckRunError, WorkspaceError) as exc:
         workspace.finalize("fail", message=str(exc))

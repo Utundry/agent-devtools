@@ -8,6 +8,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from agent_devtools.core.files import iter_paths
 from agent_devtools.core.hashing import sha256_file
 from agent_devtools.core.pathmatch import matches_any, matches_pattern
 
@@ -107,9 +108,7 @@ def discover_files(config: ContextConfig) -> dict[str, FileInfo]:
     forced = set(semantic_map.target_files)
     result: dict[str, FileInfo] = {}
     superseded_knowledge = _superseded_knowledge_paths(config)
-    for path in sorted(config.root.rglob("*")):
-        if path.is_symlink() or not path.is_file():
-            continue
+    for path in iter_paths(config.root, exclude=config.exclude):
         rel = path.relative_to(config.root).as_posix()
         info = _file_info(config, path, rel, force=rel in forced, superseded_knowledge=superseded_knowledge)
         if info is not None and (info.is_text or rel in forced):

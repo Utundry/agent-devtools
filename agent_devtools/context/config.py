@@ -22,7 +22,7 @@ _DEFAULT_INCLUDE = (
 )
 _DEFAULT_IGNORE = (
     ".git/**", ".agent-cache/**", ".agent-work/**", "**/__pycache__/**",
-    "node_modules/**", "vendor/**", "dist/**", "build/**", "coverage/**",
+    "**/node_modules/**", "**/vendor/**", "**/.venv/**", "**/venv/**", "dist/**", "build/**", "coverage/**",
     "*.min.js", "*.min.css", "*.map", "*.pyc", "*.pyo", "*.log", "*.tmp",
 )
 _DEFAULT_KIND_CAPS = {
@@ -113,7 +113,22 @@ def load_context_config(root: Path, config_path: Path | None = None) -> ContextC
         context = {}
     if not isinstance(context, dict):
         raise ContextConfigError("context must be an object")
-    ignore = _string_list(raw.get("ignore"), "ignore", _DEFAULT_IGNORE)
+    # Project ignores extend context safety defaults instead of replacing them.
+    ignore = tuple(dict.fromkeys((*_DEFAULT_IGNORE, *_string_list(raw.get("ignore"), "ignore", ()))))
+    include_runtime = context.get("includeRuntime", False)
+    if not isinstance(include_runtime, bool):
+        raise ContextConfigError("context.includeRuntime must be a boolean")
+    if not include_runtime:
+        ignore = (*ignore, "devtools/agent/**")
+        runtime_root = Path(__file__).resolve().parents[2]
+        try:
+            runtime_rel = runtime_root.relative_to(root)
+        except ValueError:
+            pass
+        else:
+            # Own source remains indexable when it IS the project root.
+            if runtime_rel.parts:
+                ignore = (*ignore, runtime_rel.as_posix() + "/**")
     include = _string_list(context.get("include"), "context.include", _DEFAULT_INCLUDE)
     extra_exclude = _string_list(context.get("exclude"), "context.exclude", ())
     low_priority = _string_list(context.get("lowPriority"), "context.lowPriority", ())

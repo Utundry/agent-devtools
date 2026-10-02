@@ -51,6 +51,7 @@ def record_verification(root: Path, *, label: str, status: str, evidence: Iterab
         "status": status,
         "evidence": [str(item).strip() for item in evidence if str(item).strip()],
         "summary": summary.strip(),
+        "verificationKind": "attestation",
         "completedAtUtc": utc_now(),
     }
     log["records"].append(record)
@@ -86,3 +87,29 @@ def record_research_bundle(root: Path, *, checks: dict[str, str], evidence: Iter
             break
     atomic_json_write(verification_path(root), log)
     return {**record, "checks": normalized}
+
+
+def record_check_report(root: Path, report: dict[str, Any]) -> dict[str, Any] | None:
+    """Bind completed CLI checks to their inspectable report and report hash."""
+    if report.get("status") not in {"pass", "fail"}:
+        return None
+    from agent_devtools.core.hashing import sha256_file
+    report_path = Path(report["runDirectory"]) / "report.json"
+    if not report_path.is_absolute():
+        report_path = root / report_path
+    report_path = report_path.resolve()
+    try:
+        evidence = report_path.relative_to(root.resolve()).as_posix()
+    except ValueError:
+        evidence = str(report_path)
+    record = record_verification(
+        root, label="check", status=report["status"], evidence=[evidence],
+        summary="Project-native check report; suite results, cache results and log paths are retained in the report.",
+    )
+    record["verificationKind"] = "machine-check"
+    record["reportSha256"] = sha256_file(report_path)
+    record["checkCompletedAtUtc"] = report.get("completedAtUtc")
+    log = _load(root)
+    log["records"][-1] = record
+    atomic_json_write(verification_path(root), log)
+    return record

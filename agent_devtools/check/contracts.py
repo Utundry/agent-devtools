@@ -1,45 +1,17 @@
 from __future__ import annotations
 
-import fnmatch
 from pathlib import Path
 from typing import Iterable
 
+from agent_devtools.core.files import iter_paths
 from agent_devtools.core.hashing import sha256_file
 
 from .config import OutputSpec
 
 
-def _has_magic(pattern: str) -> bool:
-    return any(char in pattern for char in "*?[")
-
-
-def _iter_project_paths(root: Path):
-    for path in root.rglob("*"):
-        yield path, path.relative_to(root).as_posix()
-
-
-def matching_paths(root: Path, patterns: Iterable[str], *, files_only: bool = True) -> list[Path]:
-    root = root.resolve()
-    found: dict[str, Path] = {}
-    for pattern in patterns:
-        pattern = str(pattern).replace("\\", "/")
-        if not pattern:
-            continue
-        if not _has_magic(pattern):
-            candidate = (root / pattern).resolve()
-            try:
-                rel = candidate.relative_to(root).as_posix()
-            except ValueError:
-                continue
-            if candidate.exists() and (candidate.is_file() or not files_only):
-                found[rel] = candidate
-            continue
-        for path, rel in _iter_project_paths(root):
-            if files_only and not path.is_file():
-                continue
-            if fnmatch.fnmatchcase(rel, pattern):
-                found[rel] = path
-    return [found[key] for key in sorted(found)]
+def matching_paths(root: Path, patterns: Iterable[str], *, files_only: bool = True, exclude: Iterable[str] = ()) -> list[Path]:
+    return sorted((path for path in iter_paths(root, patterns, exclude=exclude, files_only=files_only)
+                   if not path.is_symlink()), key=str)
 
 
 def missing_required(root: Path, patterns: Iterable[str]) -> list[str]:

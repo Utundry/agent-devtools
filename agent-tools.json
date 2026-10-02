@@ -42,6 +42,8 @@
           "agent-tools.json",
           "agent-check.policy.json",
           "presets/**",
+          "scripts/**",
+          "bootstrap/**",
           "agent-context.map.json"
         ],
         "tool": "python",
@@ -50,7 +52,23 @@
         "resultAdapter": {
           "kind": "unittest",
           "requireCount": false
-        }
+        },
+        "cacheEnv": [
+          "PATH",
+          "PYTHON*",
+          "LANG",
+          "LC_*",
+          "TZ",
+          "HOME",
+          "USERPROFILE",
+          "TMP*",
+          "TEMP",
+          "SYSTEMROOT",
+          "PATHEXT",
+          "GIT_*",
+          "AGENT_DEVTOOLS_*",
+          "COMSPEC"
+        ]
       },
       "compile": {
         "argv": [
@@ -59,17 +77,34 @@
           "compileall",
           "-q",
           "agent_devtools",
-          "tests"
+          "tests",
+          "scripts",
+          "bootstrap"
         ],
         "inputs": [
           "agent_devtools/**",
           "tests/**",
-          "presets/**"
+          "presets/**",
+          "scripts/**",
+          "bootstrap/*.py"
         ],
         "tool": "python",
         "timeoutSeconds": 60,
         "cache": true,
-        "resultAdapter": "exit-code"
+        "resultAdapter": "exit-code",
+        "cacheEnv": [
+          "PATH",
+          "PYTHON*",
+          "LANG",
+          "LC_*",
+          "TZ",
+          "HOME",
+          "USERPROFILE",
+          "TMP*",
+          "TEMP",
+          "SYSTEMROOT",
+          "PATHEXT"
+        ]
       }
     },
     "certification": {

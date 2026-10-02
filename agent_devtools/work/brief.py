@@ -10,7 +10,7 @@ from typing import Any
 from agent_devtools import __version__
 from agent_devtools.context.affected import build_affected_briefing
 from agent_devtools.context.config import ContextConfigError, load_context_config
-from agent_devtools.context.index import ContextIndexError
+from agent_devtools.context.index import ContextIndexError, ensure_index
 from agent_devtools.context.semantic_diff import compare_semantic_states
 from agent_devtools.context.search import query_context
 from agent_devtools.profiles import ProfileError, load_profile
@@ -142,6 +142,8 @@ def _context(root: Path, changed: tuple[str, ...], budget: int, before_root: Pat
         return None
     try:
         config = load_context_config(root)
+        if not config.database.is_file() and before_root is None:
+            return {"available": False, "reason": "Index not built; use context ensure or context query when retrieval is needed."}
         semantic_identities: tuple[str, ...] = ()
         semantic_diff = None
         if before_root is not None:
@@ -200,6 +202,9 @@ def _generic_context(root: Path, task: dict[str, Any] | None, budget: int) -> di
         return None
     try:
         config = load_context_config(root)
+        if not config.database.is_file():
+            return {"available": False, "reason": "Index not built; use context ensure or context query when retrieval is needed."}
+        ensure_index(config)
         report = query_context(config, query, limit=8, budget=budget, preferred_paths=task.get("changedFiles", []))
     except (ContextConfigError, ContextIndexError, OSError, ValueError, sqlite3.Error) as exc:
         return {"available": False, "error": f"{type(exc).__name__}: {exc}"}
@@ -281,13 +286,16 @@ def build_brief(root: Path, *, mode: str = "brief", budget: int = 1400, include_
         "recovery": recovery,
         "context": context,
     }
-    payload["workingStateFingerprint"] = stable_fingerprint({
+    payload["stateMetadataFingerprint"] = stable_fingerprint({
         "profile": profile_payload,
         "task": task,
         "git": {"head": git.get("head"), "changedFiles": git.get("changedFiles") if use_git_changes else []},
         "changedFiles": list(changed),
         "latestVerification": latest,
     })
+    # Legacy name retained as a metadata fingerprint, never used as content evidence.
+    payload["workingStateFingerprint"] = payload["stateMetadataFingerprint"]
+    payload["fingerprintKind"] = "metadata"
     return payload
 
 

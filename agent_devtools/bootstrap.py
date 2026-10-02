@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 from copy import deepcopy
 from dataclasses import dataclass
@@ -92,11 +93,15 @@ def detect_stack(root: Path) -> dict[str, Any]:
 def classify_intent(intent: str, *, stack: str | None = None) -> IntentDetection:
     """Classify a human goal conservatively; unsupported/ambiguous stacks remain explicit."""
     text = f"{intent} {stack or ''}".strip().lower()
-    dev_words = ("разработ", "код", "прилож", "сервис", "api", "сайт", "frontend", "backend", "software", "develop", "development", "program", "программ", "build", "implement", "coding", "cli")
     research_words = ("исслед", "research", "изуч", "сравн", "обосн", "источник")
     document_words = ("документ", "статья", "отчет", "отчёт", "memo", "proposal", "договор", "текст")
     analysis_words = ("анализ", "analysis", "модель", "расчет", "расчёт", "оцен")
-    development = bool(stack and stack.strip()) or any(w in text for w in dev_words)
+    # General business words such as service/develop/build are not stack evidence.
+    software_signals = ("приложение", "приложения", "программ", "сайт", "software", "coding", "frontend", "backend", "typescript", "python", "php", "node.js", "vue")
+    development = bool(stack and stack.strip()) or any(w in text for w in software_signals) or bool(re.search(r"\b(?:api|cli|код|кода)\b", text))
+    research_context = any(w in text for w in research_words)
+    if research_context and not stack and not any(w in text for w in ("написать код", "implement", "coding", "разработать приложение")):
+        development = False
     if development:
         preset = None
         reasons: list[str] = ["intent indicates software development"]

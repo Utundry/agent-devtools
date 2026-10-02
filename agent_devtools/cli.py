@@ -273,6 +273,12 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
             print(f"workflow contract v{payload['formatVersion']} · profile={payload['profile']['id']}")
+            route = payload.get("routineRoute")
+            if route:
+                print(f"  routine: {route['entry']} -> project-native work -> {route['completion']}")
+                print(f"  already verified: {route['alreadyVerifiedCompletion']} (checks current inputs and evidence)")
+                print("  context indexing and knowledge promotion: optional")
+                print("  responsibilities (not separate mandatory calls):")
             for phase in payload["phases"]:
                 marker = "required" if phase["required"] else "optional"
                 print(f"  {phase['id']}: {marker} · {phase['purpose']}")
