@@ -1,0 +1,28 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "de41eb310f934b4e858a5338ef7a1a2c",
+  "kind": "requirement",
+  "subject": "failure-recovery/progress-guarantee",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "The Agent Work Lifecycle must guarantee progress when an external tool repeatedly fails: identical tool/action failures must not be retried indefinitely.",
+  "scope": [
+    "agent-devtools/failure-recovery"
+  ],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "c2c5d486-e56d-49c6-ab42-7f0628b1a8ad",
+    "taskGoal": "Implement Stage R4 Failure Recovery and Progress Guarantees from the repeated external write-tool failure dogfood",
+    "eventId": "29b0bd77ea87418abfca627cde49fe39"
+  },
+  "taskId": "c2c5d486-e56d-49c6-ab42-7f0628b1a8ad",
+  "taskGoal": "Implement Stage R4 Failure Recovery and Progress Guarantees from the repeated external write-tool failure dogfood",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T13:23:52Z",
+  "updatedAtUtc": "2026-10-08T13:23:52Z"
+}

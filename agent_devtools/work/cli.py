@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -190,6 +191,15 @@ def configure_cognition_parser(parser: argparse.ArgumentParser) -> None:
     checkpoint.add_argument("--promote-required", action="store_true", help="promote every required durable candidate through knowledge remember, then re-run the checkpoint")
     checkpoint.add_argument("--json", action="store_true", dest="json_output")
 
+    tool_failure = sub.add_parser("tool-failure", help="record repeated external-tool failure and get bounded recovery guidance")
+    tool_failure.add_argument("--tool", required=True, help="tool/capability name, for example write or browser")
+    tool_failure.add_argument("--operation", default="", help="short attempted operation label")
+    tool_failure.add_argument("--error", required=True, help="stable error class/message from the failed attempt")
+    tool_failure.add_argument("--importance", choices=("optional", "mandatory"), required=True)
+    tool_failure.add_argument("--attempts", type=int, default=2, help="number of equivalent failed attempts observed")
+    tool_failure.add_argument("--fallback", default="", help="available alternative path, if any")
+    tool_failure.add_argument("--json", action="store_true", dest="json_output")
+
 
 def _cognition_text(args: argparse.Namespace) -> str:
     positional = str(getattr(args, "text", "") or "").strip()
@@ -202,8 +212,114 @@ def _cognition_text(args: argparse.Namespace) -> str:
     return value
 
 
+def _tool_failure_recovery(root: Path, args: argparse.Namespace) -> tuple[dict, dict]:
+    state = load_task_state(root)
+    if state is None:
+        raise TaskStateError("no task state exists; use begin or work start first")
+    tool = str(args.tool or "").strip()
+    operation = str(args.operation or "").strip()
+    error = str(args.error or "").strip()
+    importance = str(args.importance or "").strip()
+    fallback = str(args.fallback or "").strip()
+    attempts = int(args.attempts)
+    if not tool or not error:
+        raise TaskStateError("tool-failure requires non-empty --tool and --error")
+    if attempts < 1:
+        raise TaskStateError("tool-failure --attempts must be >= 1")
+
+    fingerprint = hashlib.sha256("\0".join((tool, operation, error)).encode("utf-8")).hexdigest()[:16]
+    retry_ceiling = 2
+    ceiling_reached = attempts >= retry_ceiling
+    retry_allowed = not ceiling_reached
+    blocker = ""
+
+    if retry_allowed:
+        recommended = "retry-once"
+    elif importance == "optional":
+        recommended = "use-fallback" if fallback else "skip-optional-step"
+    else:
+        recommended = "use-fallback-and-resolve-blocker" if fallback else "stop-and-resolve-blocker"
+        blocker = f"mandatory tool failure [{fingerprint}] {tool}" + (f"/{operation}" if operation else "") + f": {error}"
+        state = update_task(root, add_blockers=[blocker])
+
+    append_event(
+        root,
+        task_id=str(state.get("taskId") or ""),
+        kind="observation",
+        text=f"tool failure {tool}" + (f"/{operation}" if operation else "") + f" attempt {attempts}: {error}",
+        metadata={
+            "source": "cognition.tool-failure",
+            "tool": tool,
+            "operation": operation,
+            "error": error,
+            "fingerprint": fingerprint,
+            "importance": importance,
+            "attempts": attempts,
+            "retryCeiling": retry_ceiling,
+            "retryCeilingReached": ceiling_reached,
+            "fallback": fallback,
+            "blocking": bool(blocker),
+        },
+        created_at_utc=utc_now(),
+    )
+
+    try:
+        profile_id = load_profile(root).profile_id
+    except ProfileError:
+        profile_id = ""
+
+    next_commands: list[str] = []
+    if blocker:
+        next_commands.append(f'agent cognition resolve-blocker "{blocker}"')
+    elif ceiling_reached and profile_id == "research":
+        next_commands.extend(["agent verify research", "agent cognition checkpoint", "agent work complete"])
+    elif ceiling_reached:
+        next_commands.extend(["agent cognition checkpoint", "agent work complete"])
+
+    return {
+        "format": "agent-devtools-tool-failure-recovery",
+        "formatVersion": 1,
+        "tool": tool,
+        "operation": operation,
+        "error": error,
+        "fingerprint": fingerprint,
+        "importance": importance,
+        "attempts": attempts,
+        "retryCeiling": retry_ceiling,
+        "retryAllowed": retry_allowed,
+        "blocking": bool(blocker),
+        "blocker": blocker or None,
+        "fallback": fallback or None,
+        "recommendedAction": recommended,
+        "progressPreserved": True,
+        "nextCommands": next_commands,
+        "policy": "Do not repeat the same tool/action after two equivalent failures. Optional work must fallback or skip; mandatory work blocks completion until recovered.",
+    }, state
+
+
 def main_cognition(root: Path, args: argparse.Namespace) -> int:
     try:
+        if args.cognition_command == "tool-failure":
+            payload, state = _tool_failure_recovery(root, args)
+            if args.json_output:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+            else:
+                print(f"Tool failure: {payload['tool']} · attempts={payload['attempts']}/{payload['retryCeiling']} · importance={payload['importance']} · action={payload['recommendedAction']}")
+                if payload["retryAllowed"]:
+                    print("Next: retry this exact tool/action at most once.")
+                elif payload["importance"] == "optional":
+                    print("Retry ceiling reached. Do not loop; use the fallback or skip this optional step.")
+                    if payload["fallback"]:
+                        print(f"Fallback: {payload['fallback']}")
+                    print("Preserve completed findings/evidence and continue the canonical lifecycle.")
+                else:
+                    print("Retry ceiling reached. Mandatory step is now a blocker.")
+                    if payload["fallback"]:
+                        print(f"Fallback: {payload['fallback']}")
+                    print(f"Blocker: {payload['blocker']}")
+                for command in payload["nextCommands"]:
+                    print(f"Next command: {command}")
+            return 1 if payload["blocking"] else 0
         if args.cognition_command == "checkpoint":
             payload = semantic_checkpoint(root)
             promoted = []

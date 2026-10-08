@@ -281,8 +281,11 @@ def main(argv: list[str] | None = None) -> int:
             print(f"workflow contract v{payload['formatVersion']} · profile={payload['profile']['id']}")
             route = payload.get("routineRoute")
             if route:
-                print(f"  routine: {route['entry']} -> project-native work -> {route['completion']}")
+                routine = route.get("canonicalRoutine") or [route["entry"], "work", "checkpoint", "complete"]
+                print("  routine: " + " -> ".join(routine))
                 print("  completion: reuse current PASS; otherwise run required checks")
+                if route.get("toolFailureRecovery"):
+                    print("  failure recovery: two equivalent failures -> fallback/skip optional work or block mandatory work")
                 print("  gates: task alignment, blockers, verification and knowledge consistency")
                 print("  context indexing and knowledge promotion: optional")
                 print("  deeper tools: certification, replay and release when explicitly needed")

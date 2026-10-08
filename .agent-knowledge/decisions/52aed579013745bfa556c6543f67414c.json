@@ -1,0 +1,28 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "52aed579013745bfa556c6543f67414c",
+  "kind": "decision",
+  "subject": "failure-recovery/policy",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "After the same tool/action failure reaches two attempts, optional work must fallback or skip without blocking completion, while mandatory work creates an ordinary blocker until a successful fallback resolves it.",
+  "scope": [
+    "agent-devtools/failure-recovery"
+  ],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "c2c5d486-e56d-49c6-ab42-7f0628b1a8ad",
+    "taskGoal": "Implement Stage R4 Failure Recovery and Progress Guarantees from the repeated external write-tool failure dogfood",
+    "eventId": "be4c531bfdcd460f8edd58250c84d685"
+  },
+  "taskId": "c2c5d486-e56d-49c6-ab42-7f0628b1a8ad",
+  "taskGoal": "Implement Stage R4 Failure Recovery and Progress Guarantees from the repeated external write-tool failure dogfood",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T13:23:52Z",
+  "updatedAtUtc": "2026-10-08T13:23:52Z"
+}

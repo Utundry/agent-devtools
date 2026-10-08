@@ -1,0 +1,28 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "58dd6188dc4f4909991bb870e5d3c144",
+  "kind": "decision",
+  "subject": "failure-recovery/architecture",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Use a lightweight cognition tool-failure recovery primitive over existing observation and blocker semantics; do not introduce a supervisor, daemon, new database, or hidden tool interception.",
+  "scope": [
+    "agent-devtools/failure-recovery"
+  ],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "c2c5d486-e56d-49c6-ab42-7f0628b1a8ad",
+    "taskGoal": "Implement Stage R4 Failure Recovery and Progress Guarantees from the repeated external write-tool failure dogfood",
+    "eventId": "da4b81f8b8e64dcc9f23e9ccce36a2ba"
+  },
+  "taskId": "c2c5d486-e56d-49c6-ab42-7f0628b1a8ad",
+  "taskGoal": "Implement Stage R4 Failure Recovery and Progress Guarantees from the repeated external write-tool failure dogfood",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T13:23:52Z",
+  "updatedAtUtc": "2026-10-08T13:23:52Z"
+}

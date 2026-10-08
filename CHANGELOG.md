@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Stage R4 adds bounded external-tool failure recovery without adding a supervisor: `cognition tool-failure` records a stable failure fingerprint, observed attempts, optional/mandatory importance and fallback guidance using existing journal/task primitives.
+- The retry ceiling is two equivalent failures for the same tool/action. Optional work then falls back or skips without blocking completion; mandatory work becomes an ordinary blocker until recovered, preserving all prior cognition/progress.
+- Human `workflow show` now renders the full canonical routine (`begin -> work -> checkpoint -> complete`) and advertises the failure-recovery rule directly.
+
 - Stage R3 adds frictionless semantic capture: cognition commands accept both canonical positional text and the natural `--text` alias, with ambiguity rejected rather than guessed.
 - Semantic checkpoint now classifies and reports `required`, `advisory`, and `session-only` cognition. A clean local-only checkpoint explicitly says that no durable promotion is needed.
 - Routine memory guidance now makes checkpoint the authority: agents are told not to call `knowledge promote` directly before classification; manual exact promotion remains an expert primitive.

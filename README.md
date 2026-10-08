@@ -147,6 +147,22 @@ python devtools/agent/agent.py verify research --confirm-all-pass --summary "...
 
 If any research dimension is `warn` or `fail`, use the granular statuses shown by `verify research --json` instead of the compact PASS attestation.
 
+### Failure recovery and progress guarantee
+
+External tools are not supervised by Agent DevTools, but routine agents must not retry the same broken action indefinitely. After two equivalent failures of the same tool/action, record the failure:
+
+```bash
+python devtools/agent/agent.py cognition tool-failure \
+  --tool write \
+  --operation "write report" \
+  --error 'SchemaError(Missing key at ["content"])' \
+  --importance optional \
+  --attempts 2 \
+  --fallback "Return the report directly to the user."
+```
+
+An optional failure is non-blocking: use a fallback or skip the artifact and continue with verification/checkpoint/completion. A mandatory repeated failure becomes an ordinary task blocker, so `work complete` cannot silently succeed until recovery is recorded. The failure is stored as a normal semantic observation with metadata; R4 adds no daemon, supervisor, new database, or interception layer.
+
 Do not memorize syntax from examples. `workflow show`, `capabilities --json`, and CLI `--help` are authoritative for the installed version.
 
 `work complete` is the normal completion action. It validates task/alignment/blocker and durable-knowledge gates, then reuses a successful check only after verifying report integrity, task identity, current inputs/outputs and coverage. Otherwise it runs the affected policy; a clean or unknown tree without usable evidence receives a baseline check. It closes the session only with current PASS evidence. Use `--no-cache` to explicitly request a new execution. Certification, replay and release remain separate tools for deeper validation and delivery. In non-development profiles a fresh explicit verification record is still required. `work finish` is the strict no-execution primitive; routine work does not require choosing it manually.

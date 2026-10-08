@@ -159,6 +159,7 @@ class AgentShell(cmd.Cmd):
         print("  remember <event-id>        -> knowledge remember")
         print("  checkpoint                 -> classify required/advisory/session-only semantics; routine memory authority")
         print("  checkpoint promote         -> cognition checkpoint --promote-required")
+        print("  cognition tool-failure ... -> bounded recovery after repeated external-tool failure")
         print("  why <knowledge-id>         -> knowledge why")
         print("  conflicts                  -> knowledge conflicts")
         print("  verify                     -> verify status")
