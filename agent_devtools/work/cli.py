@@ -491,9 +491,17 @@ def main_begin(root: Path, args: argparse.Namespace) -> int:
                 budget=args.budget,
             )
         canonical_routine = ["begin", "work", "checkpoint", "complete"]
+        resumed_active = entry.get("action") == "resumed" and not str(args.goal or "").strip()
+        recovery = {
+            "mode": "active-task-resume" if resumed_active else "normal-entry",
+            "interruptionSafe": bool(resumed_active),
+            "conversationMemoryAuthoritative": False,
+            "projectStateAuthoritative": True,
+            "canonicalRecoveryCommand": "agent begin",
+        }
         payload = {
             "format": "agent-devtools-work-ritual-begin",
-            "formatVersion": 1,
+            "formatVersion": 2,
             "lifecycle": "agent-work-lifecycle",
             "canonicalRoutine": canonical_routine,
             "ritual": canonical_routine,
@@ -501,6 +509,7 @@ def main_begin(root: Path, args: argparse.Namespace) -> int:
             "knowledge": knowledge_status(root),
             "contextProjection": projection,
             "nextAction": task.get("nextStep") or "continue the current work item",
+            "recovery": recovery,
         }
     except (TaskStateError, WorkEntryError, KnowledgeError, ContextProjectionError) as exc:
         print(f"agent begin: {exc}", file=sys.stderr)
@@ -523,6 +532,9 @@ def main_begin(root: Path, args: argparse.Namespace) -> int:
                     print(f"  [{item['kind']}] {item['subject']} · {item['expandRef']}")
             else:
                 print("  durable context: none yet")
+        if payload["recovery"]["mode"] == "active-task-resume":
+            print("  interruption recovery: active task resumed from project state")
+            print("  project task state is authoritative; do not reconstruct progress from chat memory")
         print(f"  next: {payload['nextAction']}")
         print("  canonical routine: work -> checkpoint -> complete")
     return 0

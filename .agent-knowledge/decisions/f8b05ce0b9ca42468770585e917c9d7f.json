@@ -1,0 +1,28 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "f8b05ce0b9ca42468770585e917c9d7f",
+  "kind": "decision",
+  "subject": "interruption-resume/architecture",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Interruption recovery reuses existing begin/work-enter active-task resume semantics; conversation memory is never authoritative and no new persistence layer is introduced.",
+  "scope": [
+    "agent-devtools/interruption-resume"
+  ],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "d9d8874c-9f4c-4a53-baa0-3f44ff8b23d5",
+    "taskGoal": "Implement R4.1 Interruption Resume after real SSE transport interruption dogfood",
+    "eventId": "64d9123a3e0f4a82883a56892f306b22"
+  },
+  "taskId": "d9d8874c-9f4c-4a53-baa0-3f44ff8b23d5",
+  "taskGoal": "Implement R4.1 Interruption Resume after real SSE transport interruption dogfood",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T16:49:14Z",
+  "updatedAtUtc": "2026-10-08T16:49:14Z"
+}

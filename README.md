@@ -163,6 +163,10 @@ python devtools/agent/agent.py cognition tool-failure \
 
 An optional failure is non-blocking: use a fallback or skip the artifact and continue with verification/checkpoint/completion. A mandatory repeated failure becomes an ordinary task blocker, so `work complete` cannot silently succeed until recovery is recorded. The failure is stored as a normal semantic observation with metadata; R4 adds no daemon, supervisor, new database, or interception layer.
 
+### Interruption resume
+
+After a chat/SSE/transport interruption, do not reconstruct work from conversation memory. On the next usable turn run `python devtools/agent/agent.py begin` without `--goal`. An active task resumes with the same task identity, recorded progress and authoritative next action. No new persistence layer is introduced.
+
 Do not memorize syntax from examples. `workflow show`, `capabilities --json`, and CLI `--help` are authoritative for the installed version.
 
 `work complete` is the normal completion action. It validates task/alignment/blocker and durable-knowledge gates, then reuses a successful check only after verifying report integrity, task identity, current inputs/outputs and coverage. Otherwise it runs the affected policy; a clean or unknown tree without usable evidence receives a baseline check. It closes the session only with current PASS evidence. Use `--no-cache` to explicitly request a new execution. Certification, replay and release remain separate tools for deeper validation and delivery. In non-development profiles a fresh explicit verification record is still required. `work finish` is the strict no-execution primitive; routine work does not require choosing it manually.

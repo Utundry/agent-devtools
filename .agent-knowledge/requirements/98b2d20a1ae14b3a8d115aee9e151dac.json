@@ -1,0 +1,28 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "98b2d20a1ae14b3a8d115aee9e151dac",
+  "kind": "requirement",
+  "subject": "interruption-resume/recovery",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "After a transport, chat, or SSE interruption, the next usable agent turn must resume the active project task through begin without --goal before continuing substantive work.",
+  "scope": [
+    "agent-devtools/interruption-resume"
+  ],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "d9d8874c-9f4c-4a53-baa0-3f44ff8b23d5",
+    "taskGoal": "Implement R4.1 Interruption Resume after real SSE transport interruption dogfood",
+    "eventId": "b8c33944e85243b9bb5ea84960e8d1f9"
+  },
+  "taskId": "d9d8874c-9f4c-4a53-baa0-3f44ff8b23d5",
+  "taskGoal": "Implement R4.1 Interruption Resume after real SSE transport interruption dogfood",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T16:49:14Z",
+  "updatedAtUtc": "2026-10-08T16:49:14Z"
+}

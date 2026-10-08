@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- R4.1 adds interruption-safe resume for transport/chat/SSE failures: the next usable turn runs `begin` without `--goal`, restoring the existing active task from project state instead of reconstructing progress from conversation memory.
+- `begin` format v2 exposes recovery mode and project-state authority; workflow/capabilities advertise interruption resume without adding storage or transport hooks.
+
 - Stage R4 adds bounded external-tool failure recovery without adding a supervisor: `cognition tool-failure` records a stable failure fingerprint, observed attempts, optional/mandatory importance and fallback guidance using existing journal/task primitives.
 - The retry ceiling is two equivalent failures for the same tool/action. Optional work then falls back or skips without blocking completion; mandatory work becomes an ordinary blocker until recovered, preserving all prior cognition/progress.
 - Human `workflow show` now renders the full canonical routine (`begin -> work -> checkpoint -> complete`) and advertises the failure-recovery rule directly.
