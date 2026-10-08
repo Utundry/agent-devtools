@@ -1,0 +1,26 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "08b1f0fafadd433d9201a012ed434655",
+  "kind": "decision",
+  "subject": "release-tooling/git-porcelain-protocol",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Treat Git porcelain output as protocol data. Never strip or lstrip the full stdout or a porcelain row before parsing its two-character XY status. Prefer `git status --porcelain=v1 -z` and parse NUL-delimited entries, including rename/copy records, before normalizing paths.",
+  "scope": [],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "005ab306-58bc-40d6-94ee-6d63f3faeb09",
+    "taskGoal": "Dogfood Agent DevTools by converting proven R6/R6.1 release and recovery failure lessons into durable project knowledge.",
+    "eventId": "6feb2ad5e7e44901b8c4b9158987d946"
+  },
+  "taskId": "005ab306-58bc-40d6-94ee-6d63f3faeb09",
+  "taskGoal": "Dogfood Agent DevTools by converting proven R6/R6.1 release and recovery failure lessons into durable project knowledge.",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T18:47:58Z",
+  "updatedAtUtc": "2026-10-08T18:47:58Z"
+}

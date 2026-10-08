@@ -1,0 +1,26 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "f6cf73a0b1d949f88bede8a488ad6383",
+  "kind": "decision",
+  "subject": "release-tooling/workspace-local-preflight",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Release and recovery preflights must preserve Agent DevTools canonical workspace-local semantics. Raw Git scans must not reinterpret `devtools/agent/`, `.agent-work/`, `.agent-cache/`, `.agent-bootstrap-report.json`, or known transient publisher files as material project changes.",
+  "scope": [],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "005ab306-58bc-40d6-94ee-6d63f3faeb09",
+    "taskGoal": "Dogfood Agent DevTools by converting proven R6/R6.1 release and recovery failure lessons into durable project knowledge.",
+    "eventId": "75a0bb1be53b41bab69a76182fa9c28a"
+  },
+  "taskId": "005ab306-58bc-40d6-94ee-6d63f3faeb09",
+  "taskGoal": "Dogfood Agent DevTools by converting proven R6/R6.1 release and recovery failure lessons into durable project knowledge.",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T18:47:58Z",
+  "updatedAtUtc": "2026-10-08T18:47:58Z"
+}

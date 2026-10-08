@@ -1,0 +1,26 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "becf8f52e21f4dd8bc366c082e541054",
+  "kind": "decision",
+  "subject": "release-tooling/idempotent-recovery",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "A recovery publisher must recognize the exact interrupted partial-application state and continue idempotently from it. Do not require a manual rollback when already-applied changes are valid and can be positively identified.",
+  "scope": [],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "005ab306-58bc-40d6-94ee-6d63f3faeb09",
+    "taskGoal": "Dogfood Agent DevTools by converting proven R6/R6.1 release and recovery failure lessons into durable project knowledge.",
+    "eventId": "b1c7c1c457e3492c8e8c8413f4c8ba70"
+  },
+  "taskId": "005ab306-58bc-40d6-94ee-6d63f3faeb09",
+  "taskGoal": "Dogfood Agent DevTools by converting proven R6/R6.1 release and recovery failure lessons into durable project knowledge.",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T18:47:58Z",
+  "updatedAtUtc": "2026-10-08T18:47:58Z"
+}

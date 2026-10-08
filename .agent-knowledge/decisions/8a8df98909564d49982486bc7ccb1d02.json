@@ -1,0 +1,26 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "8a8df98909564d49982486bc7ccb1d02",
+  "kind": "decision",
+  "subject": "release-tooling/regex-replacement-escaping",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "When release/recovery tooling structurally rewrites source with `re.sub`/`re.subn`, use a callable replacement whenever replacement text can contain backslashes or escape sequences. Do not pass generated source snippets with escapes as regex replacement strings, because replacement-string escape semantics can corrupt source.",
+  "scope": [],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "005ab306-58bc-40d6-94ee-6d63f3faeb09",
+    "taskGoal": "Dogfood Agent DevTools by converting proven R6/R6.1 release and recovery failure lessons into durable project knowledge.",
+    "eventId": "1f8e296f437e416795edf8256c01e5a5"
+  },
+  "taskId": "005ab306-58bc-40d6-94ee-6d63f3faeb09",
+  "taskGoal": "Dogfood Agent DevTools by converting proven R6/R6.1 release and recovery failure lessons into durable project knowledge.",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T18:47:58Z",
+  "updatedAtUtc": "2026-10-08T18:47:58Z"
+}

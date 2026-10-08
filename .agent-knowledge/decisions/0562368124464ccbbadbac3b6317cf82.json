@@ -1,0 +1,26 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "0562368124464ccbbadbac3b6317cf82",
+  "kind": "decision",
+  "subject": "release-tooling/durable-failure-learning",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "A release/recovery failure that required root-cause diagnosis and produced a reusable prevention rule is not fully closed until that invariant is represented in durable project knowledge. Fix + tests alone are insufficient when the lesson applies to future work.",
+  "scope": [],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "005ab306-58bc-40d6-94ee-6d63f3faeb09",
+    "taskGoal": "Dogfood Agent DevTools by converting proven R6/R6.1 release and recovery failure lessons into durable project knowledge.",
+    "eventId": "da6bfe387e0d4f56b6acdb2fed966395"
+  },
+  "taskId": "005ab306-58bc-40d6-94ee-6d63f3faeb09",
+  "taskGoal": "Dogfood Agent DevTools by converting proven R6/R6.1 release and recovery failure lessons into durable project knowledge.",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T18:47:58Z",
+  "updatedAtUtc": "2026-10-08T18:47:58Z"
+}

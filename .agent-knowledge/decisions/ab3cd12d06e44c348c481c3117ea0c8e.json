@@ -1,0 +1,26 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "ab3cd12d06e44c348c481c3117ea0c8e",
+  "kind": "decision",
+  "subject": "release-tooling/generated-test-escaping",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Generated test fixtures must distinguish source-level backslash escapes from runtime characters. Before trusting full-suite failures, compile generated test/source files and run a direct behavior gate with real multiline Unicode data so an outer raw-string generator cannot silently turn intended newlines into literal backslash+n data.",
+  "scope": [],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "005ab306-58bc-40d6-94ee-6d63f3faeb09",
+    "taskGoal": "Dogfood Agent DevTools by converting proven R6/R6.1 release and recovery failure lessons into durable project knowledge.",
+    "eventId": "b2d61924f7114956a89d34356cd47a6e"
+  },
+  "taskId": "005ab306-58bc-40d6-94ee-6d63f3faeb09",
+  "taskGoal": "Dogfood Agent DevTools by converting proven R6/R6.1 release and recovery failure lessons into durable project knowledge.",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T18:47:58Z",
+  "updatedAtUtc": "2026-10-08T18:47:58Z"
+}
