@@ -1,0 +1,26 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "aec5a51326914bdb9971ce1c1ca9c6cf",
+  "kind": "decision",
+  "subject": "context/cross-task-relevance",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Cross-task durable knowledge must not enter C3 context projection on a weak lexical coincidence alone. Explicit scope/path/same-task signals remain authoritative; lexical-only matches from another task require multiple overlapping query terms and supporting overlap with the source task goal.",
+  "scope": [],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "2220c51c-9f31-4114-83d9-43b4ccb485e9",
+    "taskGoal": "Implement R6.2 Cognitive Hardening from fresh-model dogfood: cross-task context relevance, research source awareness, and material open-question awareness.",
+    "eventId": "31b2eec8d2634432866107fce103be79"
+  },
+  "taskId": "2220c51c-9f31-4114-83d9-43b4ccb485e9",
+  "taskGoal": "Implement R6.2 Cognitive Hardening from fresh-model dogfood: cross-task context relevance, research source awareness, and material open-question awareness.",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T19:13:33Z",
+  "updatedAtUtc": "2026-10-08T19:13:33Z"
+}

@@ -7,7 +7,7 @@ from typing import Any
 from . import __version__
 from .profiles import load_profile
 
-CLI_CONTRACT_VERSION = 28
+CLI_CONTRACT_VERSION = 29
 WORKFLOW_CONTRACT_VERSION = 21
 
 
@@ -141,8 +141,8 @@ def capabilities(root: Path) -> dict[str, Any]:
             "work": {"enter": True, "start": True, "align": True, "status": True, "complete": True, "finish": True, "report": True, "reportReadOnly": True, "oneActionEntry": True, "handoffEntry": True, "routineEntryFastPath": True, "alignmentPendingOptOut": True, "oneActionCompletion": True, "automaticVerificationReuse": True, "baselineWhenUnverified": True, "taskGapGate": True, "noGapFastPath": True, "semanticCloseout": True},
             "cognition": {"observation": True, "decision": True, "finding": True, "assumption": True, "requirement": not profile.development, "openQuestion": not profile.development, "evidence": not profile.development, "blocker": True, "resolveBlocker": True, "toolFailure": True, "toolFailureRetryCeiling": 2, "toolFailureOptionalNonBlocking": True, "toolFailureMandatoryBlocks": True, "status": True, "checkpoint": True, "checkpointPromoteRequired": True, "textOptionAlias": True, "stdin": True, "fromFile": True, "utf8BulkCapture": True, "naturalGuessHints": True, "checkpointSessionOnlyClassification": True, "appendOnlyJournal": True},
             "knowledge": {"promote": True, "remember": True, "why": True, "lifecycle": True, "supersede": True, "validate": True, "status": True, "researchKinds": not profile.development, "softContradictionWarnings": True, "promotionRequired": False, "routineDirectPromote": False, "checkpointAuthority": True, "canonicalStore": ".agent-knowledge", "durableSqlite": False},
-            "source": {"add": not profile.development, "list": not profile.development},
-            "context": {"available": True, "affected": profile.development, "prepare": True, "current": True, "why": True, "expand": True, "stageAware": True, "hierarchicalScope": True, "budgeted": True, "deduplicate": True, "selectionReasons": True, "usageSqliteDisposable": True},
+            "source": {"add": not profile.development, "list": not profile.development, "taskSessionProvenance": not profile.development},
+            "context": {"available": True, "affected": profile.development, "prepare": True, "current": True, "why": True, "expand": True, "stageAware": True, "hierarchicalScope": True, "budgeted": True, "deduplicate": True, "selectionReasons": True, "crossTaskLexicalIsolation": True, "usageSqliteDisposable": True},
             "shell": {"available": True, "interactive": True, "batchCommand": True, "sameDispatcher": True, "shellOnlyState": False},
             "changes": {"status": profile.development, "patch": profile.development, "canonicalUntracked": profile.development, "workspaceLocalMarks": profile.development},
             "verification": {
@@ -150,6 +150,8 @@ def capabilities(root: Path) -> dict[str, Any]:
                 "guidedResearchReview": profile.profile_id == "research",
                 "researchConfirmAllPass": profile.profile_id == "research",
                 "researchContextWarnings": profile.profile_id == "research",
+                "researchSourceAwareness": profile.profile_id == "research",
+                "researchMaterialQuestionAwareness": profile.profile_id == "research",
                 "record": profile.verification_mode == "record",
                 "researchBundle": profile.profile_id == "research",
                 "researchCanonicalCommand": "verify research" if profile.profile_id == "research" else None,

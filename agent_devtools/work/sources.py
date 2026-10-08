@@ -7,7 +7,7 @@ from typing import Any, Iterable
 
 from agent_devtools.core.io import atomic_json_write
 from .knowledge import KNOWLEDGE_FORMAT, KNOWLEDGE_VERSION, KnowledgeError, load_records, validate_record
-from .state import utc_now
+from .state import load_task_state, utc_now
 
 class SourceError(RuntimeError):
     pass
@@ -19,6 +19,13 @@ def add_source(root: Path, *, url: str, title: str, claims: Iterable[str] = (), 
     record_id = uuid.uuid4().hex
     claim_list = [str(x).strip() for x in claims if str(x).strip()]
     now = utc_now()
+    state = load_task_state(root)
+    source_session = {}
+    if isinstance(state, dict) and state.get("status") == "active":
+        source_session = {
+            "taskId": str(state.get("taskId") or ""),
+            "taskGoal": str(state.get("goal") or ""),
+        }
     record = {
         "format": KNOWLEDGE_FORMAT,
         "formatVersion": KNOWLEDGE_VERSION,
@@ -35,7 +42,7 @@ def add_source(root: Path, *, url: str, title: str, claims: Iterable[str] = (), 
         "scope": [],
         "confidence": None,
         "evidenceRefs": [],
-        "sourceSession": {},
+        "sourceSession": source_session,
         "anchors": [],
         "supersedes": [],
         "sourceRefs": [],

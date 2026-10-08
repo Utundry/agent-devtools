@@ -1,0 +1,26 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "1c8f1db03f2044ee86b45a0e87cdcd5e",
+  "kind": "decision",
+  "subject": "research-verification/material-open-question",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "A subject-bearing open question is intentionally scoped and must be surfaced separately as potentially material during research verification so the agent explicitly checks whether it could change the recommendation or architecture.",
+  "scope": [],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "2220c51c-9f31-4114-83d9-43b4ccb485e9",
+    "taskGoal": "Implement R6.2 Cognitive Hardening from fresh-model dogfood: cross-task context relevance, research source awareness, and material open-question awareness.",
+    "eventId": "6e8cc6d21144441fbe65039d494e545c"
+  },
+  "taskId": "2220c51c-9f31-4114-83d9-43b4ccb485e9",
+  "taskGoal": "Implement R6.2 Cognitive Hardening from fresh-model dogfood: cross-task context relevance, research source awareness, and material open-question awareness.",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T19:13:33Z",
+  "updatedAtUtc": "2026-10-08T19:13:33Z"
+}

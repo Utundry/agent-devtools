@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Stage R6.2 hardens cognitive quality from fresh-model hardware-research dogfood: C3 no longer admits cross-task durable knowledge on weak lexical overlap alone; term-only reuse from another task now requires multiple query-term matches plus support from the source task goal, while explicit scope/path/same-task signals remain authoritative.
+- Research verification now warns when the current task has no recorded source/evidence provenance before `sourcing=pass`, and separately flags subject-bearing open questions as potentially material so the agent reviews whether they could change the recommendation or architecture.
+- Research `source add` now binds source provenance to the active task when one exists. CLI contract advances to v29; workflow contract remains v21 and no new routine command, storage layer, service or dependency is introduced.
+
 - Stage R6.1 hardens agent UX from fresh-model dogfood: `verify research` now surfaces active assumptions and open questions as contextual warnings before/after attestation while keeping deliberately retained non-blocking uncertainty legal.
 - A natural invalid guess such as `cognition add --stdin` now receives one actionable semantic-type hint before argparse; `cognition add` remains invalid and is not advertised in parser inventory/capabilities.
 - CLI contract advances to v28; the workflow contract and canonical R5/R6 lifecycle remain unchanged.

@@ -272,11 +272,28 @@ def _score_record(
     query_tokens = _tokens(query)
     record_tokens = _tokens(haystack)
     overlap = sorted(query_tokens & record_tokens)
+    session = record.get("sourceSession") if isinstance(record.get("sourceSession"), dict) else {}
+    source_task_id = str(session.get("taskId") or "")
+    source_goal_tokens = _tokens(str(session.get("taskGoal") or ""))
+    same_task = bool(task_id and source_task_id and source_task_id == task_id)
+    cross_task = bool(task_id and source_task_id and source_task_id != task_id)
     if overlap:
         term_score = min(30, len(overlap) * 6)
         score += term_score
-        reasons.append("terms:" + ",".join(overlap[:5]) + f"+{term_score}")
-        matched = True
+        lexical_match = False
+        if same_task:
+            lexical_match = True
+        elif cross_task:
+            lexical_match = len(overlap) >= 2 and bool(query_tokens & source_goal_tokens)
+        else:
+            lexical_match = len(overlap) >= 2
+        if lexical_match:
+            reasons.append("terms:" + ",".join(overlap[:5]) + f"+{term_score}")
+            if cross_task:
+                reasons.append("cross-task-source-goal")
+            matched = True
+        else:
+            reasons.append("terms:weak-cross-task-filtered")
 
     normalized_paths = [str(item).replace("\\", "/").lower() for item in paths]
     anchors = [str(item).replace("\\", "/").lower() for item in record.get("anchors", [])]
@@ -290,7 +307,6 @@ def _score_record(
         reasons.append("path:scope+20")
         matched = True
 
-    session = record.get("sourceSession") if isinstance(record.get("sourceSession"), dict) else {}
     if task_id and session.get("taskId") == task_id:
         score += 12
         reasons.append("same-task+12")

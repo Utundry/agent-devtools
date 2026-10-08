@@ -1,0 +1,26 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "cf022943b8a648b29f28b934724a2514",
+  "kind": "decision",
+  "subject": "release-tooling/semantic-exit-codes",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Automation around Agent DevTools must interpret exit codes according to each command's semantic contract. A nonzero code such as cognition checkpoint rc=1 can represent a valid actionable non-clean state rather than execution failure.",
+  "scope": [],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "2220c51c-9f31-4114-83d9-43b4ccb485e9",
+    "taskGoal": "Implement R6.2 Cognitive Hardening from fresh-model dogfood: cross-task context relevance, research source awareness, and material open-question awareness.",
+    "eventId": "2e6ec8127efb425891a02a8907d521f2"
+  },
+  "taskId": "2220c51c-9f31-4114-83d9-43b4ccb485e9",
+  "taskGoal": "Implement R6.2 Cognitive Hardening from fresh-model dogfood: cross-task context relevance, research source awareness, and material open-question awareness.",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T19:13:33Z",
+  "updatedAtUtc": "2026-10-08T19:13:33Z"
+}

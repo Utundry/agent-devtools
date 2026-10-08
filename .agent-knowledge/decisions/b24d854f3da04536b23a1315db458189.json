@@ -1,0 +1,26 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "b24d854f3da04536b23a1315db458189",
+  "kind": "decision",
+  "subject": "research-verification/source-awareness",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Research verification must surface a contextual warning when the current task has no recorded source provenance or evidence before sourcing is attested PASS. The warning is advisory rather than a universal hard block.",
+  "scope": [],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "2220c51c-9f31-4114-83d9-43b4ccb485e9",
+    "taskGoal": "Implement R6.2 Cognitive Hardening from fresh-model dogfood: cross-task context relevance, research source awareness, and material open-question awareness.",
+    "eventId": "fe4f6ff77ab546fd80b4fe018b2a92f4"
+  },
+  "taskId": "2220c51c-9f31-4114-83d9-43b4ccb485e9",
+  "taskGoal": "Implement R6.2 Cognitive Hardening from fresh-model dogfood: cross-task context relevance, research source awareness, and material open-question awareness.",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T19:13:33Z",
+  "updatedAtUtc": "2026-10-08T19:13:33Z"
+}

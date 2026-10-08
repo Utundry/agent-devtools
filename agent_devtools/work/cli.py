@@ -12,7 +12,7 @@ from .entry import WorkEntryError, enter_work
 from .checkpoint import CheckpointError, create_checkpoint, inspect_checkpoint, restore_checkpoint
 from .state import TaskStateError, align_task, clear_task, complete_task, load_task_state, start_task, update_task, utc_now
 from .knowledge import KnowledgeError, conflicts as knowledge_conflicts, effective_lifecycle_statuses, effective_statuses, explain as explain_knowledge, knowledge_status, load_records as load_knowledge_records, promote as promote_knowledge, remember as remember_knowledge, set_lifecycle as set_knowledge_lifecycle, supersede as supersede_knowledge, validate_knowledge, soft_contradictions
-from .journal import SemanticJournalError, append_event, journal_status
+from .journal import SemanticJournalError, append_event, events_for_task, journal_status
 from .semantic_closeout import semantic_checkpoint
 from .verification import RESEARCH_CHECKS, VerificationError, latest_verification, record_verification, verification_status, record_research_bundle
 from .sources import SourceError, add_source, list_sources
@@ -101,6 +101,23 @@ def _research_context_warnings(root: Path) -> list[dict]:
     warnings: list[dict] = []
     assumptions = [str(item).strip() for item in state.get("assumptions", []) if str(item).strip()]
     questions = [str(item).strip() for item in state.get("openQuestions", []) if str(item).strip()]
+    task_id = str(state.get("taskId") or "")
+    started = str(state.get("startedAtUtc") or "")
+    current_sources = []
+    for record in load_knowledge_records(root):
+        if record.get("kind") != "source":
+            continue
+        session = record.get("sourceSession") if isinstance(record.get("sourceSession"), dict) else {}
+        created = str(record.get("createdAtUtc") or "")
+        if str(session.get("taskId") or "") == task_id or (
+            not session.get("taskId") and started and created and created >= started
+        ):
+            current_sources.append(record)
+    evidence = [str(item).strip() for item in state.get("evidence", []) if str(item).strip()]
+    material_questions = [
+        item for item in events_for_task(root, task_id)
+        if item.get("kind") == "question" and str(item.get("subject") or "").strip()
+    ]
     if assumptions:
         warnings.append({
             "id": "active-assumptions",
@@ -117,6 +134,28 @@ def _research_context_warnings(root: Path) -> list[dict]:
             "message": (
                 f"Current task retains {len(questions)} open question(s). "
                 "A PASS for unresolved_questions means they were explicitly retained and are non-blocking, not that they disappeared."
+            ),
+        })
+    if material_questions:
+        subjects = sorted({str(item.get("subject") or "").strip() for item in material_questions})
+        warnings.append({
+            "id": "potentially-material-open-questions",
+            "count": len(material_questions),
+            "subjects": subjects,
+            "message": (
+                f"Current task has {len(material_questions)} subject-bearing open question(s) "
+                f"({', '.join(subjects)}). Review whether any could change the recommendation or architecture "
+                "before treating unresolved questions as non-blocking."
+            ),
+        })
+    if not current_sources and not evidence:
+        warnings.append({
+            "id": "missing-source-provenance",
+            "sourceCount": 0,
+            "evidenceCount": 0,
+            "message": (
+                "Current research task has no recorded source provenance or evidence. "
+                "Confirm sourcing=pass only if external sourcing is genuinely unnecessary; otherwise add source/evidence provenance or use sourcing=warn."
             ),
         })
     return warnings

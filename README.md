@@ -117,7 +117,7 @@ Agent DevTools is intentionally a harness, not an autonomous platform. Its main 
 - explicit work sessions with resumable goals and next actions;
 - findings, assumptions, decisions, blockers and profile-appropriate research semantics;
 - durable project knowledge kept separately from disposable caches;
-- repository-aware bounded context retrieval;
+- repository-aware bounded context retrieval with cross-task lexical isolation so unrelated active knowledge does not consume projection budget on weak term overlap;
 - deterministic affected-check planning and project-native verification orchestration;
 - certified evidence and cold verification paths;
 - exact binary replay from a known source base;
@@ -145,7 +145,7 @@ python devtools/agent/agent.py verify research
 python devtools/agent/agent.py verify research --confirm-all-pass --summary "..."
 ```
 
-If any research dimension is `warn` or `fail`, use the granular statuses shown by `verify research --json` instead of the compact PASS attestation. Research verification also surfaces current task assumptions and open questions as contextual warnings: they do not automatically block PASS, but `unresolved_questions=pass` means any remaining questions were deliberately retained and judged non-blocking.
+If any research dimension is `warn` or `fail`, use the granular statuses shown by `verify research --json` instead of the compact PASS attestation. Research verification also surfaces current task assumptions and open questions as contextual warnings: they do not automatically block PASS, but `unresolved_questions=pass` means any remaining questions were deliberately retained and judged non-blocking. A subject-bearing open question is additionally flagged as potentially material so the agent explicitly checks whether it could change the recommendation or architecture. If the current task has neither recorded source provenance nor evidence, verification also warns before `sourcing=pass`; this remains advisory because some research tasks genuinely do not require external sourcing.
 
 ### Failure recovery and progress guarantee
 
