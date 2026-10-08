@@ -176,6 +176,8 @@ def parser() -> argparse.ArgumentParser:
     release_cli.configure_parser(release)
     context = sub.add_parser("context", help="local repository context/retrieval facade")
     context_cli.configure_parser(context)
+    begin = sub.add_parser("begin", help="normal work ritual entry: enter/resume work and immediately project durable context")
+    work_cli.configure_begin_parser(begin)
     shell = sub.add_parser("shell", help="interactive thin UX over the ordinary Agent DevTools CLI")
     shell_cli.configure_parser(shell, command_dest="shell_commands")
     source = sub.add_parser("source", help="research/document source provenance")
@@ -339,6 +341,8 @@ def main(argv: list[str] | None = None) -> int:
         return release_cli.main(discover_project_root(), args)
     if args.command == "context":
         return context_cli.main(discover_project_root(), args)
+    if args.command == "begin":
+        return work_cli.main_begin(discover_project_root(), args)
     if args.command == "shell":
         return shell_cli.main(discover_project_root(), args, dispatcher=main)
     if args.command == "source":

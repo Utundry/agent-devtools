@@ -16,6 +16,7 @@ from .semantic_closeout import semantic_checkpoint
 from .verification import VerificationError, latest_verification, record_verification, verification_status, record_research_bundle
 from .sources import SourceError, add_source, list_sources
 from agent_devtools.profiles import ProfileError, load_profile
+from agent_devtools.work.context_projection import ContextProjectionError, prepare_context
 
 
 def configure_task_parser(parser: argparse.ArgumentParser) -> None:
@@ -117,7 +118,8 @@ def configure_cognition_parser(parser: argparse.ArgumentParser) -> None:
     resolve.add_argument("--json", action="store_true", dest="json_output")
     status = sub.add_parser("status", help="show compact cognition state")
     status.add_argument("--json", action="store_true", dest="json_output")
-    checkpoint = sub.add_parser("checkpoint", help="classify current semantic journal for closeout without mutating durable knowledge")
+    checkpoint = sub.add_parser("checkpoint", help="classify current semantic journal for closeout; optionally promote required durable candidates explicitly")
+    checkpoint.add_argument("--promote-required", action="store_true", help="promote every required durable candidate through knowledge remember, then re-run the checkpoint")
     checkpoint.add_argument("--json", action="store_true", dest="json_output")
 
 
@@ -125,6 +127,17 @@ def main_cognition(root: Path, args: argparse.Namespace) -> int:
     try:
         if args.cognition_command == "checkpoint":
             payload = semantic_checkpoint(root)
+            promoted = []
+            if bool(getattr(args, "promote_required", False)):
+                before = payload
+                for item in before["requiredPromotions"]:
+                    promoted.append(remember_knowledge(root, event_id=str(item["eventId"])))
+                payload = semantic_checkpoint(root)
+                payload["promotion"] = {
+                    "mode": "required-explicit",
+                    "beforeRequired": len(before["requiredPromotions"]),
+                    "promoted": [record["id"] for record in promoted],
+                }
             if args.json_output:
                 print(json.dumps(payload, ensure_ascii=False, indent=2))
             else:
@@ -133,6 +146,9 @@ def main_cognition(root: Path, args: argparse.Namespace) -> int:
                     f"required={len(payload['requiredPromotions'])} · "
                     f"advisory={len(payload['advisoryCandidates'])}"
                 )
+                if promoted:
+                    for record in promoted:
+                        print(f"PROMOTED {record['kind']} · {record['subject']} · {record['id']}")
                 for item in payload["requiredPromotions"]:
                     print(f"REQUIRED {item['kind']} · {item['subject']} · {item['text']}")
                 for item in payload["advisoryCandidates"]:
@@ -203,6 +219,79 @@ def main_cognition(root: Path, args: argparse.Namespace) -> int:
         if payload["nextAction"]: print(f"next: {payload['nextAction']}")
         for warning in payload.get("knowledgeWarnings", []):
             print(f"KNOWLEDGE WARNING {warning['recordId']} · {warning['subject']} · {warning['statement']}")
+    return 0
+
+
+def configure_begin_parser(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--goal", help="new work goal; omit to resume the active task")
+    parser.add_argument("--scope", action="append", default=[])
+    parser.add_argument("--constraint", action="append", default=[])
+    parser.add_argument("--done", action="append", default=[])
+    parser.add_argument("--next-action", default="")
+    parser.add_argument("--alignment-pending", action="store_true")
+    parser.add_argument("--replace", action="store_true")
+    parser.add_argument("--handoff", type=Path, default=None)
+    parser.add_argument("--force", action="store_true")
+    parser.add_argument("--budget", type=int, default=1400)
+    parser.add_argument("--no-context", action="store_true")
+    parser.add_argument("--json", action="store_true", dest="json_output")
+
+
+def main_begin(root: Path, args: argparse.Namespace) -> int:
+    try:
+        entry = enter_work(
+            root,
+            goal=args.goal,
+            scope=args.scope,
+            constraints=args.constraint,
+            definition_of_done=args.done,
+            next_action=args.next_action,
+            alignment_pending=bool(args.alignment_pending),
+            replace=bool(args.replace),
+            handoff=args.handoff,
+            force=bool(args.force),
+            budget=args.budget,
+            include_context=False,
+        )
+        task = entry.get("task") if isinstance(entry.get("task"), dict) else {}
+        projection = None
+        if not args.no_context:
+            projection = prepare_context(
+                root,
+                task=str(task.get("goal") or args.goal or "").strip() or None,
+                stage="orient",
+                scope=task.get("scope", []) or args.scope,
+                budget=args.budget,
+            )
+        payload = {
+            "format": "agent-devtools-work-ritual-begin",
+            "formatVersion": 1,
+            "ritual": ["begin", "work", "checkpoint", "complete"],
+            "entry": entry,
+            "knowledge": knowledge_status(root),
+            "contextProjection": projection,
+            "nextAction": task.get("nextStep") or "continue the current work item",
+        }
+    except (TaskStateError, WorkEntryError, KnowledgeError, ContextProjectionError) as exc:
+        print(f"agent begin: {exc}", file=sys.stderr)
+        return 2
+    if args.json_output:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        print(
+            f"BEGIN: {entry['action']} · "
+            f"alignment={'ready' if entry['alignmentReady'] else 'pending'} · "
+            f"knowledge={payload['knowledge']['records']}"
+        )
+        if projection is not None:
+            print(
+                f"  durable context: {projection['selectedRecords']} selected · "
+                f"stage={projection['stage']} · ~{projection['estimatedTokens']}/{projection['budget']} tokens"
+            )
+            for item in projection.get("knowledge", []):
+                print(f"  [{item['kind']}] {item['subject']} · {item['expandRef']}")
+        print(f"  next: {payload['nextAction']}")
+        print("  ritual: work -> checkpoint -> complete")
     return 0
 
 

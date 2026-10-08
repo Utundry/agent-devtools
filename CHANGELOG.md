@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Stage R1 establishes the normal agent work ritual `begin -> work -> checkpoint -> complete`. New `agent begin` is a thin facade over `work enter` plus durable context projection and knowledge-health reporting; it introduces no new state model.
+- `cognition checkpoint --promote-required` explicitly promotes only REQUIRED subject-bearing decisions/requirements through the existing `knowledge remember` path, while ordinary checkpoint remains read-only and advisory candidates remain manual.
+- Interactive shell adds `begin <goal>` and `checkpoint promote` shortcuts over the same top-level dispatcher. Workflow/capabilities advertise the ritual without hiding the underlying primitives.
+- The work-ritual regression suite includes fresh-clone recovery proving that Git-tracked `.agent-knowledge` is immediately reusable by `begin` after disposable task state is absent.
+
 - Bootstrap explicit profile selection now has precedence over inferred intent specialization; explicit neutral profiles work without a redundant intent prompt and can deliberately re-specialize an existing neutral workspace.
 - Context projection CLI stage validation now derives accepted spellings from the same alias table as projection normalization, so workflow terms such as `orient`, `work`, `verify`, `checkpoint`, and `finish` are accepted consistently.
 - Context Lifecycle C4 adds `agent shell` as a thin interactive UX over the ordinary top-level CLI dispatcher, with deterministic shortcut normalization, repeatable `--command` batch mode, and no shell-only project state.

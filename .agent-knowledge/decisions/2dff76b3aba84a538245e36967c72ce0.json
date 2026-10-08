@@ -1,0 +1,28 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "2dff76b3aba84a538245e36967c72ce0",
+  "kind": "decision",
+  "subject": "work-ritual/begin",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Implement begin as orchestration over work enter, context prepare, and knowledge status; do not create a new state model or durable store.",
+  "scope": [
+    "agent-devtools/work-ritual"
+  ],
+  "confidence": "high",
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "11be4be9-ef1f-451e-bf0d-622f8489c7de",
+    "taskGoal": "Introduce the normal Agent DevTools work ritual and explicit checkpoint promotion assistance",
+    "eventId": "46a1ded85df247ee83ebcd0190ad65c8"
+  },
+  "taskId": "11be4be9-ef1f-451e-bf0d-622f8489c7de",
+  "taskGoal": "Introduce the normal Agent DevTools work ritual and explicit checkpoint promotion assistance",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T11:14:26Z",
+  "updatedAtUtc": "2026-10-08T11:14:26Z"
+}

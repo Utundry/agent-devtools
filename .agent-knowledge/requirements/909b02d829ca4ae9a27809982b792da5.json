@@ -1,0 +1,28 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "909b02d829ca4ae9a27809982b792da5",
+  "kind": "requirement",
+  "subject": "work-ritual/normal-route",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "The normal substantial-work ritual must be begin -> work -> checkpoint -> complete, while lower-level commands remain authoritative primitives.",
+  "scope": [
+    "agent-devtools/work-ritual"
+  ],
+  "confidence": "high",
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "11be4be9-ef1f-451e-bf0d-622f8489c7de",
+    "taskGoal": "Introduce the normal Agent DevTools work ritual and explicit checkpoint promotion assistance",
+    "eventId": "99b42a1a82504b7f9fcd8a38aee55a33"
+  },
+  "taskId": "11be4be9-ef1f-451e-bf0d-622f8489c7de",
+  "taskGoal": "Introduce the normal Agent DevTools work ritual and explicit checkpoint promotion assistance",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T11:14:25Z",
+  "updatedAtUtc": "2026-10-08T11:14:25Z"
+}

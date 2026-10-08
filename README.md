@@ -93,6 +93,19 @@ python devtools/agent/agent.py workflow validate
 python devtools/agent/agent.py capabilities --json
 ```
 
+For ordinary substantial work, the preferred ritual is intentionally small:
+
+```bash
+python devtools/agent/agent.py begin --goal "..."
+# work with project-native tools; record only meaningful findings/decisions
+python devtools/agent/agent.py cognition checkpoint
+# if REQUIRED durable candidates are listed:
+python devtools/agent/agent.py cognition checkpoint --promote-required
+python devtools/agent/agent.py work complete
+```
+
+`begin` is not a second workflow engine. It delegates to `work enter`, then immediately builds the durable C3 context projection and reports knowledge health. `cognition checkpoint` stays read-only by default; `--promote-required` is an explicit convenience path that promotes only required subject-bearing decisions/requirements through the ordinary `knowledge remember` contract. Advisory findings/assumptions/questions are never auto-promoted.
+
 `workflow validate` checks every command advertised by the workflow contract against the real argparse command tree. Machine-readable capabilities also expose `cliCommands`, derived from that same parser rather than from a second command registry.
 
 ## What it gives an agent

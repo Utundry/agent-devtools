@@ -42,6 +42,10 @@ def normalize_command(line: str) -> list[str]:
     name, rest = tokens[0], tokens[1:]
     if name in {"exit", "quit"}:
         return []
+    if name == "begin":
+        if not rest or rest[0].startswith("-"):
+            return ["begin", *rest]
+        return ["begin", "--goal", " ".join(rest)]
     if name == "status":
         return ["work", "status", *rest]
     if name == "context":
@@ -65,6 +69,8 @@ def normalize_command(line: str) -> list[str]:
     if name == "checkpoint":
         if rest and rest[0] in {"create", "inspect", "restore"}:
             return ["checkpoint", *rest]
+        if rest and rest[0] == "promote":
+            return ["cognition", "checkpoint", "--promote-required", *rest[1:]]
         return ["cognition", "checkpoint", *rest]
     if name == "verify" and not rest:
         return ["verify", "status"]
@@ -145,12 +151,14 @@ class AgentShell(cmd.Cmd):
             return
         print("Agent DevTools shell — thin UX over the ordinary CLI; no shell-only project state.")
         print("Shortcuts:")
+        print("  begin [goal]               -> begin / begin --goal <goal>")
         print("  status                     -> work status")
         print("  context                    -> context current")
         print("  context <task>             -> context prepare --task <task>")
         print("  decision|finding|assumption|requirement|question|evidence|observation <text> [--subject S]")
         print("  remember <event-id>        -> knowledge remember")
-        print("  checkpoint                 -> cognition checkpoint")
+        print("  checkpoint                 -> cognition checkpoint (read-only)")
+        print("  checkpoint promote         -> cognition checkpoint --promote-required")
         print("  why <knowledge-id>         -> knowledge why")
         print("  conflicts                  -> knowledge conflicts")
         print("  verify                     -> verify status")

@@ -7,8 +7,8 @@ from typing import Any
 from . import __version__
 from .profiles import load_profile
 
-CLI_CONTRACT_VERSION = 20
-WORKFLOW_CONTRACT_VERSION = 14
+CLI_CONTRACT_VERSION = 21
+WORKFLOW_CONTRACT_VERSION = 15
 
 
 def workflow_contract(root: Path) -> dict[str, Any]:
@@ -26,7 +26,8 @@ def workflow_contract(root: Path) -> dict[str, Any]:
             "changeDiscovery": profile.change_discovery,
         },
         "principles": [
-            "Phases describe responsibilities, not seven separate command invocations. Routine work uses work enter, project-native execution, and work complete; work enter covers orientation, session start and routine alignment.",
+            "The normal agent ritual is begin -> work -> checkpoint -> complete. begin is a thin facade over work enter plus durable context projection; lower-level commands remain authoritative primitives.",
+            "Phases describe responsibilities, not seven separate command invocations. Routine work uses begin, project-native execution, checkpoint when semantic closeout needs review, and work complete.",
             "Use work complete for routine completion: reuse a successful check only after validating its current inputs, outputs, task identity and coverage; otherwise run the affected policy. No visible changes and no reusable evidence require a baseline check. work finish is the strict no-execution primitive; work complete --no-cache explicitly requests physical execution.",
             "Read relevant durable knowledge when needed; promote only new reusable knowledge and reuse exact existing statements instead of creating duplicates.",
             "AGENTS.md defines the mandatory project workflow; the CLI is authoritative for current syntax and capabilities.",
@@ -44,7 +45,8 @@ def workflow_contract(root: Path) -> dict[str, Any]:
             "Interactive shell is UX only: every shell action normalizes to the ordinary CLI dispatcher, creates no shell-only project state, and remains reproducible as a conventional command.",
         ],
         "routineRoute": {
-            "entry": "work enter",
+            "entry": "begin",
+            "entryPrimitive": "work enter",
             "execution": "Use project-native tools; record only meaningful new findings or decisions.",
             "completion": "work complete",
             "alreadyVerifiedCompletion": "work finish",
@@ -52,7 +54,7 @@ def workflow_contract(root: Path) -> dict[str, Any]:
             "explicitExecution": "work complete --no-cache",
             "deepVerification": "Explicit certification, replay or release; not part of routine completion.",
             "contextIndex": "Optional; created only by explicit context operations, reused by briefings when present.",
-            "knowledgePromotion": "Event-driven; zero new records is valid when semantic checkpoint has no required durable candidates.",
+            "knowledgePromotion": "Event-driven; checkpoint is read-only by default, while checkpoint --promote-required is the explicit convenience path for required decisions/requirements only. Zero new records is valid when no durable candidate exists.",
             "knowledgeLifecycle": "Tracked .agent-knowledge JSON is canonical durable state; supersession is relation-derived and append-friendly.",
             "contextProjection": "Budgeted stage-aware projection from active durable knowledge with compact cues, expand refs and deterministic selection reasons; runtime usage state is disposable.",
             "interactiveShell": "Optional UX over the same top-level CLI dispatcher; no shell-only state or write path.",
@@ -63,13 +65,13 @@ def workflow_contract(root: Path) -> dict[str, Any]:
                 "id": "orient",
                 "required": True,
                 "purpose": "Recover project/task context and existing durable knowledge before substantial work.",
-                "commands": ["work enter", "handoff resume", "resume", "work status", "knowledge status", "context prepare", "context current", "shell"],
+                "commands": ["begin", "work enter", "handoff resume", "resume", "work status", "knowledge status", "context prepare", "context current", "shell"],
             },
             {
                 "id": "start",
                 "required": True,
                 "purpose": "Start or continue an explicit work session with a goal and next action.",
-                "commands": ["work enter", "work start"],
+                "commands": ["begin", "work enter", "work start"],
             },
             {
                 "id": "align",
@@ -118,8 +120,9 @@ def capabilities(root: Path) -> dict[str, Any]:
             "workflow": {"show": True, "validate": True},
             "capabilities": {"json": True},
             "selfUpdate": {"available": True, "latestDiscovery": True, "explicitVersion": True, "checkOnly": True, "freshDownload": True, "identityVerified": True},
+            "begin": {"available": True, "usesWorkEnter": True, "durableContextProjection": True, "knowledgeHealth": True, "newStateModel": False},
             "work": {"enter": True, "start": True, "align": True, "status": True, "complete": True, "finish": True, "oneActionEntry": True, "handoffEntry": True, "routineEntryFastPath": True, "alignmentPendingOptOut": True, "oneActionCompletion": True, "automaticVerificationReuse": True, "baselineWhenUnverified": True, "taskGapGate": True, "noGapFastPath": True, "semanticCloseout": True},
-            "cognition": {"observation": True, "decision": True, "finding": True, "assumption": True, "requirement": not profile.development, "openQuestion": not profile.development, "evidence": not profile.development, "blocker": True, "resolveBlocker": True, "status": True, "checkpoint": True, "appendOnlyJournal": True},
+            "cognition": {"observation": True, "decision": True, "finding": True, "assumption": True, "requirement": not profile.development, "openQuestion": not profile.development, "evidence": not profile.development, "blocker": True, "resolveBlocker": True, "status": True, "checkpoint": True, "checkpointPromoteRequired": True, "appendOnlyJournal": True},
             "knowledge": {"promote": True, "remember": True, "why": True, "lifecycle": True, "supersede": True, "validate": True, "status": True, "researchKinds": not profile.development, "softContradictionWarnings": True, "promotionRequired": False, "canonicalStore": ".agent-knowledge", "durableSqlite": False},
             "source": {"add": not profile.development, "list": not profile.development},
             "context": {"available": True, "affected": profile.development, "prepare": True, "current": True, "why": True, "expand": True, "stageAware": True, "hierarchicalScope": True, "budgeted": True, "deduplicate": True, "selectionReasons": True, "usageSqliteDisposable": True},

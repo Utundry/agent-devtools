@@ -1,0 +1,28 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "488af61b6c7c4925b21f5233ff358121",
+  "kind": "decision",
+  "subject": "work-ritual/promotion",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Keep checkpoint read-only by default and require an explicit --promote-required action that delegates required candidates to knowledge remember; never auto-promote advisory cognition.",
+  "scope": [
+    "agent-devtools/work-ritual"
+  ],
+  "confidence": "high",
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "11be4be9-ef1f-451e-bf0d-622f8489c7de",
+    "taskGoal": "Introduce the normal Agent DevTools work ritual and explicit checkpoint promotion assistance",
+    "eventId": "46fe8d3b9925491a93ef6d844c46f7c0"
+  },
+  "taskId": "11be4be9-ef1f-451e-bf0d-622f8489c7de",
+  "taskGoal": "Introduce the normal Agent DevTools work ritual and explicit checkpoint promotion assistance",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T11:14:26Z",
+  "updatedAtUtc": "2026-10-08T11:14:26Z"
+}
