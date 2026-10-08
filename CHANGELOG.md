@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Stage R6.1 hardens agent UX from fresh-model dogfood: `verify research` now surfaces active assumptions and open questions as contextual warnings before/after attestation while keeping deliberately retained non-blocking uncertainty legal.
+- A natural invalid guess such as `cognition add --stdin` now receives one actionable semantic-type hint before argparse; `cognition add` remains invalid and is not advertised in parser inventory/capabilities.
+- CLI contract advances to v28; the workflow contract and canonical R5/R6 lifecycle remain unchanged.
+
 - Stage R6 adds UTF-8 bulk semantic capture through `cognition ... --stdin` and `--from-file`, with an exactly-one-source contract shared with positional text and `--text`; multiline/Unicode research notes no longer need shell-escaping or temporary Python wrappers.
 - Adds `work report`, a read-only consolidated projection of task outcome, DoD, cognition, latest verification, knowledge health and semantic-journal status. Report generation does not mutate task state and remains optional outside the canonical lifecycle.
 - Workflow/capabilities advertise bulk capture and the optional final report without expanding the R5 normal surface.

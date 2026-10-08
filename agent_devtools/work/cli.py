@@ -94,12 +94,41 @@ _RESEARCH_REVIEW = {
 }
 
 
-def _research_review_payload() -> dict:
+def _research_context_warnings(root: Path) -> list[dict]:
+    state = load_task_state(root)
+    if state is None:
+        return []
+    warnings: list[dict] = []
+    assumptions = [str(item).strip() for item in state.get("assumptions", []) if str(item).strip()]
+    questions = [str(item).strip() for item in state.get("openQuestions", []) if str(item).strip()]
+    if assumptions:
+        warnings.append({
+            "id": "active-assumptions",
+            "count": len(assumptions),
+            "message": (
+                f"Current task retains {len(assumptions)} explicit assumption(s). "
+                "Confirm PASS only after reviewing their effect on the conclusion."
+            ),
+        })
+    if questions:
+        warnings.append({
+            "id": "open-questions",
+            "count": len(questions),
+            "message": (
+                f"Current task retains {len(questions)} open question(s). "
+                "A PASS for unresolved_questions means they were explicitly retained and are non-blocking, not that they disappeared."
+            ),
+        })
+    return warnings
+
+
+def _research_review_payload(root: Path) -> dict:
     return {
         "format": "agent-devtools-research-verification-review",
         "formatVersion": 1,
         "status": "review-required",
         "checks": [{"id": name, "prompt": _RESEARCH_REVIEW[name]} for name in RESEARCH_CHECKS],
+        "contextWarnings": _research_context_warnings(root),
         "guidance": {
             "rule": "Review all five dimensions before recording PASS; do not use the compact attestation when any item should be warn/fail.",
             "nextCommands": [
@@ -132,7 +161,7 @@ def main_verify(root: Path, args: argparse.Namespace) -> int:
                     "use the granular form when any dimension is warn/fail"
                 )
             if not confirm_all and not any(provided):
-                payload = _research_review_payload()
+                payload = _research_review_payload(root)
                 review_only = True
             elif not confirm_all and not all(provided):
                 raise VerificationError(
@@ -146,7 +175,12 @@ def main_verify(root: Path, args: argparse.Namespace) -> int:
                     else {name: str(raw_checks[name]) for name in RESEARCH_CHECKS}
                 )
                 item = record_research_bundle(root, checks=checks, evidence=args.evidence, summary=args.summary)
-                payload = {"format": "agent-devtools-verification", "formatVersion": 1, "record": item}
+                payload = {
+                    "format": "agent-devtools-verification",
+                    "formatVersion": 1,
+                    "record": item,
+                    "contextWarnings": _research_context_warnings(root),
+                }
         else:
             payload = {"format": "agent-devtools-verification", "formatVersion": 1, **verification_status(root)}
     except VerificationError as exc:
@@ -158,6 +192,8 @@ def main_verify(root: Path, args: argparse.Namespace) -> int:
         print("Research verification review:")
         for item in payload["checks"]:
             print(f"  {item['id']}: {item['prompt']}")
+        for warning in payload.get("contextWarnings", []):
+            print(f"Context warning: {warning['message']}")
         print("Next, after reviewing all five dimensions:")
         print("  " + payload["guidance"]["nextCommands"][0])
         print("If any dimension is warn/fail, use the granular command shown by `agent verify research --json`.")
@@ -167,6 +203,9 @@ def main_verify(root: Path, args: argparse.Namespace) -> int:
             print(f"verification: {item['status'].upper()} · {item['label']} · {item['completedAtUtc']}")
         else:
             print("verification: none")
+        if args.verify_command == "research":
+            for warning in payload.get("contextWarnings", []):
+                print(f"Context warning: {warning['message']}")
     if review_only:
         return 1
     if args.verify_command in {"record", "research"} and payload["record"]["status"] == "fail":

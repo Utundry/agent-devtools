@@ -106,7 +106,7 @@ python devtools/agent/agent.py work complete
 
 `begin` is not a second workflow engine. It delegates to `work enter`, then immediately builds the durable C3 context projection and reports knowledge health. `cognition checkpoint` stays read-only by default; `--promote-required` is an explicit convenience path that promotes only required subject-bearing decisions/requirements through the ordinary `knowledge remember` contract. Advisory findings/assumptions/questions are never auto-promoted.
 
-Semantic capture is intentionally forgiving without adding a second contract: both `cognition finding "..."` and `cognition finding --text "..."` map to the same event primitive. Add `--subject` when the statement is intended to survive as reusable project knowledge. Subjectless cognition remains session-only, and checkpoint explicitly reports when **no promotion is needed**. Routine agents should not call `knowledge promote` before checkpoint; that command remains an expert primitive for exact/manual workflows.
+Semantic capture is intentionally forgiving without adding a second contract: both `cognition finding "..."` and `cognition finding --text "..."` map to the same event primitive. A natural but invalid guess such as `cognition add` stays invalid and receives an actionable hint to choose a semantic type; it is not added as an alias or second ingestion API. Add `--subject` when the statement is intended to survive as reusable project knowledge. Subjectless cognition remains session-only, and checkpoint explicitly reports when **no promotion is needed**. Routine agents should not call `knowledge promote` before checkpoint; that command remains an expert primitive for exact/manual workflows.
 
 `workflow validate` checks every command advertised by the workflow contract against the real argparse command tree. Machine-readable capabilities also expose `cliCommands`, derived from that same parser rather than from a second command registry.
 
@@ -145,7 +145,7 @@ python devtools/agent/agent.py verify research
 python devtools/agent/agent.py verify research --confirm-all-pass --summary "..."
 ```
 
-If any research dimension is `warn` or `fail`, use the granular statuses shown by `verify research --json` instead of the compact PASS attestation.
+If any research dimension is `warn` or `fail`, use the granular statuses shown by `verify research --json` instead of the compact PASS attestation. Research verification also surfaces current task assumptions and open questions as contextual warnings: they do not automatically block PASS, but `unresolved_questions=pass` means any remaining questions were deliberately retained and judged non-blocking.
 
 ### Failure recovery and progress guarantee
 

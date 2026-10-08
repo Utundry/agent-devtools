@@ -120,6 +120,16 @@ def _capabilities_payload(root: Path, cli_parser: argparse.ArgumentParser) -> di
 
 
 
+def _natural_guess_hint(argv: list[str]) -> str | None:
+    if len(argv) >= 2 and argv[0] == "cognition" and argv[1] == "add":
+        return (
+            "agent cognition add: `add` is not a semantic type. "
+            "Choose observation | finding | assumption | decision | requirement | open-question | evidence | blocker. "
+            "For general notes use `agent cognition observation --stdin` or `agent cognition observation --from-file <path>`."
+        )
+    return None
+
+
 def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="agent", description="Portable agent work toolbox")
     p.add_argument("--version", action="version", version=__version__)
@@ -208,8 +218,13 @@ def parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
+    hint = _natural_guess_hint(raw_argv)
+    if hint:
+        print(hint, file=sys.stderr)
+        return 2
     cli_parser = parser()
-    args = cli_parser.parse_args(argv)
+    args = cli_parser.parse_args(raw_argv)
     if args.command == "bootstrap":
         try:
             payload = (
