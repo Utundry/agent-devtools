@@ -1,0 +1,28 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "4da6240049164357932c24db44fc328f",
+  "kind": "requirement",
+  "subject": "canonical-surface/normal-route",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Routine agents must see one small canonical command surface and must not need to explore lower-level Agent DevTools primitives.",
+  "scope": [
+    "agent-devtools/canonical-surface"
+  ],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "5e92d37c-1707-4123-9f3c-1365350dc95b",
+    "taskGoal": "Implement Stage R5 Canonical Surface and Anti-Guessing from Solar-mini4 dogfood",
+    "eventId": "b1db1410b75b459fb0c6ebb62f099e6a"
+  },
+  "taskId": "5e92d37c-1707-4123-9f3c-1365350dc95b",
+  "taskGoal": "Implement Stage R5 Canonical Surface and Anti-Guessing from Solar-mini4 dogfood",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T17:12:10Z",
+  "updatedAtUtc": "2026-10-08T17:12:10Z"
+}

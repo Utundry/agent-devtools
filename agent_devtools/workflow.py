@@ -7,8 +7,8 @@ from typing import Any
 from . import __version__
 from .profiles import load_profile
 
-CLI_CONTRACT_VERSION = 25
-WORKFLOW_CONTRACT_VERSION = 19
+CLI_CONTRACT_VERSION = 26
+WORKFLOW_CONTRACT_VERSION = 20
 
 
 def workflow_contract(root: Path) -> dict[str, Any]:
@@ -69,6 +69,12 @@ def workflow_contract(root: Path) -> dict[str, Any]:
             "researchVerification": "Research routine uses verify research guided review, then explicit compact or granular attestation.",
             "toolFailureRecovery": "After two equivalent failures of the same tool/action, stop retrying: optional work falls back or skips without blocking; mandatory work becomes an ordinary blocker. Preserve completed cognition and continue from the nearest safe lifecycle step.",
             "interruptionResume": "After transport/chat/SSE interruption, run begin without --goal. Resume the existing active task from project state and its next action; do not reconstruct progress from conversation memory.",
+            "surface": {
+                "mode": "canonical-surface",
+                "normalCommands": ["begin", "cognition", "verify", "cognition checkpoint", "work complete"],
+                "advancedPrimitives": ["task update", "work enter", "work finish", "knowledge promote", "checkpoint create", "resume"],
+                "rule": "Routine agents stay on the normal surface; advanced primitives remain available for expert, compatibility and recovery use."
+            },
         },
         "phases": [
             {
@@ -130,7 +136,7 @@ def capabilities(root: Path) -> dict[str, Any]:
             "workflow": {"show": True, "validate": True},
             "capabilities": {"json": True},
             "selfUpdate": {"available": True, "latestDiscovery": True, "explicitVersion": True, "checkOnly": True, "freshDownload": True, "identityVerified": True},
-            "begin": {"available": True, "canonicalRoutineEntry": True, "usesWorkEnter": True, "durableContextProjection": True, "knowledgeHealth": True, "interruptionResume": True, "resumeWithoutGoal": True, "conversationMemoryAuthoritative": False, "projectStateAuthoritative": True, "newStateModel": False},
+            "begin": {"available": True, "canonicalRoutineEntry": True, "usesWorkEnter": True, "durableContextProjection": True, "knowledgeHealth": True, "interruptionResume": True, "resumeWithoutGoal": True, "profileHintCompatibility": True, "conversationMemoryAuthoritative": False, "projectStateAuthoritative": True, "newStateModel": False},
             "work": {"enter": True, "start": True, "align": True, "status": True, "complete": True, "finish": True, "oneActionEntry": True, "handoffEntry": True, "routineEntryFastPath": True, "alignmentPendingOptOut": True, "oneActionCompletion": True, "automaticVerificationReuse": True, "baselineWhenUnverified": True, "taskGapGate": True, "noGapFastPath": True, "semanticCloseout": True},
             "cognition": {"observation": True, "decision": True, "finding": True, "assumption": True, "requirement": not profile.development, "openQuestion": not profile.development, "evidence": not profile.development, "blocker": True, "resolveBlocker": True, "toolFailure": True, "toolFailureRetryCeiling": 2, "toolFailureOptionalNonBlocking": True, "toolFailureMandatoryBlocks": True, "status": True, "checkpoint": True, "checkpointPromoteRequired": True, "textOptionAlias": True, "checkpointSessionOnlyClassification": True, "appendOnlyJournal": True},
             "knowledge": {"promote": True, "remember": True, "why": True, "lifecycle": True, "supersede": True, "validate": True, "status": True, "researchKinds": not profile.development, "softContradictionWarnings": True, "promotionRequired": False, "routineDirectPromote": False, "checkpointAuthority": True, "canonicalStore": ".agent-knowledge", "durableSqlite": False},
@@ -159,6 +165,16 @@ def capabilities(root: Path) -> dict[str, Any]:
             "checkpoint": True,
             "workspaceSnapshot": {"create": not profile.development, "inspect": True, "restore": not profile.development},
             "release": profile.development,
+        },
+        "normalSurface": {
+            "profile": profile.profile_id,
+            "commands": (
+                ["agent begin", "agent cognition", "agent verify research", "agent cognition checkpoint", "agent work complete"]
+                if profile.profile_id == "research"
+                else ["agent begin", "agent cognition", "agent verify", "agent cognition checkpoint", "agent work complete"]
+            ),
+            "advancedPrimitives": ["agent task update", "agent work enter", "agent work finish", "agent knowledge promote", "agent checkpoint create", "agent resume"],
+            "advancedPrimitivesAreRoutine": False,
         },
         "tracked": ["AGENTS.md", "agent-tools.json", "agent-check.policy.json", ".agent-knowledge/"],
         "disposable": ["devtools/agent/", ".agent-cache/", ".agent-work/", ".agent-bootstrap-report.json"],

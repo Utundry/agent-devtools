@@ -1,0 +1,28 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "99aa161ba9e640ab80f1055918b3d567",
+  "kind": "decision",
+  "subject": "canonical-surface/architecture",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Keep advanced primitives available for compatibility and expert use, but mark them non-routine and advertise cognition/checkpoint/work complete as the normal surface.",
+  "scope": [
+    "agent-devtools/canonical-surface"
+  ],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "5e92d37c-1707-4123-9f3c-1365350dc95b",
+    "taskGoal": "Implement Stage R5 Canonical Surface and Anti-Guessing from Solar-mini4 dogfood",
+    "eventId": "3c98bd25d9574f5cb9fbe730d28062c0"
+  },
+  "taskId": "5e92d37c-1707-4123-9f3c-1365350dc95b",
+  "taskGoal": "Implement Stage R5 Canonical Surface and Anti-Guessing from Solar-mini4 dogfood",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T17:12:10Z",
+  "updatedAtUtc": "2026-10-08T17:12:10Z"
+}

@@ -163,6 +163,10 @@ python devtools/agent/agent.py cognition tool-failure \
 
 An optional failure is non-blocking: use a fallback or skip the artifact and continue with verification/checkpoint/completion. A mandatory repeated failure becomes an ordinary task blocker, so `work complete` cannot silently succeed until recovery is recorded. The failure is stored as a normal semantic observation with metadata; R4 adds no daemon, supervisor, new database, or interception layer.
 
+### Canonical agent surface
+
+Routine agents use a deliberately small surface: `begin`, `cognition`, profile-appropriate `verify`, `cognition checkpoint`, and `work complete`. Lower-level commands such as `task update`, `work enter`, `work finish`, `knowledge promote`, `checkpoint create`, and `resume` remain available for expert, compatibility, and recovery scenarios but are not the normal path. `begin --profile <current-profile>` is accepted as a compatibility hint, and obvious `task update --add-finding/--add-assumption/--add-decision/--done` aliases are accepted to prevent syntax thrashing without promoting `task update` to the routine surface.
+
 ### Interruption resume
 
 After a chat/SSE/transport interruption, do not reconstruct work from conversation memory. On the next usable turn run `python devtools/agent/agent.py begin` without `--goal`. An active task resumes with the same task identity, recorded progress and authoritative next action. No new persistence layer is introduced.

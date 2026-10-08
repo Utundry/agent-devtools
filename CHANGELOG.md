@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Stage R5 introduces a canonical agent surface: routine work is explicitly limited to `begin`, `cognition`, profile-appropriate `verify`, `cognition checkpoint`, and `work complete`; lower-level task/work/knowledge/recovery commands are marked advanced rather than peer alternatives.
+- `begin` advertises the normal surface in human and JSON output and accepts a matching `--profile` compatibility hint. `task update` accepts obvious aliases (`--add-finding`, `--add-assumption`, `--add-decision`, `--done`) while remaining advanced.
+- Workflow/capabilities expose normal-vs-advanced command classification so weaker agents can avoid CLI exploration and guessed primitive syntax.
+
 - R4.1 adds interruption-safe resume for transport/chat/SSE failures: the next usable turn runs `begin` without `--goal`, restoring the existing active task from project state instead of reconstructing progress from conversation memory.
 - `begin` format v2 exposes recovery mode and project-state authority; workflow/capabilities advertise interruption resume without adding storage or transport hooks.
 

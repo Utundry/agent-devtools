@@ -31,14 +31,14 @@ def configure_task_parser(parser: argparse.ArgumentParser) -> None:
     start.add_argument("--replace", action="store_true")
     start.add_argument("--json", action="store_true", dest="json_output")
 
-    update = sub.add_parser("update", help="record compact progress without a workflow/FSM")
+    update = sub.add_parser("update", help="advanced compatibility primitive; routine semantic work should use cognition")
     update.add_argument("--goal")
     update.add_argument("--add-scope", action="append", default=[])
     update.add_argument("--add-constraint", action="append", default=[])
-    update.add_argument("--add-done", action="append", default=[])
-    update.add_argument("--decision", action="append", default=[])
-    update.add_argument("--finding", action="append", default=[])
-    update.add_argument("--assumption", action="append", default=[])
+    update.add_argument("--add-done", "--done", dest="add_done", action="append", default=[])
+    update.add_argument("--decision", "--add-decision", dest="decision", action="append", default=[])
+    update.add_argument("--finding", "--add-finding", dest="finding", action="append", default=[])
+    update.add_argument("--assumption", "--add-assumption", dest="assumption", action="append", default=[])
     update.add_argument("--blocker", action="append", default=[])
     update.add_argument("--resolve-blocker", action="append", default=[])
     update.add_argument("--changed", action="append", default=[])
@@ -451,6 +451,7 @@ def main_cognition(root: Path, args: argparse.Namespace) -> int:
 
 def configure_begin_parser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--goal", help="new work goal; omit to resume the active task")
+    parser.add_argument("--profile", help="compatibility hint only; must match the already-selected workspace profile")
     parser.add_argument("--scope", action="append", default=[])
     parser.add_argument("--constraint", action="append", default=[])
     parser.add_argument("--done", action="append", default=[])
@@ -466,6 +467,13 @@ def configure_begin_parser(parser: argparse.ArgumentParser) -> None:
 
 def main_begin(root: Path, args: argparse.Namespace) -> int:
     try:
+        current_profile = load_profile(root)
+        profile_hint = str(getattr(args, "profile", "") or "").strip()
+        if profile_hint and profile_hint != current_profile.profile_id:
+            raise WorkEntryError(
+                f"profile is already {current_profile.profile_id}; do not change it through begin. "
+                "Use bootstrap/profile only when project intent itself changes."
+            )
         entry = enter_work(
             root,
             goal=args.goal,
@@ -499,9 +507,32 @@ def main_begin(root: Path, args: argparse.Namespace) -> int:
             "projectStateAuthoritative": True,
             "canonicalRecoveryCommand": "agent begin",
         }
+        normal_commands = ["agent cognition"]
+        if current_profile.profile_id == "research":
+            normal_commands.append("agent verify research")
+        elif current_profile.verification_mode == "check":
+            normal_commands.append("agent work complete")
+        else:
+            normal_commands.append("agent verify record")
+        normal_commands.extend(["agent cognition checkpoint", "agent work complete"])
+        normal_commands = list(dict.fromkeys(normal_commands))
+        normal_surface = {
+            "mode": "canonical-surface",
+            "profile": current_profile.profile_id,
+            "commands": normal_commands,
+            "advancedPrimitives": [
+                "agent task update",
+                "agent work enter",
+                "agent work finish",
+                "agent knowledge promote",
+                "agent checkpoint create",
+                "agent resume",
+            ],
+            "rule": "Use normal commands for routine work; do not explore advanced primitives unless debugging, compatibility, or explicit recovery requires them.",
+        }
         payload = {
             "format": "agent-devtools-work-ritual-begin",
-            "formatVersion": 2,
+            "formatVersion": 3,
             "lifecycle": "agent-work-lifecycle",
             "canonicalRoutine": canonical_routine,
             "ritual": canonical_routine,
@@ -510,6 +541,7 @@ def main_begin(root: Path, args: argparse.Namespace) -> int:
             "contextProjection": projection,
             "nextAction": task.get("nextStep") or "continue the current work item",
             "recovery": recovery,
+            "normalSurface": normal_surface,
         }
     except (TaskStateError, WorkEntryError, KnowledgeError, ContextProjectionError) as exc:
         print(f"agent begin: {exc}", file=sys.stderr)
@@ -536,13 +568,15 @@ def main_begin(root: Path, args: argparse.Namespace) -> int:
             print("  interruption recovery: active task resumed from project state")
             print("  project task state is authoritative; do not reconstruct progress from chat memory")
         print(f"  next: {payload['nextAction']}")
+        print("  normal surface: " + " -> ".join(payload["normalSurface"]["commands"]))
+        print("  advanced primitives are not routine: " + ", ".join(payload["normalSurface"]["advancedPrimitives"]))
         print("  canonical routine: work -> checkpoint -> complete")
     return 0
 
 
 def configure_work_parser(parser: argparse.ArgumentParser) -> None:
     sub = parser.add_subparsers(dest="work_command", required=True)
-    enter = sub.add_parser("enter", help="start, resume, or restore work through one lifecycle-aware entrypoint")
+    enter = sub.add_parser("enter", help="advanced lifecycle primitive; routine agents should use top-level begin")
     enter.add_argument("--goal")
     enter.add_argument("--scope", action="append", default=[])
     enter.add_argument("--constraint", action="append", default=[])
@@ -589,7 +623,7 @@ def configure_work_parser(parser: argparse.ArgumentParser) -> None:
     complete.add_argument("--resume", action="store_true", help="resume compatible development verification chunks")
     complete.add_argument("--json", action="store_true", dest="json_output")
 
-    finish = sub.add_parser("finish", help="lower-level finish after verification already exists")
+    finish = sub.add_parser("finish", help="advanced no-execution primitive; routine agents should use cognition checkpoint then work complete")
     finish.add_argument("--summary")
     finish.add_argument("--json", action="store_true", dest="json_output")
 

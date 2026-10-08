@@ -283,6 +283,9 @@ def main(argv: list[str] | None = None) -> int:
             if route:
                 routine = route.get("canonicalRoutine") or [route["entry"], "work", "checkpoint", "complete"]
                 print("  routine: " + " -> ".join(routine))
+                surface = route.get("surface") or {}
+                if surface:
+                    print("  normal surface: " + " | ".join(surface.get("normalCommands", [])))
                 print("  completion: reuse current PASS; otherwise run required checks")
                 if route.get("toolFailureRecovery"):
                     print("  failure recovery: two equivalent failures -> fallback/skip optional work or block mandatory work")
