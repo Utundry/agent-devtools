@@ -10,14 +10,14 @@ from .config import ContextConfigError, load_context_config
 from .index import ContextIndexError, ensure_index, index_stats, validate_context
 from .search import SearchResult, inspect_identity, query_context
 from .semantic_diff import compare_semantic_states
-from agent_devtools.work.context_projection import ContextProjectionError, current_context, expand_context, prepare_context, why_selected
+from agent_devtools.work.context_projection import ContextProjectionError, context_stage_choices, current_context, expand_context, prepare_context, why_selected
 
 
 def configure_parser(parser: argparse.ArgumentParser) -> None:
     sub = parser.add_subparsers(dest="context_command", required=True)
     prepare = sub.add_parser("prepare", help="assemble a budgeted stage-aware projection from current task + durable knowledge")
     prepare.add_argument("--task", default=None, help="optional task/query override; defaults to current work goal")
-    prepare.add_argument("--stage", choices=("planning", "implementation", "verification", "documentation", "checkpointing", "handoff", "operator_review"), default=None)
+    prepare.add_argument("--stage", choices=context_stage_choices(), default=None)
     prepare.add_argument("--scope", action="append", default=[], help="additional hierarchical scope; repeat as needed")
     prepare.add_argument("--path", action="append", default=[], help="additional relevant project path; repeat as needed")
     prepare.add_argument("--budget", type=int, default=1400, help="approximate token budget for projected durable knowledge")
@@ -25,7 +25,7 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
     prepare.add_argument("--include-historical", action="store_true", help="include non-active lifecycle/semantic knowledge for explicit historical review")
     prepare.add_argument("--json", action="store_true", dest="json_output")
     current = sub.add_parser("current", help="show the structured current-task and operational projection without knowledge retrieval")
-    current.add_argument("--stage", choices=("planning", "implementation", "verification", "documentation", "checkpointing", "handoff", "operator_review"), default=None)
+    current.add_argument("--stage", choices=context_stage_choices(), default=None)
     current.add_argument("--json", action="store_true", dest="json_output")
     why = sub.add_parser("why", help="explain why one knowledge record was selected by the last context prepare")
     why.add_argument("knowledge_id")

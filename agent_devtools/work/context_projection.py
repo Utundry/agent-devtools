@@ -37,6 +37,11 @@ _STAGE_ALIASES = {
     "operator_review": "operator_review",
 }
 
+def context_stage_choices() -> tuple[str, ...]:
+    """Return every accepted public stage spelling in deterministic order."""
+    return tuple(_STAGE_ALIASES)
+
+
 _STAGE_KIND_WEIGHT = {
     "planning": {"requirement": 24, "open_question": 22, "decision": 20, "assumption": 16, "finding": 10, "evidence": 6, "source": 4},
     "implementation": {"requirement": 24, "decision": 24, "finding": 20, "assumption": 14, "evidence": 10, "open_question": 8, "source": 4},

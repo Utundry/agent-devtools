@@ -1,0 +1,28 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "a050163aeaa744028a3100ef7d48e0c9",
+  "kind": "decision",
+  "subject": "context/stage-vocabulary",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Context CLI stage choices must come from the same alias table used by projection normalization.",
+  "scope": [
+    "agent-devtools/context"
+  ],
+  "confidence": "high",
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "70b2b88e-abe3-4df3-b492-2fc5b8e85e93",
+    "taskGoal": "Fix Agent DevTools explicit profile precedence and context stage vocabulary",
+    "eventId": "36c08248f8824af7b2033ac9da72be2e"
+  },
+  "taskId": "70b2b88e-abe3-4df3-b492-2fc5b8e85e93",
+  "taskGoal": "Fix Agent DevTools explicit profile precedence and context stage vocabulary",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T10:47:09Z",
+  "updatedAtUtc": "2026-10-08T10:47:09Z"
+}

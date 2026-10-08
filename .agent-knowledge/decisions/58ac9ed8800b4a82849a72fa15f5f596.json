@@ -1,0 +1,28 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "58ac9ed8800b4a82849a72fa15f5f596",
+  "kind": "decision",
+  "subject": "bootstrap/profile-precedence",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Explicit bootstrap profile selection is authoritative; intent inference remains diagnostic and specializes only when no explicit profile was supplied.",
+  "scope": [
+    "agent-devtools/bootstrap"
+  ],
+  "confidence": "high",
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "70b2b88e-abe3-4df3-b492-2fc5b8e85e93",
+    "taskGoal": "Fix Agent DevTools explicit profile precedence and context stage vocabulary",
+    "eventId": "a7db4065e540433eb126e6a29b2ee221"
+  },
+  "taskId": "70b2b88e-abe3-4df3-b492-2fc5b8e85e93",
+  "taskGoal": "Fix Agent DevTools explicit profile precedence and context stage vocabulary",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T10:47:09Z",
+  "updatedAtUtc": "2026-10-08T10:47:09Z"
+}

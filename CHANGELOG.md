@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Bootstrap explicit profile selection now has precedence over inferred intent specialization; explicit neutral profiles work without a redundant intent prompt and can deliberately re-specialize an existing neutral workspace.
+- Context projection CLI stage validation now derives accepted spellings from the same alias table as projection normalization, so workflow terms such as `orient`, `work`, `verify`, `checkpoint`, and `finish` are accepted consistently.
 - Context Lifecycle C4 adds `agent shell` as a thin interactive UX over the ordinary top-level CLI dispatcher, with deterministic shortcut normalization, repeatable `--command` batch mode, and no shell-only project state.
 - Context Lifecycle C3 adds deterministic budgeted context projection over Git-tracked durable knowledge: stage-aware ranking, hierarchical scopes, active-status filtering, near-duplicate suppression, compact cues with expand refs, selection explanations, current-task/operational projections, and disposable usage tracking.
 - Context Lifecycle C2 adds Git-canonical durable knowledge lifecycle in `.agent-knowledge`: active/superseded/historical/rejected lifecycle, scope/confidence/evidence/provenance, append-friendly supersession, `knowledge remember/why/lifecycle/supersede`, and no durable SQLite dependency.

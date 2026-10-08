@@ -171,7 +171,9 @@ def main() -> int:
             report["update"] = result
             current_profile = result.get("profile")
             requested_dev_preset = args.preset or (intent_detection.preset_id if intent_detection and intent_detection.development else None)
-            if current_profile != "development" and (args.profile == "development" or (intent_detection and intent_detection.development)):
+            requested_neutral_profile = args.profile if args.profile in {"research", "analysis", "document", "general"} else None
+            inferred_profile = None if args.profile else intent_detection
+            if current_profile != "development" and args.profile == "development":
                 if not requested_dev_preset:
                     report.update({
                         "status": "needs-stack",
@@ -179,8 +181,18 @@ def main() -> int:
                     })
                     print(json.dumps(report, ensure_ascii=False, indent=2) if args.json_output else _human(report)); return 0
                 report["specialization"] = specialize_development_workspace(target, requested_dev_preset, source_root=payload)
-            elif current_profile != "development" and intent_detection and not intent_detection.development and intent_detection.profile_id != current_profile:
-                report["specialization"] = set_workspace_profile(target, intent_detection.profile_id)
+            elif current_profile != "development" and requested_neutral_profile and requested_neutral_profile != current_profile:
+                report["specialization"] = set_workspace_profile(target, requested_neutral_profile)
+            elif current_profile != "development" and inferred_profile and inferred_profile.development:
+                if not requested_dev_preset:
+                    report.update({
+                        "status": "needs-stack",
+                        "agentAction": "This neutral workspace is now known to be a software-development project, but the stack is not specific enough. Ask what language/framework/test/build tools are planned, then rerun the same bootstrap with --intent and --stack (or --preset).",
+                    })
+                    print(json.dumps(report, ensure_ascii=False, indent=2) if args.json_output else _human(report)); return 0
+                report["specialization"] = specialize_development_workspace(target, requested_dev_preset, source_root=payload)
+            elif current_profile != "development" and inferred_profile and inferred_profile.profile_id != current_profile:
+                report["specialization"] = set_workspace_profile(target, inferred_profile.profile_id)
         else:
             report["mode"] = "bootstrap-new-or-unconfigured"
             plan = build_plan(target, preset_id=args.preset, source_root=payload)
@@ -218,22 +230,23 @@ def main() -> int:
                     if intent_detection:
                         report["intentDetection"] = {"profile": intent_detection.profile_id, "development": intent_detection.development, "preset": intent_detection.preset_id, "confidence": intent_detection.confidence, "reasons": list(intent_detection.reasons), "needsStack": intent_detection.needs_stack}
 
-                if intent_detection is None:
+                if intent_detection is None and args.profile is None:
                     report["status"] = "needs-intent"
                     report["agentAction"] = "Universal workspace is ready. Ask the human: ‘What are you planning to do or discuss in this project?’ Then rerun this same bootstrap with --intent <answer>. Do not ask them to choose an internal Agent DevTools profile."
                     checks = _post_checks(target); report["postChecks"] = checks
                     try: (target / ".agent-bootstrap-report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
                     except OSError: pass
                     print(json.dumps(report, ensure_ascii=False, indent=2) if args.json_output else _human(report)); return 0
-                if intent_detection.development:
-                    preset = args.preset or intent_detection.preset_id
+                inferred_profile = None if args.profile else intent_detection
+                if args.profile == "development" or (inferred_profile and inferred_profile.development):
+                    preset = args.preset or (intent_detection.preset_id if intent_detection else None)
                     if not preset:
                         report["status"] = "needs-stack"
                         report["agentAction"] = "Development intent is clear, but the stack is not. Ask for language/framework/test/build tools, then rerun with --intent and --stack. The universal layer remains valid and must not be discarded."
                         print(json.dumps(report, ensure_ascii=False, indent=2) if args.json_output else _human(report)); return 0
                     report["specialization"] = specialize_development_workspace(target, preset, source_root=payload)
-                elif intent_detection.profile_id != neutral_profile:
-                    report["specialization"] = set_workspace_profile(target, intent_detection.profile_id)
+                elif inferred_profile and inferred_profile.profile_id != neutral_profile:
+                    report["specialization"] = set_workspace_profile(target, inferred_profile.profile_id)
 
         kit_root = _park_kit_if_inside_target(kit_root, target, report)
         checks = _post_checks(target)
