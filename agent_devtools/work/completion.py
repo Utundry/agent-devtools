@@ -64,7 +64,15 @@ def complete_work(
         raise TaskStateError(
             "cannot complete work while durable knowledge has conflicts or dangling supersedes"
         )
-    semantic = require_semantic_closeout(root)
+    try:
+        semantic = require_semantic_closeout(root)
+    except TaskStateError as exc:
+        raise TaskStateError(
+            str(exc)
+            + "\nNext: run `agent cognition checkpoint` to review durable candidates; "
+              "if the REQUIRED candidates are correct, run `agent cognition checkpoint --promote-required`, "
+              "then retry `agent work complete`."
+        ) from exc
     try:
         profile = load_profile(root)
     except ProfileError as exc:
@@ -98,7 +106,20 @@ def complete_work(
                 raise TaskStateError(f"development verification failed with exit code {code}{detail}")
             latest = validated_check_report(root, state)
     else:
-        latest = _require_fresh_success(state, latest_verification(root), "verification record")
+        try:
+            latest = _require_fresh_success(state, latest_verification(root), "verification record")
+        except TaskStateError as exc:
+            if profile.profile_id == "research":
+                raise TaskStateError(
+                    str(exc)
+                    + "\nNext: run `agent verify research` for the guided review; "
+                      "record the resulting verification, then retry `agent work complete`."
+                ) from exc
+            raise TaskStateError(
+                str(exc)
+                + "\nNext: record profile-appropriate verification with `agent verify`, "
+                  "then retry `agent work complete`."
+            ) from exc
 
     task = complete_task(root, summary=summary)
     return {

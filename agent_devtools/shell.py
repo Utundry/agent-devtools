@@ -162,6 +162,8 @@ class AgentShell(cmd.Cmd):
         print("  why <knowledge-id>         -> knowledge why")
         print("  conflicts                  -> knowledge conflicts")
         print("  verify                     -> verify status")
+        print("  verify research            -> guided research verification review")
+        print("  verify research --confirm-all-pass -> explicit compact PASS attestation after review")
         print("  finish / complete          -> work finish / work complete")
         print("Any ordinary Agent DevTools command may also be entered unchanged.")
 

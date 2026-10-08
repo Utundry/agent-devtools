@@ -1,0 +1,28 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "f44a3b35845b45648dcc6666e6b689dd",
+  "kind": "decision",
+  "subject": "guided-work-lifecycle/research-verification",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Research verification remains honest and explicit: verify research without statuses is a read-only review tray; --confirm-all-pass is an explicit compact attestation, while granular pass/warn/fail flags remain available.",
+  "scope": [
+    "agent-devtools/guided-work-lifecycle"
+  ],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "b3c1687e-ad91-4cdf-b1a0-6a6e3f9cd944",
+    "taskGoal": "Implement Stage R2 Guided Work Lifecycle from real research dogfood findings",
+    "eventId": "7ca7eea23b4f4573afb4d1a4bb3ec7ac"
+  },
+  "taskId": "b3c1687e-ad91-4cdf-b1a0-6a6e3f9cd944",
+  "taskGoal": "Implement Stage R2 Guided Work Lifecycle from real research dogfood findings",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T12:15:58Z",
+  "updatedAtUtc": "2026-10-08T12:15:58Z"
+}

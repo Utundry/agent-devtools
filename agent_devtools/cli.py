@@ -176,7 +176,7 @@ def parser() -> argparse.ArgumentParser:
     release_cli.configure_parser(release)
     context = sub.add_parser("context", help="local repository context/retrieval facade")
     context_cli.configure_parser(context)
-    begin = sub.add_parser("begin", help="normal work ritual entry: enter/resume work and immediately project durable context")
+    begin = sub.add_parser("begin", help="canonical Agent Work Lifecycle entry: enter/resume work and immediately project durable context")
     work_cli.configure_begin_parser(begin)
     shell = sub.add_parser("shell", help="interactive thin UX over the ordinary Agent DevTools CLI")
     shell_cli.configure_parser(shell, command_dest="shell_commands")

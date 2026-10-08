@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Stage R2 formalizes the **Agent Work Lifecycle** terminology and makes `begin` the canonical routine entrypoint across onboarding, workflow and agent handoff; `work enter` remains an explicit lower-level primitive.
+- Semantic checkpoint and work-completion failures now emit executable canonical next actions instead of leaving agents to guess `knowledge promote`, `work show`, or other primitive syntax.
+- `verify research` with no statuses is now a read-only five-dimension review tray. `--confirm-all-pass` provides an explicit compact attestation only after review; granular pass/warn/fail statuses remain available whenever any dimension is uncertain.
+- Begin output distinguishes an empty durable project memory from an unavailable context subsystem, retains the R1 compatibility `ritual` field, and adds explicit Agent Work Lifecycle/canonical-routine metadata.
+
 - Stage R1 establishes the normal agent work ritual `begin -> work -> checkpoint -> complete`. New `agent begin` is a thin facade over `work enter` plus durable context projection and knowledge-health reporting; it introduces no new state model.
 - `cognition checkpoint --promote-required` explicitly promotes only REQUIRED subject-bearing decisions/requirements through the existing `knowledge remember` path, while ordinary checkpoint remains read-only and advisory candidates remain manual.
 - Interactive shell adds `begin <goal>` and `checkpoint promote` shortcuts over the same top-level dispatcher. Workflow/capabilities advertise the ritual without hiding the underlying primitives.

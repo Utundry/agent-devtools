@@ -1,0 +1,28 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "33664c9b443849099200ae74a9c069c3",
+  "kind": "decision",
+  "subject": "guided-work-lifecycle/terminology",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Use Agent Work Lifecycle as the official concept; the canonical routine is begin -> work -> checkpoint -> complete, while work enter remains a lower-level lifecycle primitive.",
+  "scope": [
+    "agent-devtools/guided-work-lifecycle"
+  ],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "b3c1687e-ad91-4cdf-b1a0-6a6e3f9cd944",
+    "taskGoal": "Implement Stage R2 Guided Work Lifecycle from real research dogfood findings",
+    "eventId": "74807c26cd19452e8753b03125d6a439"
+  },
+  "taskId": "b3c1687e-ad91-4cdf-b1a0-6a6e3f9cd944",
+  "taskGoal": "Implement Stage R2 Guided Work Lifecycle from real research dogfood findings",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T12:15:58Z",
+  "updatedAtUtc": "2026-10-08T12:15:58Z"
+}

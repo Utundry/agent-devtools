@@ -1,0 +1,28 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "107ecd35d38e4d47b4987693ee9ba338",
+  "kind": "requirement",
+  "subject": "guided-work-lifecycle/actionable-next-steps",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Routine agent work must expose canonical executable next actions so an agent does not need to guess lower-level Agent DevTools primitive syntax during entry, verification, promotion, or closeout.",
+  "scope": [
+    "agent-devtools/guided-work-lifecycle"
+  ],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "b3c1687e-ad91-4cdf-b1a0-6a6e3f9cd944",
+    "taskGoal": "Implement Stage R2 Guided Work Lifecycle from real research dogfood findings",
+    "eventId": "84abaeed1f2f4f8d91bccdbcff599a03"
+  },
+  "taskId": "b3c1687e-ad91-4cdf-b1a0-6a6e3f9cd944",
+  "taskGoal": "Implement Stage R2 Guided Work Lifecycle from real research dogfood findings",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T12:15:58Z",
+  "updatedAtUtc": "2026-10-08T12:15:58Z"
+}

@@ -13,7 +13,7 @@ from .state import TaskStateError, align_task, clear_task, complete_task, load_t
 from .knowledge import KnowledgeError, conflicts as knowledge_conflicts, effective_lifecycle_statuses, effective_statuses, explain as explain_knowledge, knowledge_status, load_records as load_knowledge_records, promote as promote_knowledge, remember as remember_knowledge, set_lifecycle as set_knowledge_lifecycle, supersede as supersede_knowledge, validate_knowledge, soft_contradictions
 from .journal import SemanticJournalError, append_event, journal_status
 from .semantic_closeout import semantic_checkpoint
-from .verification import VerificationError, latest_verification, record_verification, verification_status, record_research_bundle
+from .verification import RESEARCH_CHECKS, VerificationError, latest_verification, record_verification, verification_status, record_research_bundle
 from .sources import SourceError, add_source, list_sources
 from agent_devtools.profiles import ProfileError, load_profile
 from agent_devtools.work.context_projection import ContextProjectionError, prepare_context
@@ -71,23 +71,81 @@ def configure_verify_parser(parser: argparse.ArgumentParser) -> None:
     record.add_argument("--json", action="store_true", dest="json_output")
     status = sub.add_parser("status", help="show latest profile-neutral verification evidence")
     status.add_argument("--json", action="store_true", dest="json_output")
-    research = sub.add_parser("research", help="record structured research verification bundle")
+    research = sub.add_parser("research", help="review or record the structured research verification bundle")
     for name in ("arithmetic", "sourcing", "assumptions", "knowledge", "unresolved-questions"):
-        research.add_argument(f"--{name}", choices=("pass", "warn", "fail"), required=True)
+        research.add_argument(f"--{name}", choices=("pass", "warn", "fail"))
+    research.add_argument(
+        "--confirm-all-pass",
+        action="store_true",
+        help="after reviewing the guided checklist, explicitly attest that all five research verification dimensions pass",
+    )
     research.add_argument("--evidence", action="append", default=[])
     research.add_argument("--summary", default="")
     research.add_argument("--json", action="store_true", dest="json_output")
 
 
+_RESEARCH_REVIEW = {
+    "arithmetic": "Calculations and quantitative comparisons were checked, or explicitly marked not applicable.",
+    "sourcing": "Important factual claims are supported by adequate source provenance.",
+    "assumptions": "Material assumptions are explicit and their effect on the conclusion was reviewed.",
+    "knowledge": "Durable conclusions/requirements that should survive the session are represented in project knowledge.",
+    "unresolved_questions": "Material unresolved questions are either closed or explicitly retained.",
+}
+
+
+def _research_review_payload() -> dict:
+    return {
+        "format": "agent-devtools-research-verification-review",
+        "formatVersion": 1,
+        "status": "review-required",
+        "checks": [{"id": name, "prompt": _RESEARCH_REVIEW[name]} for name in RESEARCH_CHECKS],
+        "guidance": {
+            "rule": "Review all five dimensions before recording PASS; do not use the compact attestation when any item should be warn/fail.",
+            "nextCommands": [
+                "agent verify research --confirm-all-pass --summary \"<what was verified>\"",
+                "agent verify research --arithmetic <pass|warn|fail> --sourcing <pass|warn|fail> --assumptions <pass|warn|fail> --knowledge <pass|warn|fail> --unresolved-questions <pass|warn|fail> --summary \"<what was verified>\"",
+            ],
+        },
+    }
+
+
 def main_verify(root: Path, args: argparse.Namespace) -> int:
+    review_only = False
     try:
         if args.verify_command == "record":
             item = record_verification(root, label=args.label, status=args.status, evidence=args.evidence, summary=args.summary)
             payload = {"format": "agent-devtools-verification", "formatVersion": 1, "record": item}
         elif args.verify_command == "research":
-            checks = {"arithmetic": args.arithmetic, "sourcing": args.sourcing, "assumptions": args.assumptions, "knowledge": args.knowledge, "unresolved_questions": args.unresolved_questions}
-            item = record_research_bundle(root, checks=checks, evidence=args.evidence, summary=args.summary)
-            payload = {"format": "agent-devtools-verification", "formatVersion": 1, "record": item}
+            raw_checks = {
+                "arithmetic": args.arithmetic,
+                "sourcing": args.sourcing,
+                "assumptions": args.assumptions,
+                "knowledge": args.knowledge,
+                "unresolved_questions": args.unresolved_questions,
+            }
+            provided = [value is not None for value in raw_checks.values()]
+            confirm_all = bool(getattr(args, "confirm_all_pass", False))
+            if confirm_all and any(provided):
+                raise VerificationError(
+                    "--confirm-all-pass cannot be combined with granular research statuses; "
+                    "use the granular form when any dimension is warn/fail"
+                )
+            if not confirm_all and not any(provided):
+                payload = _research_review_payload()
+                review_only = True
+            elif not confirm_all and not all(provided):
+                raise VerificationError(
+                    "partial research verification is not recordable; run `agent verify research` for the guided review "
+                    "or provide all five pass/warn/fail statuses"
+                )
+            else:
+                checks = (
+                    {name: "pass" for name in RESEARCH_CHECKS}
+                    if confirm_all
+                    else {name: str(raw_checks[name]) for name in RESEARCH_CHECKS}
+                )
+                item = record_research_bundle(root, checks=checks, evidence=args.evidence, summary=args.summary)
+                payload = {"format": "agent-devtools-verification", "formatVersion": 1, "record": item}
         else:
             payload = {"format": "agent-devtools-verification", "formatVersion": 1, **verification_status(root)}
     except VerificationError as exc:
@@ -95,12 +153,21 @@ def main_verify(root: Path, args: argparse.Namespace) -> int:
         return 2
     if getattr(args, "json_output", False):
         print(json.dumps(payload, ensure_ascii=False, indent=2))
+    elif review_only:
+        print("Research verification review:")
+        for item in payload["checks"]:
+            print(f"  {item['id']}: {item['prompt']}")
+        print("Next, after reviewing all five dimensions:")
+        print("  " + payload["guidance"]["nextCommands"][0])
+        print("If any dimension is warn/fail, use the granular command shown by `agent verify research --json`.")
     else:
         item = payload.get("record") or payload.get("latest")
         if item:
             print(f"verification: {item['status'].upper()} · {item['label']} · {item['completedAtUtc']}")
         else:
             print("verification: none")
+    if review_only:
+        return 1
     if args.verify_command in {"record", "research"} and payload["record"]["status"] == "fail":
         return 1
     return 0
@@ -153,6 +220,25 @@ def main_cognition(root: Path, args: argparse.Namespace) -> int:
                     print(f"REQUIRED {item['kind']} · {item['subject']} · {item['text']}")
                 for item in payload["advisoryCandidates"]:
                     print(f"REVIEW {item['kind']} · {item['subject']} · {item['text']}")
+                if payload["requiredPromotions"]:
+                    print("Next:")
+                    print("  review REQUIRED candidates")
+                    print("  agent cognition checkpoint --promote-required")
+                    print("  agent work complete")
+                elif payload["advisoryCandidates"]:
+                    print("Advisory candidates do not block completion.")
+                    print("Next: agent work complete")
+                else:
+                    print("Next: agent work complete")
+            payload["guidance"] = {
+                "requiredAction": bool(payload["requiredPromotions"]),
+                "advisoryOnly": bool(payload["advisoryCandidates"]) and not bool(payload["requiredPromotions"]),
+                "nextCommands": (
+                    ["agent cognition checkpoint --promote-required", "agent work complete"]
+                    if payload["requiredPromotions"]
+                    else ["agent work complete"]
+                ),
+            }
             return 0 if payload["clean"] else 1
         subject = str(getattr(args, "subject", "") or "").strip()
         if args.cognition_command == "status":
@@ -263,10 +349,13 @@ def main_begin(root: Path, args: argparse.Namespace) -> int:
                 scope=task.get("scope", []) or args.scope,
                 budget=args.budget,
             )
+        canonical_routine = ["begin", "work", "checkpoint", "complete"]
         payload = {
             "format": "agent-devtools-work-ritual-begin",
             "formatVersion": 1,
-            "ritual": ["begin", "work", "checkpoint", "complete"],
+            "lifecycle": "agent-work-lifecycle",
+            "canonicalRoutine": canonical_routine,
+            "ritual": canonical_routine,
             "entry": entry,
             "knowledge": knowledge_status(root),
             "contextProjection": projection,
@@ -284,14 +373,17 @@ def main_begin(root: Path, args: argparse.Namespace) -> int:
             f"knowledge={payload['knowledge']['records']}"
         )
         if projection is not None:
-            print(
-                f"  durable context: {projection['selectedRecords']} selected · "
-                f"stage={projection['stage']} · ~{projection['estimatedTokens']}/{projection['budget']} tokens"
-            )
-            for item in projection.get("knowledge", []):
-                print(f"  [{item['kind']}] {item['subject']} · {item['expandRef']}")
+            if projection["selectedRecords"]:
+                print(
+                    f"  durable context: {projection['selectedRecords']} selected · "
+                    f"stage={projection['stage']} · ~{projection['estimatedTokens']}/{projection['budget']} tokens"
+                )
+                for item in projection.get("knowledge", []):
+                    print(f"  [{item['kind']}] {item['subject']} · {item['expandRef']}")
+            else:
+                print("  durable context: none yet")
         print(f"  next: {payload['nextAction']}")
-        print("  ritual: work -> checkpoint -> complete")
+        print("  canonical routine: work -> checkpoint -> complete")
     return 0
 
 

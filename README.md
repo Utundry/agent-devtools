@@ -93,7 +93,7 @@ python devtools/agent/agent.py workflow validate
 python devtools/agent/agent.py capabilities --json
 ```
 
-For ordinary substantial work, the preferred ritual is intentionally small:
+For ordinary substantial work, the canonical routine inside the **Agent Work Lifecycle** is intentionally small:
 
 ```bash
 python devtools/agent/agent.py begin --goal "..."
@@ -127,10 +127,23 @@ Agent DevTools is intentionally a harness, not an autonomous platform. Its main 
 Typical development workflow:
 
 ```bash
-python devtools/agent/agent.py work enter --goal "..." --next-action "..."
+python devtools/agent/agent.py begin --goal "..." --next-action "..."
 # Do the work with the project's normal tools.
+python devtools/agent/agent.py cognition checkpoint
 python devtools/agent/agent.py work complete
 ```
+
+`work enter` remains available as the lower-level lifecycle primitive, but agents should not use it as the routine entrypoint. When `checkpoint` or `work complete` cannot proceed, follow the executable next action printed by the command instead of guessing a lower-level syntax.
+
+For research, verification is similarly guided:
+
+```bash
+python devtools/agent/agent.py verify research
+# review the five dimensions shown by the tray; when all genuinely pass:
+python devtools/agent/agent.py verify research --confirm-all-pass --summary "..."
+```
+
+If any research dimension is `warn` or `fail`, use the granular statuses shown by `verify research --json` instead of the compact PASS attestation.
 
 Do not memorize syntax from examples. `workflow show`, `capabilities --json`, and CLI `--help` are authoritative for the installed version.
 

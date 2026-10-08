@@ -7,8 +7,8 @@ from typing import Any
 from . import __version__
 from .profiles import load_profile
 
-CLI_CONTRACT_VERSION = 21
-WORKFLOW_CONTRACT_VERSION = 15
+CLI_CONTRACT_VERSION = 22
+WORKFLOW_CONTRACT_VERSION = 16
 
 
 def workflow_contract(root: Path) -> dict[str, Any]:
@@ -26,7 +26,7 @@ def workflow_contract(root: Path) -> dict[str, Any]:
             "changeDiscovery": profile.change_discovery,
         },
         "principles": [
-            "The normal agent ritual is begin -> work -> checkpoint -> complete. begin is a thin facade over work enter plus durable context projection; lower-level commands remain authoritative primitives.",
+            "The Agent Work Lifecycle canonical routine is begin -> work -> checkpoint -> complete. begin is the normal entry facade over work enter plus durable context projection; lower-level commands remain authoritative primitives.",
             "Phases describe responsibilities, not seven separate command invocations. Routine work uses begin, project-native execution, checkpoint when semantic closeout needs review, and work complete.",
             "Use work complete for routine completion: reuse a successful check only after validating its current inputs, outputs, task identity and coverage; otherwise run the affected policy. No visible changes and no reusable evidence require a baseline check. work finish is the strict no-execution primitive; work complete --no-cache explicitly requests physical execution.",
             "Read relevant durable knowledge when needed; promote only new reusable knowledge and reuse exact existing statements instead of creating duplicates.",
@@ -36,7 +36,7 @@ def workflow_contract(root: Path) -> dict[str, Any]:
             "Session state and caches are disposable; durable project knowledge is tracked in .agent-knowledge/.",
             "Use preserve for profile-aware portable recovery state; lower-level checkpoint/workspace-snapshot commands remain available when their distinction matters.",
             "Use handoff to transfer unfinished work across chats or agents as one manifest-verified bundle containing both recoverable state and a resume briefing.",
-            "Use work enter as the preferred lifecycle-aware entrypoint: resume active work, start an explicit new goal, or restore a handoff without recreating ceremony.",
+            "Use begin as the canonical routine entrypoint. work enter remains the lifecycle primitive for debugging/integration and must not be guessed as the normal agent-facing route.",
             "Autonomy starts after alignment: ask only about material gaps that are expensive to get wrong; propose a concrete best option and obtain explicit user approval before substantial execution when such gaps exist. If the task is already sufficiently specified, record the no-gap fast path and proceed without a user turn.",
             "Alignment must be explicit in state, not necessarily visible as friction to the user. A newly created high-level work enter uses the routine no-gap fast path by default; use --alignment-pending when material-gap assessment is genuinely needed. Never ask a question merely to satisfy the gate.",
             "Meaningful cognition is append-only in the local semantic journal. Subject-bearing decisions and requirements are explicit durable candidates and must be represented in project knowledge before clean closeout; subjectless local cognition remains lightweight.",
@@ -45,8 +45,11 @@ def workflow_contract(root: Path) -> dict[str, Any]:
             "Interactive shell is UX only: every shell action normalizes to the ordinary CLI dispatcher, creates no shell-only project state, and remains reproducible as a conventional command.",
         ],
         "routineRoute": {
+            "name": "Agent Work Lifecycle",
+            "canonicalRoutine": ["begin", "work", "checkpoint", "complete"],
             "entry": "begin",
             "entryPrimitive": "work enter",
+            "entryRule": "Routine agents use begin; work enter is a lower-level primitive.",
             "execution": "Use project-native tools; record only meaningful new findings or decisions.",
             "completion": "work complete",
             "alreadyVerifiedCompletion": "work finish",
@@ -54,7 +57,7 @@ def workflow_contract(root: Path) -> dict[str, Any]:
             "explicitExecution": "work complete --no-cache",
             "deepVerification": "Explicit certification, replay or release; not part of routine completion.",
             "contextIndex": "Optional; created only by explicit context operations, reused by briefings when present.",
-            "knowledgePromotion": "Event-driven; checkpoint is read-only by default, while checkpoint --promote-required is the explicit convenience path for required decisions/requirements only. Zero new records is valid when no durable candidate exists.",
+            "knowledgePromotion": "Event-driven; checkpoint is read-only by default and prints executable next actions. checkpoint --promote-required is the explicit convenience path for required decisions/requirements only. Zero new records is valid when no durable candidate exists.",
             "knowledgeLifecycle": "Tracked .agent-knowledge JSON is canonical durable state; supersession is relation-derived and append-friendly.",
             "contextProjection": "Budgeted stage-aware projection from active durable knowledge with compact cues, expand refs and deterministic selection reasons; runtime usage state is disposable.",
             "interactiveShell": "Optional UX over the same top-level CLI dispatcher; no shell-only state or write path.",
@@ -88,7 +91,7 @@ def workflow_contract(root: Path) -> dict[str, Any]:
             {
                 "id": "verify",
                 "required": True,
-                "purpose": "Collect fresh profile-appropriate verification evidence using project-native tooling.",
+                "purpose": "Collect fresh profile-appropriate verification evidence. Research uses a guided review tray before explicit attestation; development continues to use project-native checks.",
                 "commands": ["check", "verify", "changes status"],
             },
             {
@@ -120,7 +123,7 @@ def capabilities(root: Path) -> dict[str, Any]:
             "workflow": {"show": True, "validate": True},
             "capabilities": {"json": True},
             "selfUpdate": {"available": True, "latestDiscovery": True, "explicitVersion": True, "checkOnly": True, "freshDownload": True, "identityVerified": True},
-            "begin": {"available": True, "usesWorkEnter": True, "durableContextProjection": True, "knowledgeHealth": True, "newStateModel": False},
+            "begin": {"available": True, "canonicalRoutineEntry": True, "usesWorkEnter": True, "durableContextProjection": True, "knowledgeHealth": True, "newStateModel": False},
             "work": {"enter": True, "start": True, "align": True, "status": True, "complete": True, "finish": True, "oneActionEntry": True, "handoffEntry": True, "routineEntryFastPath": True, "alignmentPendingOptOut": True, "oneActionCompletion": True, "automaticVerificationReuse": True, "baselineWhenUnverified": True, "taskGapGate": True, "noGapFastPath": True, "semanticCloseout": True},
             "cognition": {"observation": True, "decision": True, "finding": True, "assumption": True, "requirement": not profile.development, "openQuestion": not profile.development, "evidence": not profile.development, "blocker": True, "resolveBlocker": True, "status": True, "checkpoint": True, "checkpointPromoteRequired": True, "appendOnlyJournal": True},
             "knowledge": {"promote": True, "remember": True, "why": True, "lifecycle": True, "supersede": True, "validate": True, "status": True, "researchKinds": not profile.development, "softContradictionWarnings": True, "promotionRequired": False, "canonicalStore": ".agent-knowledge", "durableSqlite": False},
@@ -130,6 +133,8 @@ def capabilities(root: Path) -> dict[str, Any]:
             "changes": {"status": profile.development, "patch": profile.development, "canonicalUntracked": profile.development, "workspaceLocalMarks": profile.development},
             "verification": {
                 "check": profile.verification_mode == "check",
+                "guidedResearchReview": profile.profile_id == "research",
+                "researchConfirmAllPass": profile.profile_id == "research",
                 "record": profile.verification_mode == "record",
                 "researchBundle": profile.profile_id == "research",
                 "resumableChunks": profile.verification_mode == "check",

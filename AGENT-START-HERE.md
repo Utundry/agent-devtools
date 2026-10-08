@@ -37,9 +37,15 @@
    python devtools/agent/agent.py capabilities --json
    ```
 
-8. Start or resume substantial work through the managed workflow described by the installed runtime and `AGENTS.md`.
-9. Before substantial execution, resolve material task gaps. Ask only about choices that would materially change the result or cause expensive rework. If the task is already sufficiently specified, record `--no-material-gaps` and proceed immediately without a user turn; never ask a question merely to satisfy the gate. If material gaps exist, present concrete options and a recommended choice instead of an open-ended questionnaire, then wait for explicit user approval/clarification before implementing. Cheap reversible choices may be made autonomously and recorded as assumptions/decisions.
-10. Continue the user's original task. Agent DevTools is infrastructure for that task, not the task itself.
+8. Start or resume substantial work through the canonical Agent Work Lifecycle entry, using the user's actual goal:
+
+   ```bash
+   python devtools/agent/agent.py begin --goal "<user's actual task>"
+   ```
+
+   If an active task already exists, resume it with `python devtools/agent/agent.py begin`. Do **not** start routine work with `work enter`; that command is the lower-level lifecycle primitive for debugging/integration. If a lifecycle command fails, follow the executable next action printed by Agent DevTools instead of guessing another primitive syntax.
+9. Before substantial execution, resolve material task gaps. Ask only about choices that would materially change the result or cause expensive rework. If the task is already sufficiently specified, `begin` uses the no-material-gaps fast path and proceeds without a user turn; never ask a question merely to satisfy the gate. If material gaps exist, present concrete options and a recommended choice instead of an open-ended questionnaire, then wait for explicit user approval/clarification before implementing. Cheap reversible choices may be made autonomously and recorded as assumptions/decisions.
+10. Continue the user's original task. Agent DevTools is infrastructure for that task, not the task itself. The canonical routine is `begin -> work -> checkpoint -> complete`.
 
 The governing principles are: **autonomy starts after alignment, not instead of alignment** and **alignment should be explicit in state, not necessarily visible as friction to the user**. Ask only what is expensive to get wrong.
 
