@@ -1,0 +1,28 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "a8182da48aac4aa0b3123038d979bf8b",
+  "kind": "decision",
+  "subject": "context-lifecycle/projection",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Context projection is deterministic and stage-aware, using hierarchical scope, explainable ranking, near-duplicate suppression before budget trimming, and disposable projection/usage state.",
+  "scope": [
+    "context-lifecycle"
+  ],
+  "confidence": "high",
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "939ef072-fa28-44b9-987e-116eee2ccdc4",
+    "taskGoal": "Close Context Lifecycle C1-C4 and prepare Agent DevTools 0.9.0",
+    "eventId": "f179c56f50264fe9b16bfd83a54691d8"
+  },
+  "taskId": "939ef072-fa28-44b9-987e-116eee2ccdc4",
+  "taskGoal": "Close Context Lifecycle C1-C4 and prepare Agent DevTools 0.9.0",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T10:01:52Z",
+  "updatedAtUtc": "2026-10-08T10:01:52Z"
+}

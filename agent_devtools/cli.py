@@ -19,6 +19,7 @@ from .profiles import ProfileError, get_profile, list_profiles, load_profile, se
 from . import preserve as preserve_cli
 from . import handoff_cli
 from .release import cli as release_cli
+from . import shell as shell_cli
 from .self_update import SelfUpdateError, self_update as perform_self_update
 from .work import cli as work_cli
 from .workflow import capabilities as workflow_capabilities, workflow_contract
@@ -175,6 +176,8 @@ def parser() -> argparse.ArgumentParser:
     release_cli.configure_parser(release)
     context = sub.add_parser("context", help="local repository context/retrieval facade")
     context_cli.configure_parser(context)
+    shell = sub.add_parser("shell", help="interactive thin UX over the ordinary Agent DevTools CLI")
+    shell_cli.configure_parser(shell, command_dest="shell_commands")
     source = sub.add_parser("source", help="research/document source provenance")
     work_cli.configure_source_parser(source)
     verify = sub.add_parser("verify", help="profile-neutral verification evidence")
@@ -336,6 +339,8 @@ def main(argv: list[str] | None = None) -> int:
         return release_cli.main(discover_project_root(), args)
     if args.command == "context":
         return context_cli.main(discover_project_root(), args)
+    if args.command == "shell":
+        return shell_cli.main(discover_project_root(), args, dispatcher=main)
     if args.command == "source":
         return work_cli.main_source(discover_project_root(), args)
     if args.command == "verify":

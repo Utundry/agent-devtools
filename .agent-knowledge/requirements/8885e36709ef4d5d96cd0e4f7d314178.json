@@ -1,0 +1,28 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "8885e36709ef4d5d96cd0e4f7d314178",
+  "kind": "requirement",
+  "subject": "context-lifecycle/storage",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Durable project knowledge is canonical in Git-tracked .agent-knowledge JSON records; SQLite state is disposable and rebuildable.",
+  "scope": [
+    "context-lifecycle"
+  ],
+  "confidence": "high",
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "939ef072-fa28-44b9-987e-116eee2ccdc4",
+    "taskGoal": "Close Context Lifecycle C1-C4 and prepare Agent DevTools 0.9.0",
+    "eventId": "7a22c17d942147bd80c503510b26aa85"
+  },
+  "taskId": "939ef072-fa28-44b9-987e-116eee2ccdc4",
+  "taskGoal": "Close Context Lifecycle C1-C4 and prepare Agent DevTools 0.9.0",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T10:01:52Z",
+  "updatedAtUtc": "2026-10-08T10:01:52Z"
+}

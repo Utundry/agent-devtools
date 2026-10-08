@@ -10,10 +10,29 @@ from .config import ContextConfigError, load_context_config
 from .index import ContextIndexError, ensure_index, index_stats, validate_context
 from .search import SearchResult, inspect_identity, query_context
 from .semantic_diff import compare_semantic_states
+from agent_devtools.work.context_projection import ContextProjectionError, current_context, expand_context, prepare_context, why_selected
 
 
 def configure_parser(parser: argparse.ArgumentParser) -> None:
     sub = parser.add_subparsers(dest="context_command", required=True)
+    prepare = sub.add_parser("prepare", help="assemble a budgeted stage-aware projection from current task + durable knowledge")
+    prepare.add_argument("--task", default=None, help="optional task/query override; defaults to current work goal")
+    prepare.add_argument("--stage", choices=("planning", "implementation", "verification", "documentation", "checkpointing", "handoff", "operator_review"), default=None)
+    prepare.add_argument("--scope", action="append", default=[], help="additional hierarchical scope; repeat as needed")
+    prepare.add_argument("--path", action="append", default=[], help="additional relevant project path; repeat as needed")
+    prepare.add_argument("--budget", type=int, default=1400, help="approximate token budget for projected durable knowledge")
+    prepare.add_argument("--dedup-threshold", type=float, default=0.60)
+    prepare.add_argument("--include-historical", action="store_true", help="include non-active lifecycle/semantic knowledge for explicit historical review")
+    prepare.add_argument("--json", action="store_true", dest="json_output")
+    current = sub.add_parser("current", help="show the structured current-task and operational projection without knowledge retrieval")
+    current.add_argument("--stage", choices=("planning", "implementation", "verification", "documentation", "checkpointing", "handoff", "operator_review"), default=None)
+    current.add_argument("--json", action="store_true", dest="json_output")
+    why = sub.add_parser("why", help="explain why one knowledge record was selected by the last context prepare")
+    why.add_argument("knowledge_id")
+    why.add_argument("--json", action="store_true", dest="json_output")
+    expand = sub.add_parser("expand", help="expand a knowledge:<id> reference from a compact context cue")
+    expand.add_argument("reference")
+    expand.add_argument("--json", action="store_true", dest="json_output")
     ensure = sub.add_parser("ensure", help="create/update the disposable local context index")
     ensure.add_argument("--rebuild", action="store_true")
     ensure.add_argument("--config", type=Path, default=None)
@@ -121,6 +140,82 @@ def main(root: Path, args: argparse.Namespace) -> int:
                         state = after or before
                         location = f"{state['path']}:{state['startLine']}-{state['endLine']}"
                     print(f"{item['status']}: {item['identity']} · {location}")
+            return 0
+        if args.context_command == "prepare":
+            payload = prepare_context(
+                root,
+                task=args.task,
+                stage=args.stage,
+                scope=args.scope,
+                paths=args.path,
+                budget=args.budget,
+                dedup_threshold=args.dedup_threshold,
+                include_historical=bool(args.include_historical),
+            )
+            if args.json_output:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+            else:
+                task = payload.get("task") or {}
+                operational = payload.get("operational") or {}
+                print(
+                    f"context projection · stage={payload['stage']} · "
+                    f"selected={payload['selectedRecords']}/{payload['candidateRecords']} · "
+                    f"budget={payload['estimatedTokens']}/{payload['budget']}"
+                )
+                if task.get("currentObjective"):
+                    print(f"task: {task['currentObjective']}")
+                if operational.get("requiredBeforeNextStage"):
+                    print("required: " + "; ".join(operational["requiredBeforeNextStage"]))
+                print(f"next safe action: {operational.get('nextSafeAction')}")
+                for item in payload.get("knowledge", []):
+                    text = item.get("statement") or item.get("summary") or ""
+                    print(
+                        f"  {item['id']} [{item['mode']}] {item['kind']} score={item['score']} · "
+                        f"{item['subject']} · {text}"
+                    )
+                    print("    why: " + "; ".join(item.get("reason", [])))
+                    print(f"    expand: {item['expandRef']}")
+            return 0
+        if args.context_command == "current":
+            payload = current_context(root, stage=args.stage)
+            if args.json_output:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+            else:
+                task = payload.get("task") or {}
+                operational = payload.get("operational") or {}
+                print(f"current task · stage={operational.get('stage')}")
+                print(f"objective: {task.get('currentObjective') or 'none'}")
+                if task.get("activeScope"):
+                    print("scope: " + ", ".join(task["activeScope"]))
+                if operational.get("blockers"):
+                    print("blockers: " + "; ".join(operational["blockers"]))
+                if operational.get("requiredBeforeNextStage"):
+                    print("required: " + "; ".join(operational["requiredBeforeNextStage"]))
+                print(f"next safe action: {operational.get('nextSafeAction')}")
+            return 0
+        if args.context_command == "why":
+            payload = why_selected(root, args.knowledge_id)
+            if args.json_output:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+            else:
+                print(f"{payload['id']} · score={payload['score']} · stage={payload['stage']} · mode={payload['mode']}")
+                print("why: " + "; ".join(payload.get("reason", [])))
+                print(f"expand: {payload['expandRef']}")
+            return 0
+        if args.context_command == "expand":
+            payload = expand_context(root, args.reference)
+            if args.json_output:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+            else:
+                record = payload["record"]
+                print(
+                    f"{record['id']} {record['kind']} {payload['effectiveLifecycleStatus']} · "
+                    f"{record['subject']} · {record['statement']}"
+                )
+                if payload.get("scope"):
+                    print("scope: " + ", ".join(payload["scope"]))
+                if payload.get("evidenceRefs"):
+                    print("evidence: " + ", ".join(payload["evidenceRefs"]))
             return 0
         config = load_context_config(root, getattr(args, "config", None))
         if args.context_command in {"ensure", "rebuild"}:
@@ -259,7 +354,7 @@ def main(root: Path, args: argparse.Namespace) -> int:
                     print(f"selector: {item.selector}")
                 print(item.content, end="" if item.content.endswith("\n") else "\n")
             return 0
-    except (ContextConfigError, ContextIndexError) as exc:
+    except (ContextConfigError, ContextIndexError, ContextProjectionError) as exc:
         print(f"agent context: {exc}")
         return 2
     raise AssertionError(args.context_command)

@@ -1,0 +1,28 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "834a7dccc29a4c2984cc78a3a4efdf7d",
+  "kind": "decision",
+  "subject": "context-lifecycle/architecture",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Context Lifecycle is implemented as C1 Structured Semantic Journal, C2 Durable Knowledge Lifecycle, C3 Context Projection, and C4 Interactive Shell.",
+  "scope": [
+    "context-lifecycle"
+  ],
+  "confidence": "high",
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "939ef072-fa28-44b9-987e-116eee2ccdc4",
+    "taskGoal": "Close Context Lifecycle C1-C4 and prepare Agent DevTools 0.9.0",
+    "eventId": "1f076d1d437f4163b656edaacbcf370c"
+  },
+  "taskId": "939ef072-fa28-44b9-987e-116eee2ccdc4",
+  "taskGoal": "Close Context Lifecycle C1-C4 and prepare Agent DevTools 0.9.0",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T10:01:52Z",
+  "updatedAtUtc": "2026-10-08T10:01:52Z"
+}

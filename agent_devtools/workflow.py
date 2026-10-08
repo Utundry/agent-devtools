@@ -7,8 +7,8 @@ from typing import Any
 from . import __version__
 from .profiles import load_profile
 
-CLI_CONTRACT_VERSION = 16
-WORKFLOW_CONTRACT_VERSION = 10
+CLI_CONTRACT_VERSION = 20
+WORKFLOW_CONTRACT_VERSION = 14
 
 
 def workflow_contract(root: Path) -> dict[str, Any]:
@@ -38,6 +38,10 @@ def workflow_contract(root: Path) -> dict[str, Any]:
             "Use work enter as the preferred lifecycle-aware entrypoint: resume active work, start an explicit new goal, or restore a handoff without recreating ceremony.",
             "Autonomy starts after alignment: ask only about material gaps that are expensive to get wrong; propose a concrete best option and obtain explicit user approval before substantial execution when such gaps exist. If the task is already sufficiently specified, record the no-gap fast path and proceed without a user turn.",
             "Alignment must be explicit in state, not necessarily visible as friction to the user. A newly created high-level work enter uses the routine no-gap fast path by default; use --alignment-pending when material-gap assessment is genuinely needed. Never ask a question merely to satisfy the gate.",
+            "Meaningful cognition is append-only in the local semantic journal. Subject-bearing decisions and requirements are explicit durable candidates and must be represented in project knowledge before clean closeout; subjectless local cognition remains lightweight.",
+            "Durable project knowledge is canonical in tracked .agent-knowledge JSON files. SQLite remains disposable session/index state and must be rebuildable without loss of durable knowledge.",
+            "Active context is a deterministic budgeted projection, not a second knowledge store: rank by task/stage/scope/path/terms, suppress near-duplicates, explain every selection, and exclude superseded/historical knowledge unless explicitly requested.",
+            "Interactive shell is UX only: every shell action normalizes to the ordinary CLI dispatcher, creates no shell-only project state, and remains reproducible as a conventional command.",
         ],
         "routineRoute": {
             "entry": "work enter",
@@ -48,14 +52,18 @@ def workflow_contract(root: Path) -> dict[str, Any]:
             "explicitExecution": "work complete --no-cache",
             "deepVerification": "Explicit certification, replay or release; not part of routine completion.",
             "contextIndex": "Optional; created only by explicit context operations, reused by briefings when present.",
-            "knowledgePromotion": "Optional; zero new records is valid.",
+            "knowledgePromotion": "Event-driven; zero new records is valid when semantic checkpoint has no required durable candidates.",
+            "knowledgeLifecycle": "Tracked .agent-knowledge JSON is canonical durable state; supersession is relation-derived and append-friendly.",
+            "contextProjection": "Budgeted stage-aware projection from active durable knowledge with compact cues, expand refs and deterministic selection reasons; runtime usage state is disposable.",
+            "interactiveShell": "Optional UX over the same top-level CLI dispatcher; no shell-only state or write path.",
+            "semanticJournal": "Append-only disposable SQLite session journal; cognition checkpoint classifies durable candidates before closeout.",
         },
         "phases": [
             {
                 "id": "orient",
                 "required": True,
                 "purpose": "Recover project/task context and existing durable knowledge before substantial work.",
-                "commands": ["work enter", "handoff resume", "resume", "work status", "knowledge status"],
+                "commands": ["work enter", "handoff resume", "resume", "work status", "knowledge status", "context prepare", "context current", "shell"],
             },
             {
                 "id": "start",
@@ -73,7 +81,7 @@ def workflow_contract(root: Path) -> dict[str, Any]:
                 "id": "work",
                 "required": True,
                 "purpose": "Record meaningful findings, decisions, assumptions, and blockers while changing project artifacts.",
-                "commands": ["cognition", "context"],
+                "commands": ["cognition", "cognition checkpoint", "context"],
             },
             {
                 "id": "verify",
@@ -84,8 +92,8 @@ def workflow_contract(root: Path) -> dict[str, Any]:
             {
                 "id": "knowledge",
                 "required": False,
-                "purpose": "Promote only lasting knowledge and reconcile contradictions explicitly.",
-                "commands": ["knowledge promote", "knowledge validate"],
+                "purpose": "Promote lasting knowledge into Git-tracked files, manage lifecycle/provenance, and reconcile contradictions explicitly.",
+                "commands": ["knowledge promote", "knowledge remember", "knowledge why", "knowledge supersede", "knowledge validate"],
             },
             {
                 "id": "finish",
@@ -110,11 +118,12 @@ def capabilities(root: Path) -> dict[str, Any]:
             "workflow": {"show": True, "validate": True},
             "capabilities": {"json": True},
             "selfUpdate": {"available": True, "latestDiscovery": True, "explicitVersion": True, "checkOnly": True, "freshDownload": True, "identityVerified": True},
-            "work": {"enter": True, "start": True, "align": True, "status": True, "complete": True, "finish": True, "oneActionEntry": True, "handoffEntry": True, "routineEntryFastPath": True, "alignmentPendingOptOut": True, "oneActionCompletion": True, "automaticVerificationReuse": True, "baselineWhenUnverified": True, "taskGapGate": True, "noGapFastPath": True},
-            "cognition": {"decision": True, "finding": True, "assumption": True, "requirement": not profile.development, "openQuestion": not profile.development, "evidence": not profile.development, "blocker": True, "resolveBlocker": True, "status": True},
-            "knowledge": {"promote": True, "validate": True, "status": True, "researchKinds": not profile.development, "softContradictionWarnings": True, "promotionRequired": False},
+            "work": {"enter": True, "start": True, "align": True, "status": True, "complete": True, "finish": True, "oneActionEntry": True, "handoffEntry": True, "routineEntryFastPath": True, "alignmentPendingOptOut": True, "oneActionCompletion": True, "automaticVerificationReuse": True, "baselineWhenUnverified": True, "taskGapGate": True, "noGapFastPath": True, "semanticCloseout": True},
+            "cognition": {"observation": True, "decision": True, "finding": True, "assumption": True, "requirement": not profile.development, "openQuestion": not profile.development, "evidence": not profile.development, "blocker": True, "resolveBlocker": True, "status": True, "checkpoint": True, "appendOnlyJournal": True},
+            "knowledge": {"promote": True, "remember": True, "why": True, "lifecycle": True, "supersede": True, "validate": True, "status": True, "researchKinds": not profile.development, "softContradictionWarnings": True, "promotionRequired": False, "canonicalStore": ".agent-knowledge", "durableSqlite": False},
             "source": {"add": not profile.development, "list": not profile.development},
-            "context": {"available": True, "affected": profile.development},
+            "context": {"available": True, "affected": profile.development, "prepare": True, "current": True, "why": True, "expand": True, "stageAware": True, "hierarchicalScope": True, "budgeted": True, "deduplicate": True, "selectionReasons": True, "usageSqliteDisposable": True},
+            "shell": {"available": True, "interactive": True, "batchCommand": True, "sameDispatcher": True, "shellOnlyState": False},
             "changes": {"status": profile.development, "patch": profile.development, "canonicalUntracked": profile.development, "workspaceLocalMarks": profile.development},
             "verification": {
                 "check": profile.verification_mode == "check",

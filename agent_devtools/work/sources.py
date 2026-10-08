@@ -18,6 +18,7 @@ def add_source(root: Path, *, url: str, title: str, claims: Iterable[str] = (), 
         raise SourceError("source url and title are required")
     record_id = uuid.uuid4().hex
     claim_list = [str(x).strip() for x in claims if str(x).strip()]
+    now = utc_now()
     record = {
         "format": KNOWLEDGE_FORMAT,
         "formatVersion": KNOWLEDGE_VERSION,
@@ -25,15 +26,22 @@ def add_source(root: Path, *, url: str, title: str, claims: Iterable[str] = (), 
         "kind": "source",
         "subject": f"source.{record_id}",
         "status": "active",
+        "lifecycleStatus": "active",
         "statement": title,
         "url": url,
         "title": title,
-        "accessedAtUtc": (accessed_at or utc_now()).strip(),
+        "accessedAtUtc": (accessed_at or now).strip(),
         "claims": claim_list,
+        "scope": [],
+        "confidence": None,
+        "evidenceRefs": [],
+        "sourceSession": {},
         "anchors": [],
         "supersedes": [],
+        "sourceRefs": [],
         "changedFiles": [],
-        "createdAtUtc": utc_now(),
+        "createdAtUtc": now,
+        "updatedAtUtc": now,
     }
     try:
         record = validate_record(record)

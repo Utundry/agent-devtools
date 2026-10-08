@@ -248,6 +248,7 @@ def update_task(
     resolve_blockers: Iterable[str] = (),
     summary: str | None = None,
     next_step: str | None = None,
+    semantic_subjects: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     state = load_task_state(root)
     if state is None:
@@ -280,8 +281,27 @@ def update_task(
         "changedFiles": (_normalize_rel(str(item)) for item in changed_files),
         "verification": verification,
     }
+    semantic_kind = {
+        "decisions": "decision",
+        "findings": "finding",
+        "assumptions": "assumption",
+        "requirements": "requirement",
+        "openQuestions": "question",
+        "evidence": "evidence",
+        "blockers": "blocker",
+        "verification": "verification",
+    }
+    new_events: list[tuple[str, str, str]] = []
+    subjects = semantic_subjects or {}
     for key, values in additions.items():
-        state[key] = _strings([*state.get(key, []), *values])
+        previous = list(state.get(key, []))
+        incoming = list(values)
+        merged = _strings([*previous, *incoming])
+        state[key] = merged
+        if key in semantic_kind:
+            for item in merged:
+                if item not in previous:
+                    new_events.append((semantic_kind[key], item, str(subjects.get(key) or "").strip()))
     resolved = set(_strings(resolve_blockers))
     if resolved:
         state["blockers"] = [item for item in state.get("blockers", []) if item not in resolved]
@@ -290,7 +310,33 @@ def update_task(
     if next_step is not None:
         state["nextStep"] = next_step.strip()
     state["updatedAtUtc"] = utc_now()
+    previous_state = load_task_state(root)
     atomic_json_write(task_state_path(root), state)
+    journal_events = [
+        {"kind": kind, "text": text, "subject": subject, "metadata": {"source": "task.update"}}
+        for kind, text, subject in new_events
+    ]
+    if resolved:
+        previous_blockers = set((previous_state or {}).get("blockers", []))
+        for item in sorted(resolved & previous_blockers):
+            journal_events.append({
+                "kind": "blocker",
+                "text": item,
+                "metadata": {"source": "task.update", "action": "resolved"},
+            })
+    if journal_events:
+        from .journal import SemanticJournalError, append_events
+        try:
+            append_events(
+                root,
+                task_id=str(state.get("taskId") or ""),
+                events=journal_events,
+                created_at_utc=state["updatedAtUtc"],
+            )
+        except SemanticJournalError as exc:
+            if previous_state is not None:
+                atomic_json_write(task_state_path(root), previous_state)
+            raise TaskStateError(f"cannot persist semantic journal; task state rolled back: {exc}") from exc
     return state
 
 

@@ -9,8 +9,10 @@ from .brief import _latest_run, build_brief, render_brief
 from .completion import complete_work
 from .entry import WorkEntryError, enter_work
 from .checkpoint import CheckpointError, create_checkpoint, inspect_checkpoint, restore_checkpoint
-from .state import TaskStateError, align_task, clear_task, complete_task, load_task_state, start_task, update_task
-from .knowledge import KnowledgeError, conflicts as knowledge_conflicts, effective_statuses, knowledge_status, load_records as load_knowledge_records, promote as promote_knowledge, validate_knowledge, soft_contradictions
+from .state import TaskStateError, align_task, clear_task, complete_task, load_task_state, start_task, update_task, utc_now
+from .knowledge import KnowledgeError, conflicts as knowledge_conflicts, effective_lifecycle_statuses, effective_statuses, explain as explain_knowledge, knowledge_status, load_records as load_knowledge_records, promote as promote_knowledge, remember as remember_knowledge, set_lifecycle as set_knowledge_lifecycle, supersede as supersede_knowledge, validate_knowledge, soft_contradictions
+from .journal import SemanticJournalError, append_event, journal_status
+from .semantic_closeout import semantic_checkpoint
 from .verification import VerificationError, latest_verification, record_verification, verification_status, record_research_bundle
 from .sources import SourceError, add_source, list_sources
 from agent_devtools.profiles import ProfileError, load_profile
@@ -104,7 +106,7 @@ def main_verify(root: Path, args: argparse.Namespace) -> int:
 
 def configure_cognition_parser(parser: argparse.ArgumentParser) -> None:
     sub = parser.add_subparsers(dest="cognition_command", required=True)
-    for name in ("decision", "finding", "assumption", "requirement", "open-question", "evidence", "blocker"):
+    for name in ("observation", "decision", "finding", "assumption", "requirement", "open-question", "evidence", "blocker"):
         cmd = sub.add_parser(name, help=f"record one {name} in current task state")
         cmd.add_argument("text")
         if name != "blocker":
@@ -115,39 +117,81 @@ def configure_cognition_parser(parser: argparse.ArgumentParser) -> None:
     resolve.add_argument("--json", action="store_true", dest="json_output")
     status = sub.add_parser("status", help="show compact cognition state")
     status.add_argument("--json", action="store_true", dest="json_output")
+    checkpoint = sub.add_parser("checkpoint", help="classify current semantic journal for closeout without mutating durable knowledge")
+    checkpoint.add_argument("--json", action="store_true", dest="json_output")
 
 
 def main_cognition(root: Path, args: argparse.Namespace) -> int:
     try:
+        if args.cognition_command == "checkpoint":
+            payload = semantic_checkpoint(root)
+            if args.json_output:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+            else:
+                print(
+                    f"Semantic checkpoint: events={payload['events']} · "
+                    f"required={len(payload['requiredPromotions'])} · "
+                    f"advisory={len(payload['advisoryCandidates'])}"
+                )
+                for item in payload["requiredPromotions"]:
+                    print(f"REQUIRED {item['kind']} · {item['subject']} · {item['text']}")
+                for item in payload["advisoryCandidates"]:
+                    print(f"REVIEW {item['kind']} · {item['subject']} · {item['text']}")
+            return 0 if payload["clean"] else 1
+        subject = str(getattr(args, "subject", "") or "").strip()
         if args.cognition_command == "status":
             state = load_task_state(root)
             if state is None:
                 raise TaskStateError("no task state exists; use work start or task start first")
+        elif args.cognition_command == "observation":
+            state = load_task_state(root)
+            if state is None:
+                raise TaskStateError("no task state exists; use work start or task start first")
+            append_event(
+                root,
+                task_id=str(state.get("taskId") or ""),
+                kind="observation",
+                text=args.text,
+                subject=subject,
+                metadata={"source": "cognition.observation"},
+                created_at_utc=utc_now(),
+            )
         else:
             kwargs = {}
-            if args.cognition_command == "decision": kwargs["add_decisions"] = [args.text]
-            elif args.cognition_command == "finding": kwargs["add_findings"] = [args.text]
-            elif args.cognition_command == "assumption": kwargs["add_assumptions"] = [args.text]
-            elif args.cognition_command == "requirement": kwargs["add_requirements"] = [args.text]
-            elif args.cognition_command == "open-question": kwargs["add_open_questions"] = [args.text]
-            elif args.cognition_command == "evidence": kwargs["add_evidence"] = [args.text]
-            elif args.cognition_command == "blocker": kwargs["add_blockers"] = [args.text]
-            elif args.cognition_command == "resolve-blocker": kwargs["resolve_blockers"] = [args.text]
+            subject_key = None
+            if args.cognition_command == "decision":
+                kwargs["add_decisions"], subject_key = [args.text], "decisions"
+            elif args.cognition_command == "finding":
+                kwargs["add_findings"], subject_key = [args.text], "findings"
+            elif args.cognition_command == "assumption":
+                kwargs["add_assumptions"], subject_key = [args.text], "assumptions"
+            elif args.cognition_command == "requirement":
+                kwargs["add_requirements"], subject_key = [args.text], "requirements"
+            elif args.cognition_command == "open-question":
+                kwargs["add_open_questions"], subject_key = [args.text], "openQuestions"
+            elif args.cognition_command == "evidence":
+                kwargs["add_evidence"], subject_key = [args.text], "evidence"
+            elif args.cognition_command == "blocker":
+                kwargs["add_blockers"] = [args.text]
+            elif args.cognition_command == "resolve-blocker":
+                kwargs["resolve_blockers"] = [args.text]
+            if subject and subject_key:
+                kwargs["semantic_subjects"] = {subject_key: subject}
             state = update_task(root, **kwargs)
-    except TaskStateError as exc:
+    except (TaskStateError, SemanticJournalError, KnowledgeError) as exc:
         print(f"agent cognition: {exc}")
         return 2
-    subject = str(getattr(args, "subject", "") or "").strip()
     kind_map = {"open-question": "open_question"}
     knowledge_kind = kind_map.get(args.cognition_command, args.cognition_command)
-    warnings = soft_contradictions(root, kind=knowledge_kind, text=getattr(args, "text", ""), subject=subject) if subject and args.cognition_command not in {"status", "resolve-blocker", "blocker"} else []
+    warnings = soft_contradictions(root, kind=knowledge_kind, text=getattr(args, "text", ""), subject=subject) if subject and args.cognition_command not in {"status", "resolve-blocker", "blocker", "observation"} else []
     payload = {
-        "format": "agent-devtools-cognition", "formatVersion": 2,
+        "format": "agent-devtools-cognition", "formatVersion": 3,
         "taskId": state.get("taskId"), "status": state.get("status"),
         "decisions": state.get("decisions", []), "findings": state.get("findings", []),
         "assumptions": state.get("assumptions", []), "requirements": state.get("requirements", []),
         "openQuestions": state.get("openQuestions", []), "evidence": state.get("evidence", []), "blockers": state.get("blockers", []),
         "nextAction": state.get("nextStep", ""), "subject": subject or None, "knowledgeWarnings": warnings,
+        "journal": journal_status(root, str(state.get("taskId") or "")),
     }
     if args.json_output:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
@@ -311,18 +355,43 @@ def configure_knowledge_parser(parser: argparse.ArgumentParser) -> None:
     promote.add_argument("--subject", required=True, help="stable human-readable knowledge subject")
     promote.add_argument("--anchor", action="append", default=[], help="semantic identity related to this knowledge")
     promote.add_argument("--supersedes", action="append", default=[], help="older durable record id superseded by this record")
+    promote.add_argument("--scope", action="append", default=[], help="durable hierarchical scope; defaults to current task scope")
+    promote.add_argument("--confidence", choices=("low", "medium", "high"))
+    promote.add_argument("--evidence-ref", action="append", default=[], help="durable verification/evidence reference")
     promote.add_argument("--author", help="optional human/team author label; defaults to AGENT_DEVTOOLS_AUTHOR")
     promote.add_argument("--agent-environment", help="optional agent environment label; defaults to AGENT_DEVTOOLS_AGENT_ENVIRONMENT")
     promote.add_argument("--workstation", help="optional workstation label; defaults to AGENT_DEVTOOLS_WORKSTATION")
     promote.add_argument("--source", action="append", default=[], help="tracked research source id supporting this knowledge")
     promote.add_argument("--json", action="store_true", dest="json_output")
+
+    remember = sub.add_parser("remember", help="promote one subject-bearing semantic journal event by event id")
+    remember.add_argument("event_id")
+    remember.add_argument("--scope", action="append", default=[], help="durable scope; defaults to current task scope")
+    remember.add_argument("--confidence", choices=("low", "medium", "high"))
+    remember.add_argument("--evidence-ref", action="append", default=[])
+    remember.add_argument("--json", action="store_true", dest="json_output")
+
+    lifecycle = sub.add_parser("lifecycle", help="mark one durable record active, historical or rejected")
+    lifecycle.add_argument("record_id")
+    lifecycle.add_argument("status", choices=("active", "historical", "rejected"))
+    lifecycle.add_argument("--json", action="store_true", dest="json_output")
+
+    supersede_cmd = sub.add_parser("supersede", help="link an active successor to an older record without rewriting the older file")
+    supersede_cmd.add_argument("older_id")
+    supersede_cmd.add_argument("--by", required=True, dest="newer_id")
+    supersede_cmd.add_argument("--json", action="store_true", dest="json_output")
+
+    why = sub.add_parser("why", help="show durable provenance, lifecycle and relations for one knowledge record")
+    why.add_argument("record_id")
+    why.add_argument("--json", action="store_true", dest="json_output")
+
     listing = sub.add_parser("list", help="list durable tracked project knowledge")
     listing.add_argument("--kind", choices=("decision", "finding", "assumption", "requirement", "open_question", "evidence", "source"))
     listing.add_argument("--subject")
     listing.add_argument("--json", action="store_true", dest="json_output")
     status = sub.add_parser("status", help="show durable knowledge counts and reconciliation health")
     status.add_argument("--json", action="store_true", dest="json_output")
-    validate = sub.add_parser("validate", help="validate durable knowledge and report unresolved decision conflicts")
+    validate = sub.add_parser("validate", help="validate durable knowledge and report conflicts/invalid lifecycle relations")
     validate.add_argument("--json", action="store_true", dest="json_output")
     conflicts_cmd = sub.add_parser("conflicts", help="show conflicting active decisions for the same subject")
     conflicts_cmd.add_argument("--json", action="store_true", dest="json_output")
@@ -332,12 +401,51 @@ def main_knowledge(root: Path, args: argparse.Namespace) -> int:
     try:
         if args.knowledge_command == "promote":
             warnings = soft_contradictions(root, kind=args.kind, text=args.text, subject=args.subject, supersedes=args.supersedes)
-            record = promote_knowledge(root, kind=args.kind, text=args.text, subject=args.subject, anchors=args.anchor, supersedes=args.supersedes, author=args.author, agent_environment=args.agent_environment, workstation=args.workstation, source_refs=args.source)
+            record = promote_knowledge(
+                root,
+                kind=args.kind,
+                text=args.text,
+                subject=args.subject,
+                anchors=args.anchor,
+                supersedes=args.supersedes,
+                author=args.author,
+                agent_environment=args.agent_environment,
+                workstation=args.workstation,
+                source_refs=args.source,
+                scope=args.scope,
+                confidence=args.confidence,
+                evidence_refs=args.evidence_ref,
+            )
             payload = {"status": "promoted", "record": record, "knowledgeWarnings": warnings}
+        elif args.knowledge_command == "remember":
+            record = remember_knowledge(
+                root,
+                event_id=args.event_id,
+                scope=args.scope,
+                confidence=args.confidence,
+                evidence_refs=args.evidence_ref,
+            )
+            payload = {"status": "remembered", "record": record}
+        elif args.knowledge_command == "lifecycle":
+            record = set_knowledge_lifecycle(root, record_id=args.record_id, lifecycle_status=args.status)
+            payload = {"status": "updated", "record": record}
+        elif args.knowledge_command == "supersede":
+            record = supersede_knowledge(root, older_id=args.older_id, newer_id=args.newer_id)
+            payload = {"status": "superseded", "record": record, "olderId": args.older_id}
+        elif args.knowledge_command == "why":
+            payload = explain_knowledge(root, args.record_id)
         elif args.knowledge_command == "list":
             records = load_knowledge_records(root)
             statuses = effective_statuses(records)
-            records = [{**item, "effectiveStatus": statuses[item["id"]]} for item in records]
+            lifecycle = effective_lifecycle_statuses(records)
+            records = [
+                {
+                    **item,
+                    "effectiveStatus": statuses[item["id"]],
+                    "effectiveLifecycleStatus": lifecycle[item["id"]],
+                }
+                for item in records
+            ]
             if args.kind:
                 records = [item for item in records if item["kind"] == args.kind]
             if args.subject:
@@ -356,11 +464,31 @@ def main_knowledge(root: Path, args: argparse.Namespace) -> int:
     if getattr(args, "json_output", False):
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
-        if args.knowledge_command == "promote":
+        if args.knowledge_command in {"promote", "remember", "lifecycle", "supersede"}:
             record = payload["record"]
-            print(f"PROMOTED {record['kind']} {record['id']} · {record['subject']}")
+            print(
+                f"KNOWLEDGE {payload['status'].upper()} {record['kind']} {record['id']} · "
+                f"{record['subject']}"
+            )
             for warning in payload.get("knowledgeWarnings", []):
                 print(f"KNOWLEDGE WARNING {warning['recordId']} · {warning['subject']} · {warning['statement']}")
+        elif args.knowledge_command == "why":
+            record = payload["record"]
+            print(
+                f"{record['id']} {record['kind']} {payload['effectiveLifecycleStatus']} · "
+                f"{record['subject']} · {record['statement']}"
+            )
+            session = payload.get("sourceSession") or {}
+            if session:
+                print("  source session: " + ", ".join(f"{key}={value}" for key, value in session.items()))
+            if payload.get("scope"):
+                print("  scope: " + ", ".join(payload["scope"]))
+            if payload.get("confidence"):
+                print(f"  confidence: {payload['confidence']}")
+            if payload.get("supersedes"):
+                print("  supersedes: " + ", ".join(payload["supersedes"]))
+            if payload.get("supersededBy"):
+                print("  superseded by: " + ", ".join(payload["supersededBy"]))
         elif args.knowledge_command == "status":
             print(
                 f"knowledge: {payload['records']} records · "
@@ -368,17 +496,28 @@ def main_knowledge(root: Path, args: argparse.Namespace) -> int:
                 f"{len(payload['danglingSupersedes'])} dangling · "
                 f"{'PASS' if payload['ok'] else 'RECONCILE'}"
             )
+            print(f"  canonical: {payload['canonicalStore']} · durable SQLite={'yes' if payload['sqliteDurableStore'] else 'no'}")
             if payload["byKind"]:
                 print("  kinds: " + ", ".join(f"{key}={value}" for key, value in payload["byKind"].items()))
+            if payload["byLifecycleStatus"]:
+                print("  lifecycle: " + ", ".join(f"{key}={value}" for key, value in payload["byLifecycleStatus"].items()))
         elif args.knowledge_command == "validate":
-            print(f"knowledge: {payload['records']} records · {len(payload['conflicts'])} conflicts · {'PASS' if payload['ok'] else 'RECONCILE'}")
+            print(
+                f"knowledge: {payload['records']} records · {len(payload['conflicts'])} conflicts · "
+                f"{len(payload.get('invalidSupersedes', []))} invalid supersedes · "
+                f"{len(payload.get('supersessionCycles', []))} cycles · "
+                f"{'PASS' if payload['ok'] else 'RECONCILE'}"
+            )
         elif args.knowledge_command == "conflicts":
             print(f"knowledge conflicts: {payload['count']}")
-            for item in payload['conflicts']:
-                print(f"  {item['subject']}: " + ", ".join(item['recordIds']))
+            for item in payload["conflicts"]:
+                print(f"  {item['subject']}: " + ", ".join(item["recordIds"]))
         else:
-            for item in payload['records']:
-                print(f"{item['id']} {item['kind']} {item.get('effectiveStatus', item['status'])} · {item['subject']} · {item['statement']}")
+            for item in payload["records"]:
+                print(
+                    f"{item['id']} {item['kind']} {item.get('effectiveLifecycleStatus', 'active')} · "
+                    f"{item['subject']} · {item['statement']}"
+                )
     if args.knowledge_command == "validate" and not payload.get("ok", True):
         return 1
     return 0

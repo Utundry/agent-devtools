@@ -7,7 +7,7 @@ from typing import Any, Iterable
 
 from agent_devtools.core.io import atomic_json_write
 from agent_devtools.core.workspace import default_work_root
-from .state import utc_now
+from .state import load_task_state, utc_now
 
 VERIFY_FORMAT = "agent-devtools-verification-log"
 VERIFY_VERSION = 1
@@ -54,8 +54,30 @@ def record_verification(root: Path, *, label: str, status: str, evidence: Iterab
         "verificationKind": "attestation",
         "completedAtUtc": utc_now(),
     }
+    previous_records = list(log["records"])
     log["records"].append(record)
     atomic_json_write(verification_path(root), log)
+    state = load_task_state(root)
+    if state is not None:
+        from .journal import SemanticJournalError, append_event
+        try:
+            append_event(
+                root,
+                task_id=str(state.get("taskId") or ""),
+                kind="verification",
+                text=f"{label}: {status}",
+                metadata={
+                    "source": "verify.record",
+                    "recordId": record["id"],
+                    "evidence": record["evidence"],
+                    "summary": record["summary"],
+                },
+                created_at_utc=record["completedAtUtc"],
+            )
+        except SemanticJournalError as exc:
+            log["records"] = previous_records
+            atomic_json_write(verification_path(root), log)
+            raise VerificationError(f"cannot persist semantic journal; verification record rolled back: {exc}") from exc
     return record
 
 

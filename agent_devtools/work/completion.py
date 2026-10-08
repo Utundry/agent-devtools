@@ -11,6 +11,7 @@ from agent_devtools.check.changes import git_changed_files
 from agent_devtools.profiles import ProfileError, load_profile
 from agent_devtools.check.freshness import validated_check_report
 from .knowledge import validate_knowledge
+from .semantic_closeout import require_semantic_closeout
 from .state import TaskStateError, complete_task, load_task_state, task_alignment_ready
 from .verification import latest_verification
 
@@ -63,6 +64,7 @@ def complete_work(
         raise TaskStateError(
             "cannot complete work while durable knowledge has conflicts or dangling supersedes"
         )
+    semantic = require_semantic_closeout(root)
     try:
         profile = load_profile(root)
     except ProfileError as exc:
@@ -109,6 +111,7 @@ def complete_work(
         "verificationReason": verification_reason,
         "verificationOutput": verification_output,
         "knowledgeValidation": knowledge,
+        "semanticCloseout": semantic,
         "latestVerification": latest,
         "task": task,
     }

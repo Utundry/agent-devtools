@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Context Lifecycle C4 adds `agent shell` as a thin interactive UX over the ordinary top-level CLI dispatcher, with deterministic shortcut normalization, repeatable `--command` batch mode, and no shell-only project state.
+- Context Lifecycle C3 adds deterministic budgeted context projection over Git-tracked durable knowledge: stage-aware ranking, hierarchical scopes, active-status filtering, near-duplicate suppression, compact cues with expand refs, selection explanations, current-task/operational projections, and disposable usage tracking.
+- Context Lifecycle C2 adds Git-canonical durable knowledge lifecycle in `.agent-knowledge`: active/superseded/historical/rejected lifecycle, scope/confidence/evidence/provenance, append-friendly supersession, `knowledge remember/why/lifecycle/supersede`, and no durable SQLite dependency.
+- Context Lifecycle C1 adds an append-only SQLite semantic journal behind existing cognition, a non-mutating `cognition checkpoint`, verification journaling, and semantic closeout that requires durable representation only for explicitly subject-bearing decisions/requirements while keeping local cognition lightweight.
+
 - Release version edits and rollback invalidate only the version module's bytecode, preventing stale version imports during same-length bumps within a timestamp second.
 - Routine completion automatically reuses a current, integrity-checked PASS; otherwise it runs affected checks, includes task-recorded changed files, and establishes a full baseline when changes are unknown or absent. Explicit `--no-cache` still requests execution. Default `workflow show` is compact, with detailed responsibilities under `--details` (workflow v10 / CLI v16).
 - Fail-safe full selection stays full even with catch-all policy rules, and completion revalidates the actual fallback coverage before reusing a report.

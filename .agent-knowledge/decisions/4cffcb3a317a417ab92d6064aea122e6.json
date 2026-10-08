@@ -1,0 +1,28 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "4cffcb3a317a417ab92d6064aea122e6",
+  "kind": "decision",
+  "subject": "context-lifecycle/shell",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Interactive shell is a UX facade over ordinary Agent DevTools CLI/core operations and owns no independent project state, database, or write path.",
+  "scope": [
+    "context-lifecycle"
+  ],
+  "confidence": "high",
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "939ef072-fa28-44b9-987e-116eee2ccdc4",
+    "taskGoal": "Close Context Lifecycle C1-C4 and prepare Agent DevTools 0.9.0",
+    "eventId": "4ccc04b39eef484f8247f01bfe5e9374"
+  },
+  "taskId": "939ef072-fa28-44b9-987e-116eee2ccdc4",
+  "taskGoal": "Close Context Lifecycle C1-C4 and prepare Agent DevTools 0.9.0",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T10:01:53Z",
+  "updatedAtUtc": "2026-10-08T10:01:53Z"
+}
