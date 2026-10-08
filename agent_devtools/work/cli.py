@@ -78,7 +78,7 @@ def configure_verify_parser(parser: argparse.ArgumentParser) -> None:
     research.add_argument(
         "--confirm-all-pass",
         action="store_true",
-        help="after reviewing the guided checklist, explicitly attest that all five research verification dimensions pass",
+        help="compact PASS for all five dimensions; cannot be combined with granular --arithmetic/--sourcing/--assumptions/--knowledge/--unresolved-questions statuses",
     )
     research.add_argument("--evidence", action="append", default=[])
     research.add_argument("--summary", default="")
@@ -550,11 +550,27 @@ def main_cognition(root: Path, args: argparse.Namespace) -> int:
     if args.json_output:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
-        print(f"Cognition: task={payload['taskId']} status={payload['status']}")
-        for key, title in (("decisions","decisions"),("findings","findings"),("assumptions","assumptions"),("requirements","requirements"),("openQuestions","open questions"),("evidence","evidence"),("blockers","blockers")):
-            values = payload[key]
-            if values: print(f"{title}: " + "; ".join(values))
-        if payload["nextAction"]: print(f"next: {payload['nextAction']}")
+        if args.cognition_command == "status":
+            print(f"Cognition: task={payload['taskId']} status={payload['status']}")
+            for key, title in (("decisions","decisions"),("findings","findings"),("assumptions","assumptions"),("requirements","requirements"),("openQuestions","open questions"),("evidence","evidence"),("blockers","blockers")):
+                values = payload[key]
+                if values:
+                    print(f"{title}: " + "; ".join(values))
+        else:
+            label = args.cognition_command
+            if subject:
+                label += f" · {subject}"
+            print(f"Cognition: {label} · recorded")
+            if semantic_text:
+                print("  " + semantic_text.replace("\n", "\n  "))
+            counts = (
+                f"decisions={len(payload['decisions'])} · findings={len(payload['findings'])} · "
+                f"assumptions={len(payload['assumptions'])} · requirements={len(payload['requirements'])} · "
+                f"open={len(payload['openQuestions'])} · evidence={len(payload['evidence'])} · blockers={len(payload['blockers'])}"
+            )
+            print("  state: " + counts)
+        if payload["nextAction"]:
+            print(f"next: {payload['nextAction']}")
         for warning in payload.get("knowledgeWarnings", []):
             print(f"KNOWLEDGE WARNING {warning['recordId']} · {warning['subject']} · {warning['statement']}")
     return 0
@@ -674,7 +690,14 @@ def main_begin(root: Path, args: argparse.Namespace) -> int:
                 for item in projection.get("knowledge", []):
                     print(f"  [{item['kind']}] {item['subject']} · {item['expandRef']}")
             else:
-                print("  durable context: none yet")
+                print("  durable context: none selected")
+            if projection.get("possiblyRelated"):
+                print(
+                    f"  possibly related: {projection['possiblyRelatedRecords']} cue(s) · "
+                    f"~{projection['relatedEstimatedTokens']} separate tokens"
+                )
+                for item in projection["possiblyRelated"]:
+                    print(f"  [? {item['kind']}] {item['subject']} · {item['expandRef']}")
         if payload["recovery"]["mode"] == "active-task-resume":
             print("  interruption recovery: active task resumed from project state")
             print("  project task state is authoritative; do not reconstruct progress from chat memory")

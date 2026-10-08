@@ -323,6 +323,54 @@ def _score_record(
     return score, reasons, matched
 
 
+def _possibly_related(
+    record: dict[str, Any],
+    *,
+    query: str,
+    task_id: str,
+) -> tuple[bool, list[str]]:
+    """Return a bounded cross-task relevance hint without weakening primary selection."""
+    query_tokens = _tokens(query)
+    if not query_tokens:
+        return False, []
+    session = record.get("sourceSession") if isinstance(record.get("sourceSession"), dict) else {}
+    source_task_id = str(session.get("taskId") or "")
+    if not source_task_id or not task_id or source_task_id == task_id:
+        return False, []
+    source_goal_tokens = _tokens(str(session.get("taskGoal") or ""))
+    if not source_goal_tokens:
+        return False, []
+    source_overlap = sorted(query_tokens & source_goal_tokens)
+    record_text = " ".join([
+        str(record.get("subject") or ""),
+        str(record.get("statement") or ""),
+        " ".join(str(x) for x in record.get("scope", [])),
+        " ".join(str(x) for x in record.get("anchors", [])),
+    ])
+    record_overlap = sorted(query_tokens & _tokens(record_text))
+    related = len(source_overlap) >= 2 or (bool(source_overlap) and bool(record_overlap))
+    if not related:
+        return False, []
+    reasons = ["related:source-task-goal:" + ",".join(source_overlap[:5])]
+    if record_overlap:
+        reasons.append("related:record:" + ",".join(record_overlap[:5]))
+    return True, reasons
+
+
+def _related_cue(item: dict[str, Any]) -> dict[str, Any]:
+    record = item["record"]
+    statement = str(record.get("statement") or "")
+    return {
+        "id": record["id"],
+        "kind": record["kind"],
+        "subject": record["subject"],
+        "reason": list(item["reason"]),
+        "summary": statement if len(statement) <= 120 else statement[:117].rstrip() + "...",
+        "expandRef": f"knowledge:{record['id']}",
+        "mode": "related-cue",
+    }
+
+
 def _jaccard(left: dict[str, Any], right: dict[str, Any]) -> float:
     a = _tokens(str(left.get("subject") or "") + " " + str(left.get("statement") or ""))
     b = _tokens(str(right.get("subject") or "") + " " + str(right.get("statement") or ""))
@@ -438,6 +486,7 @@ def prepare_context(
     lifecycle = effective_lifecycle_statuses(records)
     semantic_status = effective_statuses(records)
     candidates: list[dict[str, Any]] = []
+    related_candidates: list[dict[str, Any]] = []
     lifecycle_omitted = 0
     semantic_omitted = 0
     relevance_omitted = 0
@@ -468,7 +517,16 @@ def prepare_context(
             task_id=task_id,
         )
         if not matched:
-            relevance_omitted += 1
+            related, related_reasons = _possibly_related(record, query=query, task_id=task_id)
+            if related:
+                related_candidates.append({
+                    "record": record,
+                    "score": score,
+                    "reason": related_reasons,
+                    "lifecycle": life,
+                })
+            else:
+                relevance_omitted += 1
             continue
         candidates.append({"record": record, "score": score, "reason": reasons, "lifecycle": life})
     candidates.sort(key=lambda item: (-float(item["score"]), str(item["record"]["id"])))
@@ -498,6 +556,21 @@ def prepare_context(
         selected.append(projected)
         estimated += cost
 
+    related_candidates.sort(
+        key=lambda item: (-len(item["reason"]), -float(item["score"]), str(item["record"]["id"]))
+    )
+    possibly_related: list[dict[str, Any]] = []
+    related_estimated = 0
+    for item in related_candidates:
+        if len(possibly_related) >= 3:
+            break
+        projected = _related_cue(item)
+        cost = _estimate_tokens(projected)
+        if related_estimated + cost > 240:
+            continue
+        possibly_related.append(projected)
+        related_estimated += cost
+
     payload = {
         "format": PROJECTION_FORMAT,
         "formatVersion": PROJECTION_VERSION,
@@ -511,6 +584,9 @@ def prepare_context(
         "estimatedTokens": estimated,
         "candidateRecords": len(candidates),
         "selectedRecords": len(selected),
+        "possiblyRelatedRecords": len(possibly_related),
+        "relatedEstimatedTokens": related_estimated,
+        "possiblyRelated": possibly_related,
         "omitted": {
             "lifecycle": lifecycle_omitted,
             "semanticStatus": semantic_omitted,

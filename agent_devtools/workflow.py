@@ -7,7 +7,7 @@ from typing import Any
 from . import __version__
 from .profiles import load_profile
 
-CLI_CONTRACT_VERSION = 30
+CLI_CONTRACT_VERSION = 31
 WORKFLOW_CONTRACT_VERSION = 21
 
 
@@ -41,7 +41,7 @@ def workflow_contract(root: Path) -> dict[str, Any]:
             "Alignment must be explicit in state, not necessarily visible as friction to the user. A newly created high-level work enter uses the routine no-gap fast path by default; use --alignment-pending when material-gap assessment is genuinely needed. Never ask a question merely to satisfy the gate.",
             "Meaningful cognition is append-only in the local semantic journal. Semantic text accepts positional or --text forms. Add --subject at capture time when reuse is intended; checkpoint is the routine authority that classifies required, advisory and session-only semantics before closeout.",
             "Durable project knowledge is canonical in tracked .agent-knowledge JSON files. SQLite remains disposable session/index state and must be rebuildable without loss of durable knowledge.",
-            "Active context is a deterministic budgeted projection, not a second knowledge store: rank by task/stage/scope/path/terms, suppress near-duplicates, explain every selection, and exclude superseded/historical knowledge unless explicitly requested.",
+            "Active context is a deterministic budgeted projection, not a second knowledge store: rank by task/stage/scope/path/terms, suppress near-duplicates, explain every primary selection, expose only a bounded separate possibly-related cue channel for weaker cross-task relevance, and exclude superseded/historical knowledge unless explicitly requested.",
             "Interactive shell is UX only: every shell action normalizes to the ordinary CLI dispatcher, creates no shell-only project state, and remains reproducible as a conventional command.",
             "External-tool failure is bounded: after two equivalent failures of the same tool/action, stop retrying. Optional work must fallback or skip while preserving completed progress; mandatory work becomes an ordinary blocker until recovered.",
             "Transport/chat/SSE interruption is recovered from project state, not conversation memory: on the next usable turn run begin without --goal, resume the active task, and continue from its returned next safe action.",
@@ -61,7 +61,7 @@ def workflow_contract(root: Path) -> dict[str, Any]:
             "contextIndex": "Optional; created only by explicit context operations, reused by briefings when present.",
             "knowledgePromotion": "Event-driven; checkpoint is read-only by default and prints executable next actions. checkpoint --promote-required is the explicit convenience path for required decisions/requirements only. Zero new records is valid when no durable candidate exists.",
             "knowledgeLifecycle": "Tracked .agent-knowledge JSON is canonical durable state; supersession is relation-derived and append-friendly.",
-            "contextProjection": "Budgeted stage-aware projection from active durable knowledge with compact cues, expand refs and deterministic selection reasons; runtime usage state is disposable.",
+            "contextProjection": "Budgeted stage-aware projection from active durable knowledge with compact primary cues plus a separately bounded possibly-related cross-task cue channel; runtime usage state is disposable.",
             "interactiveShell": "Optional UX over the same top-level CLI dispatcher; no shell-only state or write path.",
             "semanticJournal": "Append-only disposable SQLite session journal; cognition checkpoint classifies durable candidates before closeout.",
             "semanticCapture": "Use cognition with positional text, --text, --stdin or --from-file; add --subject only for reusable semantics, then let checkpoint classify required/advisory/session-only outcomes.",
@@ -139,10 +139,10 @@ def capabilities(root: Path) -> dict[str, Any]:
             "selfUpdate": {"available": True, "latestDiscovery": True, "explicitVersion": True, "checkOnly": True, "freshDownload": True, "identityVerified": True},
             "begin": {"available": True, "canonicalRoutineEntry": True, "usesWorkEnter": True, "durableContextProjection": True, "knowledgeHealth": True, "interruptionResume": True, "resumeWithoutGoal": True, "profileHintCompatibility": True, "conversationMemoryAuthoritative": False, "projectStateAuthoritative": True, "newStateModel": False},
             "work": {"enter": True, "start": True, "align": True, "status": True, "complete": True, "finish": True, "report": True, "reportReadOnly": True, "oneActionEntry": True, "handoffEntry": True, "routineEntryFastPath": True, "alignmentPendingOptOut": True, "oneActionCompletion": True, "automaticVerificationReuse": True, "baselineWhenUnverified": True, "taskGapGate": True, "noGapFastPath": True, "semanticCloseout": True},
-            "cognition": {"observation": True, "decision": True, "finding": True, "assumption": True, "requirement": not profile.development, "openQuestion": not profile.development, "evidence": not profile.development, "blocker": True, "resolveBlocker": True, "toolFailure": True, "toolFailureRetryCeiling": 2, "toolFailureOptionalNonBlocking": True, "toolFailureMandatoryBlocks": True, "status": True, "checkpoint": True, "checkpointPromoteRequired": True, "textOptionAlias": True, "stdin": True, "fromFile": True, "utf8BulkCapture": True, "naturalGuessHints": True, "checkpointSessionOnlyClassification": True, "appendOnlyJournal": True, "possibleStaleCognition": True},
+            "cognition": {"observation": True, "decision": True, "finding": True, "assumption": True, "requirement": not profile.development, "openQuestion": not profile.development, "evidence": not profile.development, "blocker": True, "resolveBlocker": True, "toolFailure": True, "toolFailureRetryCeiling": 2, "toolFailureOptionalNonBlocking": True, "toolFailureMandatoryBlocks": True, "status": True, "checkpoint": True, "checkpointPromoteRequired": True, "textOptionAlias": True, "stdin": True, "fromFile": True, "utf8BulkCapture": True, "naturalGuessHints": True, "checkpointSessionOnlyClassification": True, "appendOnlyJournal": True, "possibleStaleCognition": True, "compactHumanOutput": True},
             "knowledge": {"promote": True, "remember": True, "why": True, "lifecycle": True, "supersede": True, "validate": True, "status": True, "researchKinds": not profile.development, "softContradictionWarnings": True, "promotionRequired": False, "routineDirectPromote": False, "checkpointAuthority": True, "canonicalStore": ".agent-knowledge", "durableSqlite": False},
             "source": {"add": not profile.development, "list": not profile.development, "taskSessionProvenance": not profile.development},
-            "context": {"available": True, "affected": profile.development, "prepare": True, "current": True, "why": True, "expand": True, "stageAware": True, "hierarchicalScope": True, "budgeted": True, "deduplicate": True, "selectionReasons": True, "crossTaskLexicalIsolation": True, "usageSqliteDisposable": True},
+            "context": {"available": True, "affected": profile.development, "prepare": True, "current": True, "why": True, "expand": True, "stageAware": True, "hierarchicalScope": True, "budgeted": True, "deduplicate": True, "selectionReasons": True, "crossTaskLexicalIsolation": True, "possiblyRelatedCues": True, "possiblyRelatedSeparateBudget": True, "usageSqliteDisposable": True},
             "shell": {"available": True, "interactive": True, "batchCommand": True, "sameDispatcher": True, "shellOnlyState": False},
             "changes": {"status": profile.development, "patch": profile.development, "canonicalUntracked": profile.development, "workspaceLocalMarks": profile.development},
             "verification": {
@@ -171,6 +171,11 @@ def capabilities(root: Path) -> dict[str, Any]:
             "checkpoint": True,
             "workspaceSnapshot": {"create": not profile.development, "inspect": True, "restore": not profile.development},
             "release": profile.development,
+        },
+        "exitCodeSemantics": {
+            "0": "successful or clean action",
+            "1": "expected actionable-gate or non-clean review state for commands that document it, for example cognition checkpoint with required promotions; not necessarily execution failure",
+            "2": "invalid invocation, violated command contract, or execution-contract failure",
         },
         "normalSurface": {
             "profile": profile.profile_id,

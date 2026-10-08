@@ -76,7 +76,7 @@ class VerificationIntegrityTests(unittest.TestCase):
     def test_capabilities(self):
         tmp,root,_=self.make_root()
         try:
-            caps=capabilities(root); self.assertEqual(30,CLI_CONTRACT_VERSION); self.assertEqual(21,WORKFLOW_CONTRACT_VERSION)
+            caps=capabilities(root); self.assertGreaterEqual(CLI_CONTRACT_VERSION,30); self.assertEqual(21,WORKFLOW_CONTRACT_VERSION)
             self.assertTrue(caps['commands']['verification']['researchStrongWarningGate']); self.assertTrue(caps['commands']['cognition']['possibleStaleCognition'])
             self.assertTrue(caps['commands']['verification']['granularAttestationEscapeHatch'])
         finally: tmp.cleanup()

@@ -104,9 +104,9 @@ python devtools/agent/agent.py cognition checkpoint --promote-required
 python devtools/agent/agent.py work complete
 ```
 
-`begin` is not a second workflow engine. It delegates to `work enter`, then immediately builds the durable C3 context projection and reports knowledge health. `cognition checkpoint` stays read-only by default; `--promote-required` is an explicit convenience path that promotes only required subject-bearing decisions/requirements through the ordinary `knowledge remember` contract. Advisory findings/assumptions/questions are never auto-promoted.
+`begin` is not a second workflow engine. It delegates to `work enter`, then immediately builds the durable C3 context projection and reports knowledge health. Primary durable context keeps the strict relevance gate and token budget; weaker but still deterministic cross-task matches may appear separately as at most three `possibly related` cues and do not consume the primary context budget. `cognition checkpoint` stays read-only by default; `--promote-required` is an explicit convenience path that promotes only required subject-bearing decisions/requirements through the ordinary `knowledge remember` contract. Advisory findings/assumptions/questions are never auto-promoted.
 
-Semantic capture is intentionally forgiving without adding a second contract: both `cognition finding "..."` and `cognition finding --text "..."` map to the same event primitive. A natural but invalid guess such as `cognition add` stays invalid and receives an actionable hint to choose a semantic type; it is not added as an alias or second ingestion API. Add `--subject` when the statement is intended to survive as reusable project knowledge. Subjectless cognition remains session-only, and checkpoint explicitly reports when **no promotion is needed**. Routine agents should not call `knowledge promote` before checkpoint; that command remains an expert primitive for exact/manual workflows.
+Semantic capture is intentionally forgiving without adding a second contract: both `cognition finding "..."` and `cognition finding --text "..."` map to the same event primitive. Human cognition output is compact by default (the newly recorded item plus state counts); use `--json` when the complete machine-readable task projection is needed. A natural but invalid guess such as `cognition add` stays invalid and receives an actionable hint to choose a semantic type; it is not added as an alias or second ingestion API. Add `--subject` when the statement is intended to survive as reusable project knowledge. Subjectless cognition remains session-only, and checkpoint explicitly reports when **no promotion is needed**. Routine agents should not call `knowledge promote` before checkpoint; that command remains an expert primitive for exact/manual workflows.
 
 `workflow validate` checks every command advertised by the workflow contract against the real argparse command tree. Machine-readable capabilities also expose `cliCommands`, derived from that same parser rather than from a second command registry.
 
@@ -143,9 +143,14 @@ For research, verification is similarly guided and this is the canonical route (
 python devtools/agent/agent.py verify research
 # review the five dimensions shown by the tray; when all genuinely pass:
 python devtools/agent/agent.py verify research --confirm-all-pass --summary "..."
+# compact --confirm-all-pass is mutually exclusive with the five granular status flags
 ```
 
 If any research dimension is `warn` or `fail`, use the granular statuses shown by `verify research --json` instead of the compact PASS attestation. Research verification also surfaces current task assumptions and open questions as contextual warnings: they do not automatically block granular PASS, but `unresolved_questions=pass` means any remaining questions were deliberately retained and judged non-blocking. A subject-bearing open question is additionally flagged as potentially material so the agent explicitly checks whether it could change the recommendation or architecture. If the current task has neither recorded source provenance nor evidence, verification also warns before `sourcing=pass`. R6.3 treats missing provenance, potentially material subject-bearing questions, and possible stale cognition as **strong contextual warnings**: while any are present, `--confirm-all-pass` is rejected and the agent must use the existing granular dimension-by-dimension attestation. This does not force a dimension to `warn` or `fail`; it forces the potentially controversial `pass` to be explicit. Subject-bearing assumptions/questions that reuse or refine an earlier subject with different text are surfaced as possible stale cognition; the runtime never silently deletes or supersedes them.
+
+### Exit-code semantics
+
+Agent DevTools exit codes are semantic command results, not a universal boolean success flag. `0` is successful/clean. `1` may be an expected actionable gate or review state when the command documents it (for example `cognition checkpoint` with required promotions); automation should inspect the command contract/output instead of treating every `1` as a crash. `2` denotes an invalid invocation, violated command contract, or execution-contract failure.
 
 ### Failure recovery and progress guarantee
 

@@ -1,0 +1,26 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "8ba973b557f04eb186fafbb608ea354a",
+  "kind": "decision",
+  "subject": "cli/semantic-exit-code-documentation",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Agent DevTools must document semantic exit-code classes: rc=0 is successful/clean action, rc=1 may be an expected actionable gate or non-clean review state such as cognition checkpoint requiring promotion, and rc=2 represents invalid invocation or execution-contract failure.",
+  "scope": [],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "5a1d300a-2e74-4e11-bdb8-0674040177be",
+    "taskGoal": "Implement R6.4 Context Recall & CLI Friction from 0.15.3 dogfood: bounded possibly-related durable cues, compact cognition output, research help discoverability, and semantic exit-code documentation.",
+    "eventId": "223eb84cdb1341078f8d8ddccb60c267"
+  },
+  "taskId": "5a1d300a-2e74-4e11-bdb8-0674040177be",
+  "taskGoal": "Implement R6.4 Context Recall & CLI Friction from 0.15.3 dogfood: bounded possibly-related durable cues, compact cognition output, research help discoverability, and semantic exit-code documentation.",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T20:48:19Z",
+  "updatedAtUtc": "2026-10-08T20:48:19Z"
+}

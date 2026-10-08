@@ -1,0 +1,26 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "a4fd6602659245178e5acac5e4db819f",
+  "kind": "decision",
+  "subject": "context/possibly-related-cues",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Cross-task isolation must not become cross-task amnesia. Durable knowledge that is below the primary selection gate but has deterministic task-goal/domain overlap should be surfaced as a bounded possibly-related cue rather than either consuming the primary context budget or disappearing completely.",
+  "scope": [],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "5a1d300a-2e74-4e11-bdb8-0674040177be",
+    "taskGoal": "Implement R6.4 Context Recall & CLI Friction from 0.15.3 dogfood: bounded possibly-related durable cues, compact cognition output, research help discoverability, and semantic exit-code documentation.",
+    "eventId": "0d7c93601ce048279dba9f8b77155895"
+  },
+  "taskId": "5a1d300a-2e74-4e11-bdb8-0674040177be",
+  "taskGoal": "Implement R6.4 Context Recall & CLI Friction from 0.15.3 dogfood: bounded possibly-related durable cues, compact cognition output, research help discoverability, and semantic exit-code documentation.",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T20:48:19Z",
+  "updatedAtUtc": "2026-10-08T20:48:19Z"
+}

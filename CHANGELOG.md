@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Stage R6.4 adds bounded cross-task recall without weakening R6.2 isolation: durable records below the primary selection gate may surface as at most three `possiblyRelated` cues when deterministic source-task-goal/domain overlap exists. These cues use a separate mini-budget and never consume the primary C3 token budget.
+- Routine cognition human output is now compact: the newly recorded semantic item plus task-state counts replaces full accumulated-history reprinting; `cognition status` and `--json` retain complete inspection paths.
+- Research verification help now states the compact/granular mutual exclusion directly, and capabilities/workflow document semantic exit-code classes (`0` clean success, documented `1` actionable gate/review state, `2` invalid/contract failure). CLI contract advances to v31; workflow contract remains v21 and no new routine command is introduced.
+
 - Stage R6.3 strengthens research attestation integrity: strong contextual warnings (`missing-source-provenance`, `potentially-material-open-questions`, and `possible-stale-cognition`) now disable compact `verify research --confirm-all-pass`; the existing granular five-dimension attestation remains available so an agent can explicitly retain a dimension as pass/warn/fail.
 - Task-local subject-bearing assumptions/questions now expose a deterministic possible-stale signal when later cognition with different text reuses the same subject or a hierarchical refinement such as `foo -> foo-16gb`; checkpoint and research verification surface the signal without auto-deleting, resolving, or superseding cognition.
 - Same-command `--evidence` participates in source-awareness so compact PASS is not rejected merely because evidence is being supplied with the attestation. CLI contract advances to v30; workflow contract remains v21 and the routine command surface is unchanged.

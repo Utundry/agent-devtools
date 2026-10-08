@@ -1,0 +1,26 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "6388623222604d3e8e1f8d2c04ab0b72",
+  "kind": "decision",
+  "subject": "cli/cognition-compact-human-output",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Routine cognition human output should report the newly recorded semantic item plus compact state counts instead of reprinting the entire accumulated task cognition on every call. Machine-readable --json remains the complete projection.",
+  "scope": [],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "5a1d300a-2e74-4e11-bdb8-0674040177be",
+    "taskGoal": "Implement R6.4 Context Recall & CLI Friction from 0.15.3 dogfood: bounded possibly-related durable cues, compact cognition output, research help discoverability, and semantic exit-code documentation.",
+    "eventId": "f233088a26e146ea813ea87e0877d41f"
+  },
+  "taskId": "5a1d300a-2e74-4e11-bdb8-0674040177be",
+  "taskGoal": "Implement R6.4 Context Recall & CLI Friction from 0.15.3 dogfood: bounded possibly-related durable cues, compact cognition output, research help discoverability, and semantic exit-code documentation.",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T20:48:19Z",
+  "updatedAtUtc": "2026-10-08T20:48:19Z"
+}

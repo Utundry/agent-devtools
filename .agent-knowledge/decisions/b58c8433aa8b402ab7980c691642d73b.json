@@ -1,0 +1,26 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "b58c8433aa8b402ab7980c691642d73b",
+  "kind": "decision",
+  "subject": "cli/research-verification-discoverability",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Research verification help must state directly that --confirm-all-pass cannot be combined with granular dimension statuses; agents should not need a failed invocation to discover this contract.",
+  "scope": [],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "5a1d300a-2e74-4e11-bdb8-0674040177be",
+    "taskGoal": "Implement R6.4 Context Recall & CLI Friction from 0.15.3 dogfood: bounded possibly-related durable cues, compact cognition output, research help discoverability, and semantic exit-code documentation.",
+    "eventId": "9ca0a921fc094c04931c13ae1e231fee"
+  },
+  "taskId": "5a1d300a-2e74-4e11-bdb8-0674040177be",
+  "taskGoal": "Implement R6.4 Context Recall & CLI Friction from 0.15.3 dogfood: bounded possibly-related durable cues, compact cognition output, research help discoverability, and semantic exit-code documentation.",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T20:48:19Z",
+  "updatedAtUtc": "2026-10-08T20:48:19Z"
+}
