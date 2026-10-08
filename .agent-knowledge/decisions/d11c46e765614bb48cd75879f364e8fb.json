@@ -1,0 +1,28 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "d11c46e765614bb48cd75879f364e8fb",
+  "kind": "decision",
+  "subject": "work-report/architecture",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Add work report only as a read-only projection over existing task, verification, knowledge and journal state; it is not a new durable artifact or mandatory lifecycle step.",
+  "scope": [
+    "agent-devtools/bulk-capture-report"
+  ],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "6fdb2595-e564-4700-9d77-c03b7ed10790",
+    "taskGoal": "Implement Stage R6 Bulk Semantic Capture and Final Work Report",
+    "eventId": "dd1a8d95c3234952a4a1431a9020f0f2"
+  },
+  "taskId": "6fdb2595-e564-4700-9d77-c03b7ed10790",
+  "taskGoal": "Implement Stage R6 Bulk Semantic Capture and Final Work Report",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T17:27:06Z",
+  "updatedAtUtc": "2026-10-08T17:27:06Z"
+}

@@ -7,8 +7,8 @@ from typing import Any
 from . import __version__
 from .profiles import load_profile
 
-CLI_CONTRACT_VERSION = 26
-WORKFLOW_CONTRACT_VERSION = 20
+CLI_CONTRACT_VERSION = 27
+WORKFLOW_CONTRACT_VERSION = 21
 
 
 def workflow_contract(root: Path) -> dict[str, Any]:
@@ -64,7 +64,8 @@ def workflow_contract(root: Path) -> dict[str, Any]:
             "contextProjection": "Budgeted stage-aware projection from active durable knowledge with compact cues, expand refs and deterministic selection reasons; runtime usage state is disposable.",
             "interactiveShell": "Optional UX over the same top-level CLI dispatcher; no shell-only state or write path.",
             "semanticJournal": "Append-only disposable SQLite session journal; cognition checkpoint classifies durable candidates before closeout.",
-            "semanticCapture": "Use cognition with positional text or --text; add --subject only for reusable semantics, then let checkpoint classify required/advisory/session-only outcomes.",
+            "semanticCapture": "Use cognition with positional text, --text, --stdin or --from-file; add --subject only for reusable semantics, then let checkpoint classify required/advisory/session-only outcomes.",
+            "finalReport": "work report",
             "directKnowledgePromotion": "expert primitive only; routine agents do not call knowledge promote before checkpoint classification.",
             "researchVerification": "Research routine uses verify research guided review, then explicit compact or granular attestation.",
             "toolFailureRecovery": "After two equivalent failures of the same tool/action, stop retrying: optional work falls back or skips without blocking; mandatory work becomes an ordinary blocker. Preserve completed cognition and continue from the nearest safe lifecycle step.",
@@ -137,8 +138,8 @@ def capabilities(root: Path) -> dict[str, Any]:
             "capabilities": {"json": True},
             "selfUpdate": {"available": True, "latestDiscovery": True, "explicitVersion": True, "checkOnly": True, "freshDownload": True, "identityVerified": True},
             "begin": {"available": True, "canonicalRoutineEntry": True, "usesWorkEnter": True, "durableContextProjection": True, "knowledgeHealth": True, "interruptionResume": True, "resumeWithoutGoal": True, "profileHintCompatibility": True, "conversationMemoryAuthoritative": False, "projectStateAuthoritative": True, "newStateModel": False},
-            "work": {"enter": True, "start": True, "align": True, "status": True, "complete": True, "finish": True, "oneActionEntry": True, "handoffEntry": True, "routineEntryFastPath": True, "alignmentPendingOptOut": True, "oneActionCompletion": True, "automaticVerificationReuse": True, "baselineWhenUnverified": True, "taskGapGate": True, "noGapFastPath": True, "semanticCloseout": True},
-            "cognition": {"observation": True, "decision": True, "finding": True, "assumption": True, "requirement": not profile.development, "openQuestion": not profile.development, "evidence": not profile.development, "blocker": True, "resolveBlocker": True, "toolFailure": True, "toolFailureRetryCeiling": 2, "toolFailureOptionalNonBlocking": True, "toolFailureMandatoryBlocks": True, "status": True, "checkpoint": True, "checkpointPromoteRequired": True, "textOptionAlias": True, "checkpointSessionOnlyClassification": True, "appendOnlyJournal": True},
+            "work": {"enter": True, "start": True, "align": True, "status": True, "complete": True, "finish": True, "report": True, "reportReadOnly": True, "oneActionEntry": True, "handoffEntry": True, "routineEntryFastPath": True, "alignmentPendingOptOut": True, "oneActionCompletion": True, "automaticVerificationReuse": True, "baselineWhenUnverified": True, "taskGapGate": True, "noGapFastPath": True, "semanticCloseout": True},
+            "cognition": {"observation": True, "decision": True, "finding": True, "assumption": True, "requirement": not profile.development, "openQuestion": not profile.development, "evidence": not profile.development, "blocker": True, "resolveBlocker": True, "toolFailure": True, "toolFailureRetryCeiling": 2, "toolFailureOptionalNonBlocking": True, "toolFailureMandatoryBlocks": True, "status": True, "checkpoint": True, "checkpointPromoteRequired": True, "textOptionAlias": True, "stdin": True, "fromFile": True, "utf8BulkCapture": True, "checkpointSessionOnlyClassification": True, "appendOnlyJournal": True},
             "knowledge": {"promote": True, "remember": True, "why": True, "lifecycle": True, "supersede": True, "validate": True, "status": True, "researchKinds": not profile.development, "softContradictionWarnings": True, "promotionRequired": False, "routineDirectPromote": False, "checkpointAuthority": True, "canonicalStore": ".agent-knowledge", "durableSqlite": False},
             "source": {"add": not profile.development, "list": not profile.development},
             "context": {"available": True, "affected": profile.development, "prepare": True, "current": True, "why": True, "expand": True, "stageAware": True, "hierarchicalScope": True, "budgeted": True, "deduplicate": True, "selectionReasons": True, "usageSqliteDisposable": True},
@@ -174,6 +175,7 @@ def capabilities(root: Path) -> dict[str, Any]:
                 else ["agent begin", "agent cognition", "agent verify", "agent cognition checkpoint", "agent work complete"]
             ),
             "advancedPrimitives": ["agent task update", "agent work enter", "agent work finish", "agent knowledge promote", "agent checkpoint create", "agent resume"],
+            "optionalReadOnly": ["agent work report"],
             "advancedPrimitivesAreRoutine": False,
         },
         "tracked": ["AGENTS.md", "agent-tools.json", "agent-check.policy.json", ".agent-knowledge/"],

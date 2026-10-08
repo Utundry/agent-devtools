@@ -1,0 +1,28 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "0b5fa5fdc5394ccbb9e5a860c2f17354",
+  "kind": "decision",
+  "subject": "bulk-capture/architecture",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Add --stdin and --from-file as exactly-one text sources on the existing cognition primitive; do not create a separate ingestion API.",
+  "scope": [
+    "agent-devtools/bulk-capture-report"
+  ],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "6fdb2595-e564-4700-9d77-c03b7ed10790",
+    "taskGoal": "Implement Stage R6 Bulk Semantic Capture and Final Work Report",
+    "eventId": "91d7c8c768994b818664b2714dffdcea"
+  },
+  "taskId": "6fdb2595-e564-4700-9d77-c03b7ed10790",
+  "taskGoal": "Implement Stage R6 Bulk Semantic Capture and Final Work Report",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T17:27:06Z",
+  "updatedAtUtc": "2026-10-08T17:27:06Z"
+}

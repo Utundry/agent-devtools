@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Stage R6 adds UTF-8 bulk semantic capture through `cognition ... --stdin` and `--from-file`, with an exactly-one-source contract shared with positional text and `--text`; multiline/Unicode research notes no longer need shell-escaping or temporary Python wrappers.
+- Adds `work report`, a read-only consolidated projection of task outcome, DoD, cognition, latest verification, knowledge health and semantic-journal status. Report generation does not mutate task state and remains optional outside the canonical lifecycle.
+- Workflow/capabilities advertise bulk capture and the optional final report without expanding the R5 normal surface.
+
 - Stage R5 introduces a canonical agent surface: routine work is explicitly limited to `begin`, `cognition`, profile-appropriate `verify`, `cognition checkpoint`, and `work complete`; lower-level task/work/knowledge/recovery commands are marked advanced rather than peer alternatives.
 - `begin` advertises the normal surface in human and JSON output and accepts a matching `--profile` compatibility hint. `task update` accepts obvious aliases (`--add-finding`, `--add-assumption`, `--add-decision`, `--done`) while remaining advanced.
 - Workflow/capabilities expose normal-vs-advanced command classification so weaker agents can avoid CLI exploration and guessed primitive syntax.

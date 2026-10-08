@@ -179,6 +179,8 @@ def configure_cognition_parser(parser: argparse.ArgumentParser) -> None:
         cmd = sub.add_parser(name, help=f"record one {name} in current task state")
         cmd.add_argument("text", nargs="?", help="semantic text (canonical positional form)")
         cmd.add_argument("--text", dest="text_option", help="natural alias for the positional semantic text")
+        cmd.add_argument("--stdin", action="store_true", dest="stdin_input", help="read UTF-8 semantic text from stdin")
+        cmd.add_argument("--from-file", type=Path, help="read UTF-8 semantic text from a file; relative paths resolve from the project root")
         if name != "blocker":
             cmd.add_argument("--subject", help="optional durable-knowledge subject for reusable/durable classification")
         cmd.add_argument("--json", action="store_true", dest="json_output")
@@ -201,16 +203,43 @@ def configure_cognition_parser(parser: argparse.ArgumentParser) -> None:
     tool_failure.add_argument("--json", action="store_true", dest="json_output")
 
 
-def _cognition_text(args: argparse.Namespace) -> str:
-    positional = str(getattr(args, "text", "") or "").strip()
-    optional = str(getattr(args, "text_option", "") or "").strip()
-    if positional and optional:
-        raise TaskStateError("provide cognition text either positionally or with --text, not both")
-    value = positional or optional
-    if not value:
-        raise TaskStateError("cognition text is required (positional text or --text)")
+def _cognition_text(root: Path, args: argparse.Namespace) -> str:
+    positional = str(getattr(args, "text", "") or "")
+    optional = str(getattr(args, "text_option", "") or "")
+    stdin_requested = bool(getattr(args, "stdin_input", False))
+    from_file = getattr(args, "from_file", None)
+    sources = [
+        bool(positional.strip()),
+        bool(optional.strip()),
+        stdin_requested,
+        from_file is not None,
+    ]
+    if sum(1 for selected in sources if selected) != 1:
+        raise TaskStateError(
+            "provide cognition text either positionally or with --text, or use exactly one of --stdin/--from-file; choose exactly one source"
+        )
+    if stdin_requested:
+        value = sys.stdin.read()
+    elif from_file is not None:
+        path = Path(from_file).expanduser()
+        if not path.is_absolute():
+            path = root / path
+        path = path.resolve()
+        if not path.is_file():
+            raise TaskStateError(f"cognition --from-file is not a readable file: {path}")
+        try:
+            value = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            raise TaskStateError(f"cannot read cognition UTF-8 text from {path}: {exc}") from exc
+    else:
+        value = positional or optional
+    if stdin_requested or from_file is not None:
+        value = value.rstrip("\r\n")
+    else:
+        value = value.strip()
+    if not value.strip():
+        raise TaskStateError("cognition text source is empty")
     return value
-
 
 def _tool_failure_recovery(root: Path, args: argparse.Namespace) -> tuple[dict, dict]:
     state = load_task_state(root)
@@ -381,7 +410,7 @@ def main_cognition(root: Path, args: argparse.Namespace) -> int:
         subject = str(getattr(args, "subject", "") or "").strip()
         semantic_text = ""
         if args.cognition_command not in {"status", "resolve-blocker"}:
-            semantic_text = _cognition_text(args)
+            semantic_text = _cognition_text(root, args)
         if args.cognition_command == "status":
             state = load_task_state(root)
             if state is None:
@@ -627,6 +656,40 @@ def configure_work_parser(parser: argparse.ArgumentParser) -> None:
     finish.add_argument("--summary")
     finish.add_argument("--json", action="store_true", dest="json_output")
 
+    report = sub.add_parser("report", help="read-only consolidated projection of task outcome, verification and knowledge state")
+    report.add_argument("--json", action="store_true", dest="json_output")
+
+
+def _work_report(root: Path) -> dict:
+    state = load_task_state(root)
+    if state is None:
+        raise TaskStateError("no task state exists; use begin --goal to start work")
+    task_id = str(state.get("taskId") or "")
+    return {
+        "format": "agent-devtools-work-report",
+        "formatVersion": 1,
+        "taskId": task_id,
+        "goal": state.get("goal"),
+        "status": state.get("status"),
+        "startedAtUtc": state.get("startedAtUtc"),
+        "updatedAtUtc": state.get("updatedAtUtc"),
+        "completedAtUtc": state.get("completedAtUtc"),
+        "definitionOfDone": list(state.get("definitionOfDone", [])),
+        "summary": state.get("summary") or "",
+        "decisions": list(state.get("decisions", [])),
+        "findings": list(state.get("findings", [])),
+        "assumptions": list(state.get("assumptions", [])),
+        "requirements": list(state.get("requirements", [])),
+        "openQuestions": list(state.get("openQuestions", [])),
+        "evidence": list(state.get("evidence", [])),
+        "blockers": list(state.get("blockers", [])),
+        "nextAction": state.get("nextStep") or "",
+        "verification": verification_status(root),
+        "knowledge": knowledge_status(root),
+        "semanticJournal": journal_status(root, task_id),
+        "readOnly": True,
+    }
+
 
 def main_work(root: Path, args: argparse.Namespace) -> int:
     try:
@@ -680,6 +743,8 @@ def main_work(root: Path, args: argparse.Namespace) -> int:
         elif args.work_command == "finish":
             payload = complete_work(root, summary=args.summary, run_verification=False)
             payload["format"] = "agent-devtools-work-finish"
+        elif args.work_command == "report":
+            payload = _work_report(root)
         else:
             return 2
     except (TaskStateError, WorkEntryError, VerificationError) as exc:
@@ -687,6 +752,34 @@ def main_work(root: Path, args: argparse.Namespace) -> int:
         return 2
     if args.json_output:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
+    elif args.work_command == "report":
+        print("WORK REPORT")
+        print(f"Status: {payload['status']} · task={payload['taskId']}")
+        print(f"Goal: {payload['goal']}")
+        if payload["definitionOfDone"]:
+            print("Done when: " + "; ".join(payload["definitionOfDone"]))
+        if payload["summary"]:
+            print(f"Summary: {payload['summary']}")
+        for key, title in (
+            ("decisions", "Decisions"),
+            ("findings", "Findings"),
+            ("assumptions", "Assumptions"),
+            ("requirements", "Requirements"),
+            ("openQuestions", "Open questions"),
+            ("evidence", "Evidence"),
+            ("blockers", "Blockers"),
+        ):
+            values = payload[key]
+            if values:
+                print(f"{title}: " + "; ".join(values))
+        latest = payload["verification"].get("latest")
+        if latest:
+            print(f"Verification: {latest['status'].upper()} · {latest['label']} · {latest['completedAtUtc']}")
+        else:
+            print("Verification: none")
+        print(f"Knowledge: {payload['knowledge']['records']} record(s)")
+        if payload["nextAction"]:
+            print(f"Next: {payload['nextAction']}")
     elif args.work_command in {"complete", "finish"}:
         print(f"PASS: work completed · {payload['task']['goal']}")
         action = payload.get("verificationAction", "recorded")

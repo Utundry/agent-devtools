@@ -167,6 +167,17 @@ An optional failure is non-blocking: use a fallback or skip the artifact and con
 
 Routine agents use a deliberately small surface: `begin`, `cognition`, profile-appropriate `verify`, `cognition checkpoint`, and `work complete`. Lower-level commands such as `task update`, `work enter`, `work finish`, `knowledge promote`, `checkpoint create`, and `resume` remain available for expert, compatibility, and recovery scenarios but are not the normal path. `begin --profile <current-profile>` is accepted as a compatibility hint, and obvious `task update --add-finding/--add-assumption/--add-decision/--done` aliases are accepted to prevent syntax thrashing without promoting `task update` to the routine surface.
 
+### Bulk semantic capture and final report
+
+Semantic capture accepts exactly one text source: positional text, `--text`, `--stdin`, or `--from-file`. The latter two are intended for multiline Markdown, Unicode text, quotes, `$`, JSON fragments and other content that is awkward to shell-escape:
+
+```bash
+cat finding.md | python devtools/agent/agent.py cognition finding --stdin --subject research/nas
+python devtools/agent/agent.py cognition decision --from-file decision.md --subject research/nas
+```
+
+`python devtools/agent/agent.py work report` is an optional read-only consolidated projection of the current/completed work item: goal, definition of done, summary, decisions, findings, assumptions, requirements, open questions, evidence, blockers, latest verification, knowledge health and semantic-journal status. It does not create a new durable document or modify task state.
+
 ### Interruption resume
 
 After a chat/SSE/transport interruption, do not reconstruct work from conversation memory. On the next usable turn run `python devtools/agent/agent.py begin` without `--goal`. An active task resumes with the same task identity, recorded progress and authoritative next action. No new persistence layer is introduced.

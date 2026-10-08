@@ -1,0 +1,28 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "ff2e493f8477469f96fb47b6aef2b8c8",
+  "kind": "requirement",
+  "subject": "bulk-capture/input",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Semantic capture must accept multiline Unicode content without forcing shell escaping or temporary wrapper scripts.",
+  "scope": [
+    "agent-devtools/bulk-capture-report"
+  ],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "6fdb2595-e564-4700-9d77-c03b7ed10790",
+    "taskGoal": "Implement Stage R6 Bulk Semantic Capture and Final Work Report",
+    "eventId": "efc67a3f2b634ecfaf4ffed1dc0d5de5"
+  },
+  "taskId": "6fdb2595-e564-4700-9d77-c03b7ed10790",
+  "taskGoal": "Implement Stage R6 Bulk Semantic Capture and Final Work Report",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T17:27:06Z",
+  "updatedAtUtc": "2026-10-08T17:27:06Z"
+}

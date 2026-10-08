@@ -49,6 +49,7 @@
 11. If the same external tool/action fails twice with an equivalent error, **stop retrying it**. Record the situation with `cognition tool-failure`, classify that step as optional or mandatory, preserve all completed progress, then use a fallback/skip for optional work or retain a blocker for mandatory work. Never turn an optional artifact/export failure into an infinite retry loop.
 12. If execution is interrupted by chat/transport/SSE failure, do not continue from conversational memory. On the next usable turn run `python devtools/agent/agent.py begin` with no `--goal`; it resumes the active project task and returns the authoritative next action.
 13. Stay on the normal surface for routine work: `begin` -> `cognition` -> profile-appropriate `verify` -> `cognition checkpoint` -> `work complete`. Do not explore `task update`, `work enter`, `work finish`, `knowledge promote`, `checkpoint create`, or `resume` unless advanced/debug/recovery use is actually required.
+14. For multiline or Unicode semantic notes, prefer `cognition ... --stdin` or `cognition ... --from-file <path>` instead of shell-escaping large text. After completion, `work report` may be used as a read-only consolidated summary; it is optional and never replaces `cognition checkpoint` or `work complete`.
 
 The governing principles are: **autonomy starts after alignment, not instead of alignment** and **alignment should be explicit in state, not necessarily visible as friction to the user**. Ask only what is expensive to get wrong.
 
