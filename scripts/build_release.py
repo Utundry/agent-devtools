@@ -254,16 +254,22 @@ def _changed_paths(*, include_workspace_local: bool = False) -> tuple[str, ...]:
     try:
         report = _change_report()
     except ReleaseBuilderError:
-        # _git_clean() itself remains fail-closed for release preparation.
-        # This compatibility fallback preserves _changed_paths() as a generic
-        # Git helper when no Agent DevTools project config exists.
+        # Preserve the generic Git helper for minimal repositories that do not
+        # have Agent DevTools project configuration.
         return raw
-    workspace_local = {
-        str(row.get("path"))
+
+    # Git porcelain may collapse a fully-untracked directory to one row such
+    # as ``devtools/`` while canonical change discovery expands it to exact
+    # files carrying content-addressed workspace-local marks. Once project
+    # configuration is available, release semantics must therefore come from
+    # the canonical report rather than trying to subtract exact file marks from
+    # lossy porcelain directory rows.
+    material = {
+        str(row.get("path") or "").replace("\\", "/")
         for row in report.get("entries", [])
-        if bool(row.get("workspaceLocal"))
+        if str(row.get("path") or "").strip() and not bool(row.get("workspaceLocal"))
     }
-    return tuple(path for path in raw if path not in workspace_local)
+    return tuple(sorted(material))
 
 
 def _workspace_local_snapshot() -> dict[Path, tuple[bytes, int]]:
