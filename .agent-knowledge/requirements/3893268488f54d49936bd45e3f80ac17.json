@@ -1,0 +1,28 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "3893268488f54d49936bd45e3f80ac17",
+  "kind": "requirement",
+  "subject": "frictionless-semantic-capture/natural-syntax",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Routine semantic capture must accept natural agent syntax when it is unambiguous and map it to the same canonical cognition primitive.",
+  "scope": [
+    "agent-devtools/frictionless-semantic-capture"
+  ],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "3d621bf4-e803-47f5-bce4-c2a2d8c2c067",
+    "taskGoal": "Implement Stage R3 Frictionless Semantic Capture from 0.11.0 NAS research dogfood",
+    "eventId": "7e95f0d11d6f4103961fa2be461ce63a"
+  },
+  "taskId": "3d621bf4-e803-47f5-bce4-c2a2d8c2c067",
+  "taskGoal": "Implement Stage R3 Frictionless Semantic Capture from 0.11.0 NAS research dogfood",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T12:48:08Z",
+  "updatedAtUtc": "2026-10-08T12:48:08Z"
+}

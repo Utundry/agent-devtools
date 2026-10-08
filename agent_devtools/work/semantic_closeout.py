@@ -61,11 +61,20 @@ def semantic_checkpoint(root: Path) -> dict[str, Any]:
     by_kind: dict[str, int] = {}
     required: list[dict[str, Any]] = []
     advisory: list[dict[str, Any]] = []
+    session_only: list[dict[str, Any]] = []
     for event in events:
         kind = str(event.get("kind") or "")
         by_kind[kind] = by_kind.get(kind, 0) + 1
         subject = str(event.get("subject") or "").strip()
+        if kind not in _KNOWLEDGE_KIND:
+            continue
         if not subject or kind not in (_REQUIRED_DURABLE_KINDS | _ADVISORY_DURABLE_KINDS):
+            session_only.append({
+                "eventId": event.get("id"),
+                "kind": kind,
+                "subject": subject or None,
+                "text": event.get("text"),
+            })
             continue
         if _represented(event, records, statuses, lifecycle):
             continue
@@ -87,6 +96,7 @@ def semantic_checkpoint(root: Path) -> dict[str, Any]:
         "byKind": dict(sorted(by_kind.items())),
         "requiredPromotions": required,
         "advisoryCandidates": advisory,
+        "sessionOnlyEvents": session_only,
         "clean": not required,
         "policy": {
             "required": "subject-bearing decisions and requirements must have durable representation",

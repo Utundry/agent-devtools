@@ -106,6 +106,8 @@ python devtools/agent/agent.py work complete
 
 `begin` is not a second workflow engine. It delegates to `work enter`, then immediately builds the durable C3 context projection and reports knowledge health. `cognition checkpoint` stays read-only by default; `--promote-required` is an explicit convenience path that promotes only required subject-bearing decisions/requirements through the ordinary `knowledge remember` contract. Advisory findings/assumptions/questions are never auto-promoted.
 
+Semantic capture is intentionally forgiving without adding a second contract: both `cognition finding "..."` and `cognition finding --text "..."` map to the same event primitive. Add `--subject` when the statement is intended to survive as reusable project knowledge. Subjectless cognition remains session-only, and checkpoint explicitly reports when **no promotion is needed**. Routine agents should not call `knowledge promote` before checkpoint; that command remains an expert primitive for exact/manual workflows.
+
 `workflow validate` checks every command advertised by the workflow contract against the real argparse command tree. Machine-readable capabilities also expose `cliCommands`, derived from that same parser rather than from a second command registry.
 
 ## What it gives an agent
@@ -135,7 +137,7 @@ python devtools/agent/agent.py work complete
 
 `work enter` remains available as the lower-level lifecycle primitive, but agents should not use it as the routine entrypoint. When `checkpoint` or `work complete` cannot proceed, follow the executable next action printed by the command instead of guessing a lower-level syntax.
 
-For research, verification is similarly guided:
+For research, verification is similarly guided and this is the canonical route (do not substitute generic `verify record` in routine research):
 
 ```bash
 python devtools/agent/agent.py verify research

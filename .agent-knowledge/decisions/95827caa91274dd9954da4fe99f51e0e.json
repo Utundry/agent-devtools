@@ -1,0 +1,28 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "95827caa91274dd9954da4fe99f51e0e",
+  "kind": "decision",
+  "subject": "frictionless-semantic-capture/checkpoint-authority",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Semantic checkpoint is the routine authority for durable-memory classification; direct knowledge promote remains an expert primitive rather than a normal workflow step.",
+  "scope": [
+    "agent-devtools/frictionless-semantic-capture"
+  ],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "3d621bf4-e803-47f5-bce4-c2a2d8c2c067",
+    "taskGoal": "Implement Stage R3 Frictionless Semantic Capture from 0.11.0 NAS research dogfood",
+    "eventId": "d26b72f4ac2146acb3964834a15058a2"
+  },
+  "taskId": "3d621bf4-e803-47f5-bce4-c2a2d8c2c067",
+  "taskGoal": "Implement Stage R3 Frictionless Semantic Capture from 0.11.0 NAS research dogfood",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T12:48:08Z",
+  "updatedAtUtc": "2026-10-08T12:48:08Z"
+}

@@ -176,9 +176,10 @@ def configure_cognition_parser(parser: argparse.ArgumentParser) -> None:
     sub = parser.add_subparsers(dest="cognition_command", required=True)
     for name in ("observation", "decision", "finding", "assumption", "requirement", "open-question", "evidence", "blocker"):
         cmd = sub.add_parser(name, help=f"record one {name} in current task state")
-        cmd.add_argument("text")
+        cmd.add_argument("text", nargs="?", help="semantic text (canonical positional form)")
+        cmd.add_argument("--text", dest="text_option", help="natural alias for the positional semantic text")
         if name != "blocker":
-            cmd.add_argument("--subject", help="optional durable-knowledge subject for soft contradiction checking")
+            cmd.add_argument("--subject", help="optional durable-knowledge subject for reusable/durable classification")
         cmd.add_argument("--json", action="store_true", dest="json_output")
     resolve = sub.add_parser("resolve-blocker", help="resolve an exact recorded blocker")
     resolve.add_argument("text")
@@ -188,6 +189,17 @@ def configure_cognition_parser(parser: argparse.ArgumentParser) -> None:
     checkpoint = sub.add_parser("checkpoint", help="classify current semantic journal for closeout; optionally promote required durable candidates explicitly")
     checkpoint.add_argument("--promote-required", action="store_true", help="promote every required durable candidate through knowledge remember, then re-run the checkpoint")
     checkpoint.add_argument("--json", action="store_true", dest="json_output")
+
+
+def _cognition_text(args: argparse.Namespace) -> str:
+    positional = str(getattr(args, "text", "") or "").strip()
+    optional = str(getattr(args, "text_option", "") or "").strip()
+    if positional and optional:
+        raise TaskStateError("provide cognition text either positionally or with --text, not both")
+    value = positional or optional
+    if not value:
+        raise TaskStateError("cognition text is required (positional text or --text)")
+    return value
 
 
 def main_cognition(root: Path, args: argparse.Namespace) -> int:
@@ -205,13 +217,26 @@ def main_cognition(root: Path, args: argparse.Namespace) -> int:
                     "beforeRequired": len(before["requiredPromotions"]),
                     "promoted": [record["id"] for record in promoted],
                 }
+            payload["guidance"] = {
+                "requiredAction": bool(payload["requiredPromotions"]),
+                "advisoryOnly": bool(payload["advisoryCandidates"]) and not bool(payload["requiredPromotions"]),
+                "promotionNeeded": bool(payload["requiredPromotions"] or payload["advisoryCandidates"]),
+                "sessionOnly": len(payload.get("sessionOnlyEvents", [])),
+                "routineRule": "Do not call agent knowledge promote manually; use --subject during cognition and let checkpoint classify durable candidates.",
+                "nextCommands": (
+                    ["agent cognition checkpoint --promote-required", "agent work complete"]
+                    if payload["requiredPromotions"]
+                    else ["agent work complete"]
+                ),
+            }
             if args.json_output:
                 print(json.dumps(payload, ensure_ascii=False, indent=2))
             else:
                 print(
                     f"Semantic checkpoint: events={payload['events']} · "
                     f"required={len(payload['requiredPromotions'])} · "
-                    f"advisory={len(payload['advisoryCandidates'])}"
+                    f"advisory={len(payload['advisoryCandidates'])} · "
+                    f"session-only={len(payload.get('sessionOnlyEvents', []))}"
                 )
                 if promoted:
                     for record in promoted:
@@ -227,20 +252,20 @@ def main_cognition(root: Path, args: argparse.Namespace) -> int:
                     print("  agent work complete")
                 elif payload["advisoryCandidates"]:
                     print("Advisory candidates do not block completion.")
+                    for item in payload["advisoryCandidates"]:
+                        print(f"  optional durable candidate: agent knowledge remember {item['eventId']}")
                     print("Next: agent work complete")
                 else:
+                    print("Durable knowledge: no promotion needed.")
+                    if payload.get("sessionOnlyEvents"):
+                        print(f"  {len(payload['sessionOnlyEvents'])} semantic event(s) remain session-only by design.")
                     print("Next: agent work complete")
-            payload["guidance"] = {
-                "requiredAction": bool(payload["requiredPromotions"]),
-                "advisoryOnly": bool(payload["advisoryCandidates"]) and not bool(payload["requiredPromotions"]),
-                "nextCommands": (
-                    ["agent cognition checkpoint --promote-required", "agent work complete"]
-                    if payload["requiredPromotions"]
-                    else ["agent work complete"]
-                ),
-            }
+                print("Routine rule: Do not call `agent knowledge promote` manually; record reusable cognition with --subject and let checkpoint classify it.")
             return 0 if payload["clean"] else 1
         subject = str(getattr(args, "subject", "") or "").strip()
+        semantic_text = ""
+        if args.cognition_command not in {"status", "resolve-blocker"}:
+            semantic_text = _cognition_text(args)
         if args.cognition_command == "status":
             state = load_task_state(root)
             if state is None:
@@ -253,7 +278,7 @@ def main_cognition(root: Path, args: argparse.Namespace) -> int:
                 root,
                 task_id=str(state.get("taskId") or ""),
                 kind="observation",
-                text=args.text,
+                text=semantic_text,
                 subject=subject,
                 metadata={"source": "cognition.observation"},
                 created_at_utc=utc_now(),
@@ -262,19 +287,19 @@ def main_cognition(root: Path, args: argparse.Namespace) -> int:
             kwargs = {}
             subject_key = None
             if args.cognition_command == "decision":
-                kwargs["add_decisions"], subject_key = [args.text], "decisions"
+                kwargs["add_decisions"], subject_key = [semantic_text], "decisions"
             elif args.cognition_command == "finding":
-                kwargs["add_findings"], subject_key = [args.text], "findings"
+                kwargs["add_findings"], subject_key = [semantic_text], "findings"
             elif args.cognition_command == "assumption":
-                kwargs["add_assumptions"], subject_key = [args.text], "assumptions"
+                kwargs["add_assumptions"], subject_key = [semantic_text], "assumptions"
             elif args.cognition_command == "requirement":
-                kwargs["add_requirements"], subject_key = [args.text], "requirements"
+                kwargs["add_requirements"], subject_key = [semantic_text], "requirements"
             elif args.cognition_command == "open-question":
-                kwargs["add_open_questions"], subject_key = [args.text], "openQuestions"
+                kwargs["add_open_questions"], subject_key = [semantic_text], "openQuestions"
             elif args.cognition_command == "evidence":
-                kwargs["add_evidence"], subject_key = [args.text], "evidence"
+                kwargs["add_evidence"], subject_key = [semantic_text], "evidence"
             elif args.cognition_command == "blocker":
-                kwargs["add_blockers"] = [args.text]
+                kwargs["add_blockers"] = [semantic_text]
             elif args.cognition_command == "resolve-blocker":
                 kwargs["resolve_blockers"] = [args.text]
             if subject and subject_key:
@@ -285,7 +310,7 @@ def main_cognition(root: Path, args: argparse.Namespace) -> int:
         return 2
     kind_map = {"open-question": "open_question"}
     knowledge_kind = kind_map.get(args.cognition_command, args.cognition_command)
-    warnings = soft_contradictions(root, kind=knowledge_kind, text=getattr(args, "text", ""), subject=subject) if subject and args.cognition_command not in {"status", "resolve-blocker", "blocker", "observation"} else []
+    warnings = soft_contradictions(root, kind=knowledge_kind, text=semantic_text, subject=subject) if subject and args.cognition_command not in {"status", "resolve-blocker", "blocker", "observation"} else []
     payload = {
         "format": "agent-devtools-cognition", "formatVersion": 3,
         "taskId": state.get("taskId"), "status": state.get("status"),
@@ -530,7 +555,7 @@ def main_work(root: Path, args: argparse.Namespace) -> int:
 
 def configure_knowledge_parser(parser: argparse.ArgumentParser) -> None:
     sub = parser.add_subparsers(dest="knowledge_command", required=True)
-    promote = sub.add_parser("promote", help="promote one current-session cognition record into tracked project knowledge")
+    promote = sub.add_parser("promote", help="expert primitive: promote exact recorded cognition; routine workflow should use cognition + checkpoint classification")
     promote.add_argument("kind", choices=("decision", "finding", "assumption", "requirement", "open_question", "evidence"))
     promote.add_argument("text", help="exact cognition text already recorded in current task")
     promote.add_argument("--subject", required=True, help="stable human-readable knowledge subject")

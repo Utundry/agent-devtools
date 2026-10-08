@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Stage R3 adds frictionless semantic capture: cognition commands accept both canonical positional text and the natural `--text` alias, with ambiguity rejected rather than guessed.
+- Semantic checkpoint now classifies and reports `required`, `advisory`, and `session-only` cognition. A clean local-only checkpoint explicitly says that no durable promotion is needed.
+- Routine memory guidance now makes checkpoint the authority: agents are told not to call `knowledge promote` directly before classification; manual exact promotion remains an expert primitive.
+- Research onboarding/workflow now names `verify research` as the canonical verification route, reducing fallback to generic `verify record` syntax guessing.
+
 - Stage R2 formalizes the **Agent Work Lifecycle** terminology and makes `begin` the canonical routine entrypoint across onboarding, workflow and agent handoff; `work enter` remains an explicit lower-level primitive.
 - Semantic checkpoint and work-completion failures now emit executable canonical next actions instead of leaving agents to guess `knowledge promote`, `work show`, or other primitive syntax.
 - `verify research` with no statuses is now a read-only five-dimension review tray. `--confirm-all-pass` provides an explicit compact attestation only after review; granular pass/warn/fail statuses remain available whenever any dimension is uncertain.
