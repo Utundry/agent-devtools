@@ -68,6 +68,7 @@ class AgentUxHardeningTests(unittest.TestCase):
             out = io.StringIO()
             args = self.research_args(
                 confirm_all_pass=True,
+                evidence=["Internal measurement reviewed"],
                 summary="Reviewed retained uncertainty",
                 json_output=True,
             )

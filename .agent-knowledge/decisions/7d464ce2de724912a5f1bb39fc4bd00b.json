@@ -1,0 +1,26 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "7d464ce2de724912a5f1bb39fc4bd00b",
+  "kind": "decision",
+  "subject": "cognition/stale-subject-refinement",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Task-local subject-bearing assumptions and questions must surface a deterministic possible-stale signal when a later event with different text reuses the same subject or refines it hierarchically (for example foo -> foo-16gb or foo/bar). The runtime warns only; it does not silently delete, resolve, or supersede cognition.",
+  "scope": [],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "4a286df5-354e-49e5-a28a-84608a661614",
+    "taskGoal": "Implement R6.3 Verification Integrity from 0.15.2 dogfood: strong research-warning attestation gate and deterministic possible-stale cognition signals.",
+    "eventId": "a3985d760e024e8cbd746d096f019c0c"
+  },
+  "taskId": "4a286df5-354e-49e5-a28a-84608a661614",
+  "taskGoal": "Implement R6.3 Verification Integrity from 0.15.2 dogfood: strong research-warning attestation gate and deterministic possible-stale cognition signals.",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T20:14:42Z",
+  "updatedAtUtc": "2026-10-08T20:14:42Z"
+}

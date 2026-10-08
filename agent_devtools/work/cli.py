@@ -12,7 +12,7 @@ from .entry import WorkEntryError, enter_work
 from .checkpoint import CheckpointError, create_checkpoint, inspect_checkpoint, restore_checkpoint
 from .state import TaskStateError, align_task, clear_task, complete_task, load_task_state, start_task, update_task, utc_now
 from .knowledge import KnowledgeError, conflicts as knowledge_conflicts, effective_lifecycle_statuses, effective_statuses, explain as explain_knowledge, knowledge_status, load_records as load_knowledge_records, promote as promote_knowledge, remember as remember_knowledge, set_lifecycle as set_knowledge_lifecycle, supersede as supersede_knowledge, validate_knowledge, soft_contradictions
-from .journal import SemanticJournalError, append_event, events_for_task, journal_status
+from .journal import SemanticJournalError, append_event, events_for_task, journal_status, possible_stale_cognition
 from .semantic_closeout import semantic_checkpoint
 from .verification import RESEARCH_CHECKS, VerificationError, latest_verification, record_verification, verification_status, record_research_bundle
 from .sources import SourceError, add_source, list_sources
@@ -94,7 +94,9 @@ _RESEARCH_REVIEW = {
 }
 
 
-def _research_context_warnings(root: Path) -> list[dict]:
+_STRONG_RESEARCH_WARNING_IDS = {"missing-source-provenance", "potentially-material-open-questions", "possible-stale-cognition"}
+
+def _research_context_warnings(root: Path, *, pending_evidence: list[str] | None = None) -> list[dict]:
     state = load_task_state(root)
     if state is None:
         return []
@@ -114,10 +116,10 @@ def _research_context_warnings(root: Path) -> list[dict]:
         ):
             current_sources.append(record)
     evidence = [str(item).strip() for item in state.get("evidence", []) if str(item).strip()]
-    material_questions = [
-        item for item in events_for_task(root, task_id)
-        if item.get("kind") == "question" and str(item.get("subject") or "").strip()
-    ]
+    evidence.extend(str(item).strip() for item in (pending_evidence or []) if str(item).strip())
+    task_events = events_for_task(root, task_id)
+    material_questions = [item for item in task_events if item.get("kind") == "question" and str(item.get("subject") or "").strip()]
+    stale = possible_stale_cognition(task_events)
     if assumptions:
         warnings.append({
             "id": "active-assumptions",
@@ -148,6 +150,9 @@ def _research_context_warnings(root: Path) -> list[dict]:
                 "before treating unresolved questions as non-blocking."
             ),
         })
+    if stale:
+        transitions = sorted({f"{item['olderSubject']} -> {item['newerSubject']}" for item in stale})
+        warnings.append({"id":"possible-stale-cognition","count":len(stale),"subjectTransitions":transitions,"message":(f"Current task has {len(stale)} possible stale cognition pair(s): {', '.join(transitions)}. Reconcile or explicitly account for the older assumption/question before compact PASS.")})
     if not current_sources and not evidence:
         warnings.append({
             "id": "missing-source-provenance",
@@ -162,20 +167,11 @@ def _research_context_warnings(root: Path) -> list[dict]:
 
 
 def _research_review_payload(root: Path) -> dict:
-    return {
-        "format": "agent-devtools-research-verification-review",
-        "formatVersion": 1,
-        "status": "review-required",
-        "checks": [{"id": name, "prompt": _RESEARCH_REVIEW[name]} for name in RESEARCH_CHECKS],
-        "contextWarnings": _research_context_warnings(root),
-        "guidance": {
-            "rule": "Review all five dimensions before recording PASS; do not use the compact attestation when any item should be warn/fail.",
-            "nextCommands": [
-                "agent verify research --confirm-all-pass --summary \"<what was verified>\"",
-                "agent verify research --arithmetic <pass|warn|fail> --sourcing <pass|warn|fail> --assumptions <pass|warn|fail> --knowledge <pass|warn|fail> --unresolved-questions <pass|warn|fail> --summary \"<what was verified>\"",
-            ],
-        },
-    }
+    warnings = _research_context_warnings(root)
+    blocking = sorted({str(item.get("id") or "") for item in warnings if str(item.get("id") or "") in _STRONG_RESEARCH_WARNING_IDS})
+    granular = "agent verify research --arithmetic <pass|warn|fail> --sourcing <pass|warn|fail> --assumptions <pass|warn|fail> --knowledge <pass|warn|fail> --unresolved-questions <pass|warn|fail> --summary \"<what was verified>\""
+    commands = [granular] if blocking else ["agent verify research --confirm-all-pass --summary \"<what was verified>\"", granular]
+    return {"format":"agent-devtools-research-verification-review","formatVersion":1,"status":"review-required","checks":[{"id":name,"prompt":_RESEARCH_REVIEW[name]} for name in RESEARCH_CHECKS],"contextWarnings":warnings,"guidance":{"rule":"Review all five dimensions before recording PASS; strong contextual warnings disable compact attestation and require granular statuses.","compactAttestationAllowed":not blocking,"blockingWarningIds":blocking,"nextCommands":commands}}
 
 
 def main_verify(root: Path, args: argparse.Namespace) -> int:
@@ -194,6 +190,10 @@ def main_verify(root: Path, args: argparse.Namespace) -> int:
             }
             provided = [value is not None for value in raw_checks.values()]
             confirm_all = bool(getattr(args, "confirm_all_pass", False))
+            context_warnings = _research_context_warnings(root, pending_evidence=list(args.evidence))
+            blocking_warning_ids = sorted({str(item.get("id") or "") for item in context_warnings if str(item.get("id") or "") in _STRONG_RESEARCH_WARNING_IDS})
+            if confirm_all and blocking_warning_ids:
+                raise VerificationError("--confirm-all-pass is unavailable while strong contextual warnings remain: " + ", ".join(blocking_warning_ids) + ". Resolve/add provenance as appropriate or use granular research statuses.")
             if confirm_all and any(provided):
                 raise VerificationError(
                     "--confirm-all-pass cannot be combined with granular research statuses; "
@@ -218,7 +218,7 @@ def main_verify(root: Path, args: argparse.Namespace) -> int:
                     "format": "agent-devtools-verification",
                     "formatVersion": 1,
                     "record": item,
-                    "contextWarnings": _research_context_warnings(root),
+                    "contextWarnings": context_warnings,
                 }
         else:
             payload = {"format": "agent-devtools-verification", "formatVersion": 1, **verification_status(root)}
@@ -234,8 +234,10 @@ def main_verify(root: Path, args: argparse.Namespace) -> int:
         for warning in payload.get("contextWarnings", []):
             print(f"Context warning: {warning['message']}")
         print("Next, after reviewing all five dimensions:")
+        if not payload["guidance"].get("compactAttestationAllowed", True):
+            print("  compact --confirm-all-pass unavailable while strong warnings remain: " + ", ".join(payload["guidance"].get("blockingWarningIds", [])))
         print("  " + payload["guidance"]["nextCommands"][0])
-        print("If any dimension is warn/fail, use the granular command shown by `agent verify research --json`.")
+        print("If any dimension is warn/fail, use granular statuses rather than compact PASS.")
     else:
         item = payload.get("record") or payload.get("latest")
         if item:
@@ -468,6 +470,8 @@ def main_cognition(root: Path, args: argparse.Namespace) -> int:
                     print(f"REQUIRED {item['kind']} · {item['subject']} · {item['text']}")
                 for item in payload["advisoryCandidates"]:
                     print(f"REVIEW {item['kind']} · {item['subject']} · {item['text']}")
+                for item in payload.get("possibleStaleCognition", []):
+                    print(f"STALE? {item['kind']} · {item['olderSubject']} -> {item['newerSubject']} · {item['olderText']} -> {item['newerText']}")
                 if payload["requiredPromotions"]:
                     print("Next:")
                     print("  review REQUIRED candidates")

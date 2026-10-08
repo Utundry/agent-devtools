@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Stage R6.3 strengthens research attestation integrity: strong contextual warnings (`missing-source-provenance`, `potentially-material-open-questions`, and `possible-stale-cognition`) now disable compact `verify research --confirm-all-pass`; the existing granular five-dimension attestation remains available so an agent can explicitly retain a dimension as pass/warn/fail.
+- Task-local subject-bearing assumptions/questions now expose a deterministic possible-stale signal when later cognition with different text reuses the same subject or a hierarchical refinement such as `foo -> foo-16gb`; checkpoint and research verification surface the signal without auto-deleting, resolving, or superseding cognition.
+- Same-command `--evidence` participates in source-awareness so compact PASS is not rejected merely because evidence is being supplied with the attestation. CLI contract advances to v30; workflow contract remains v21 and the routine command surface is unchanged.
+
 - Stage R6.2 hardens cognitive quality from fresh-model hardware-research dogfood: C3 no longer admits cross-task durable knowledge on weak lexical overlap alone; term-only reuse from another task now requires multiple query-term matches plus support from the source task goal, while explicit scope/path/same-task signals remain authoritative.
 - Research verification now warns when the current task has no recorded source/evidence provenance before `sourcing=pass`, and separately flags subject-bearing open questions as potentially material so the agent reviews whether they could change the recommendation or architecture.
 - Research `source add` now binds source provenance to the active task when one exists. CLI contract advances to v29; workflow contract remains v21 and no new routine command, storage layer, service or dependency is introduced.

@@ -188,7 +188,7 @@ class CognitiveHardeningTests(unittest.TestCase):
         tmp, root, _ = self.make_root()
         try:
             caps = capabilities(root)
-            self.assertEqual(29, CLI_CONTRACT_VERSION)
+            self.assertGreaterEqual(CLI_CONTRACT_VERSION, 29)
             self.assertEqual(21, WORKFLOW_CONTRACT_VERSION)
             self.assertTrue(caps["commands"]["context"]["crossTaskLexicalIsolation"])
             self.assertTrue(caps["commands"]["verification"]["researchSourceAwareness"])

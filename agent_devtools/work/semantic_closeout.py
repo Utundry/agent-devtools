@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .journal import SemanticJournalError, events_for_task
+from .journal import SemanticJournalError, events_for_task, possible_stale_cognition
 from .knowledge import effective_lifecycle_statuses, effective_statuses, load_records
 from .state import TaskStateError, load_task_state
 
@@ -97,11 +97,13 @@ def semantic_checkpoint(root: Path) -> dict[str, Any]:
         "requiredPromotions": required,
         "advisoryCandidates": advisory,
         "sessionOnlyEvents": session_only,
+        "possibleStaleCognition": possible_stale_cognition(events),
         "clean": not required,
         "policy": {
             "required": "subject-bearing decisions and requirements must have durable representation",
             "advisory": "subject-bearing findings, assumptions and questions are review candidates only",
             "subjectless": "session-local cognition does not create promotion bureaucracy",
+            "stale": "same/refined subject with different task-local assumption/question text is a review warning only; never auto-delete or supersede",
         },
     }
 

@@ -1,0 +1,26 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "0699e643792e47bba094c0c72c5b456e",
+  "kind": "decision",
+  "subject": "testing/forward-compatible-regressions",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Regression tests for an older capability must assert preservation of that capability rather than freeze extensible aggregate values such as global CLI contract versions or warning-list cardinality, unless exact equality is itself part of the public compatibility contract.",
+  "scope": [],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "4a286df5-354e-49e5-a28a-84608a661614",
+    "taskGoal": "Implement R6.3 Verification Integrity from 0.15.2 dogfood: strong research-warning attestation gate and deterministic possible-stale cognition signals.",
+    "eventId": "c468eee9ff0c44b18e98e3d5ee17c5ac"
+  },
+  "taskId": "4a286df5-354e-49e5-a28a-84608a661614",
+  "taskGoal": "Implement R6.3 Verification Integrity from 0.15.2 dogfood: strong research-warning attestation gate and deterministic possible-stale cognition signals.",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T20:14:42Z",
+  "updatedAtUtc": "2026-10-08T20:14:42Z"
+}

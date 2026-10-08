@@ -180,6 +180,23 @@ def events_for_task(root: Path, task_id: str) -> list[dict[str, Any]]:
     return events
 
 
+def possible_stale_cognition(events: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    prior=[]; out=[]
+    def related(left: str, right: str) -> bool:
+        if left == right: return True
+        return any(right.startswith(left + sep) or left.startswith(right + sep) for sep in ("-", "/", ".", ":"))
+    for event in events:
+        kind=str(event.get("kind") or ""); subject=str(event.get("subject") or "").strip(); text=str(event.get("text") or "").strip()
+        if kind not in {"assumption", "question"} or not subject or not text: continue
+        match=None
+        for older in reversed(prior):
+            if older["kind"] == kind and older["text"] != text and related(str(older["subject"]), subject): match=older; break
+        if match is not None:
+            out.append({"kind":kind,"olderEventId":match.get("id"),"newerEventId":event.get("id"),"olderSubject":match.get("subject"),"newerSubject":subject,"olderText":match.get("text"),"newerText":text})
+        prior.append({"id":event.get("id"),"kind":kind,"subject":subject,"text":text})
+    return out
+
+
 def journal_status(root: Path, task_id: str) -> dict[str, Any]:
     events = events_for_task(root, task_id)
     by_kind: dict[str, int] = {}

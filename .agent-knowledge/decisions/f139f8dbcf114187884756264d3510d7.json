@@ -1,0 +1,26 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "f139f8dbcf114187884756264d3510d7",
+  "kind": "decision",
+  "subject": "research-verification/strong-warning-gate",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Compact research --confirm-all-pass must be rejected when runtime already detects a strong contextual warning: missing current-task source/evidence provenance, a subject-bearing potentially material open question, or possible stale cognition. Granular dimension-by-dimension attestation remains available so the agent can explicitly retain a warning as pass/warn/fail.",
+  "scope": [],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "4a286df5-354e-49e5-a28a-84608a661614",
+    "taskGoal": "Implement R6.3 Verification Integrity from 0.15.2 dogfood: strong research-warning attestation gate and deterministic possible-stale cognition signals.",
+    "eventId": "5cb71c1e4c1e48e69a54b658b8ca83d5"
+  },
+  "taskId": "4a286df5-354e-49e5-a28a-84608a661614",
+  "taskGoal": "Implement R6.3 Verification Integrity from 0.15.2 dogfood: strong research-warning attestation gate and deterministic possible-stale cognition signals.",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T20:14:42Z",
+  "updatedAtUtc": "2026-10-08T20:14:42Z"
+}

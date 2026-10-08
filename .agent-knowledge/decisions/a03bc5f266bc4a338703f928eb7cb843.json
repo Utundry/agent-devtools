@@ -1,0 +1,26 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "a03bc5f266bc4a338703f928eb7cb843",
+  "kind": "decision",
+  "subject": "release-tooling/promoted-knowledge-preflight",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Release/recovery preflight must treat successfully promoted .agent-knowledge records from the current work session as expected canonical project state, while validating exact subject/provenance rather than broadly ignoring .agent-knowledge changes.",
+  "scope": [],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "4a286df5-354e-49e5-a28a-84608a661614",
+    "taskGoal": "Implement R6.3 Verification Integrity from 0.15.2 dogfood: strong research-warning attestation gate and deterministic possible-stale cognition signals.",
+    "eventId": "95bb4bde25264718a96e48989c32be73"
+  },
+  "taskId": "4a286df5-354e-49e5-a28a-84608a661614",
+  "taskGoal": "Implement R6.3 Verification Integrity from 0.15.2 dogfood: strong research-warning attestation gate and deterministic possible-stale cognition signals.",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-08T20:14:42Z",
+  "updatedAtUtc": "2026-10-08T20:14:42Z"
+}
