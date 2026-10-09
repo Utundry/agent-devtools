@@ -4,6 +4,7 @@
     ".git/**",
     ".agent-cache/**",
     ".agent-work/**",
+    ".agent-updates/**",
     "**/__pycache__/**",
     "*.pyc",
     "build/**",

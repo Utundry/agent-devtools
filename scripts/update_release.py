@@ -144,10 +144,12 @@ def update(args: argparse.Namespace) -> dict:
         raise UpdateError(f"Patch not found: {patch}")
     if scenario_path is not None and not scenario_path.is_file():
         raise UpdateError(f"Scenario not found: {scenario_path}")
-    output = root / "build"
-    output.mkdir(exist_ok=True)
+    output = root / ".agent-updates" / "runs"
+    output.mkdir(parents=True, exist_ok=True)
     run = Path(tempfile.mkdtemp(prefix=f"update-{version}-", dir=output))
     clone = run / "repo"
+    if scenario is not None:
+        shutil.copy2(scenario.path, run / "scenario.json")
     print(f"Branch: {args.branch}; original worktree: {root}", flush=True)
     print(f"Preparing committed source; log and artifacts: {run}", flush=True)
     git(root, "clone", "--quiet", "--no-local", "--no-checkout", str(root), str(clone))

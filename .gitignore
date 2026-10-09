@@ -1,6 +1,7 @@
 # Agent DevTools derived/runtime state
 .agent-cache/
 .agent-work/
+.agent-updates/
 __pycache__/
 *.pyc
 

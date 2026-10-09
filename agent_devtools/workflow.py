@@ -185,6 +185,9 @@ def capabilities(root: Path) -> dict[str, Any]:
                 "arbitraryHooks": False,
                 "isolatedPreparation": True,
                 "provenanceSha256": True,
+                "technicalWorkspace": ".agent-updates/",
+                "trackedScenarios": False,
+                "scenarioSnapshotPerRun": True,
             },
         },
         "exitCodeSemantics": {
@@ -204,5 +207,5 @@ def capabilities(root: Path) -> dict[str, Any]:
             "advancedPrimitivesAreRoutine": False,
         },
         "tracked": ["AGENTS.md", "agent-tools.json", "agent-check.policy.json", ".agent-knowledge/"],
-        "disposable": ["devtools/agent/", ".agent-cache/", ".agent-work/", ".agent-bootstrap-report.json"],
+        "disposable": ["devtools/agent/", ".agent-cache/", ".agent-work/", ".agent-updates/", ".agent-bootstrap-report.json"],
     }
