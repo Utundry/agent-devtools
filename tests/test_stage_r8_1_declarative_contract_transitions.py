@@ -103,6 +103,84 @@ class DeclarativeContractTransitionTests(unittest.TestCase):
         finally:
             tmp.cleanup()
 
+    def test_stale_payload_field_assertion_fails_closed(self) -> None:
+        tmp, root = self.make_root(7)
+        try:
+            (root / "tests").mkdir()
+            (root / "tests" / "test_old.py").write_text(
+                "import unittest\n"
+                "class T(unittest.TestCase):\n"
+                "    def test_old(self):\n"
+                "        payload = {'publicContractVersion': 7}\n"
+                "        self.assertEqual(7, payload['publicContractVersion'])\n",
+                encoding="utf-8",
+            )
+            scenario = load_scenario(self.scenario(root, 7, 8))
+            with self.assertRaisesRegex(UpdateScenarioError, "stale exact contract-version assertion"):
+                apply_scenario(root, scenario)
+        finally:
+            tmp.cleanup()
+
+    def test_stale_payload_get_and_exact_compare_fail_closed(self) -> None:
+        for assertion in (
+            "self.assertEqual(payload.get('publicContractVersion'), 7)",
+            "assert payload['publicContractVersion'] == 7",
+        ):
+            tmp, root = self.make_root(7)
+            try:
+                (root / "tests").mkdir()
+                (root / "tests" / "test_old.py").write_text(
+                    "import unittest\n"
+                    "class T(unittest.TestCase):\n"
+                    "    def test_old(self):\n"
+                    "        payload = {'publicContractVersion': 7}\n"
+                    f"        {assertion}\n",
+                    encoding="utf-8",
+                )
+                scenario = load_scenario(self.scenario(root, 7, 8))
+                with self.assertRaisesRegex(UpdateScenarioError, "stale exact contract-version assertion"):
+                    apply_scenario(root, scenario)
+            finally:
+                tmp.cleanup()
+
+    def test_workflow_format_version_alias_is_guarded(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        root = Path(tmp.name)
+        try:
+            (root / "VERSION").write_text("1.0.0\n", encoding="utf-8")
+            (root / "pkg").mkdir()
+            (root / "pkg" / "contract.py").write_text("WORKFLOW_CONTRACT_VERSION = 22\n", encoding="utf-8")
+            (root / "tests").mkdir()
+            (root / "tests" / "test_old.py").write_text(
+                "import unittest\n"
+                "class T(unittest.TestCase):\n"
+                "    def test_old(self):\n"
+                "        payload = {'formatVersion': 22}\n"
+                "        self.assertEqual(22, payload['formatVersion'])\n",
+                encoding="utf-8",
+            )
+            payload = {
+                "format": "agent-devtools-update-scenario",
+                "formatVersion": 1,
+                "fromVersion": "1.0.0",
+                "toVersion": "1.0.1",
+                "contracts": {
+                    "workflow": {
+                        "path": "pkg/contract.py",
+                        "symbol": "WORKFLOW_CONTRACT_VERSION",
+                        "from": 22,
+                        "to": 23,
+                    }
+                },
+                "changes": [{"op": "assert_contains", "path": "VERSION", "text": "1.0.0"}],
+            }
+            scenario_path = root / "scenario.json"
+            scenario_path.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaisesRegex(UpdateScenarioError, "stale exact contract-version assertion"):
+                apply_scenario(root, load_scenario(scenario_path))
+        finally:
+            tmp.cleanup()
+
     def test_invalid_contract_declaration_is_rejected(self) -> None:
         tmp, root = self.make_root(7)
         try:

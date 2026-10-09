@@ -259,40 +259,84 @@ def _assert_contract_targets(root: Path, contracts: tuple[dict[str, Any], ...]) 
             )
 
 
+def _contract_payload_keys(symbol: str) -> set[str]:
+    parts = [part.lower() for part in symbol.split("_") if part]
+    keys: set[str] = set()
+    if len(parts) >= 2 and parts[-2:] == ["contract", "version"]:
+        stem = parts[:-2]
+        if stem:
+            keys.add(stem[0] + "".join(part.title() for part in stem[1:]) + "ContractVersion")
+    if symbol == "WORKFLOW_CONTRACT_VERSION":
+        keys.update({"formatVersion", "workflowContractVersion"})
+    elif symbol == "CLI_CONTRACT_VERSION":
+        keys.add("cliContractVersion")
+    return keys
+
+
+def _expression_refs_contract(node: ast.AST, symbol: str, payload_keys: set[str]) -> bool:
+    if isinstance(node, ast.Name):
+        return node.id == symbol
+    if isinstance(node, ast.Attribute):
+        return node.attr in payload_keys
+    if isinstance(node, ast.Subscript):
+        key = node.slice
+        return isinstance(key, ast.Constant) and isinstance(key.value, str) and key.value in payload_keys
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "get":
+        if not node.args:
+            return False
+        key = node.args[0]
+        return isinstance(key, ast.Constant) and isinstance(key.value, str) and key.value in payload_keys
+    return False
+
+
+def _frozen_contract_pair(left: ast.AST, right: ast.AST, *, before: int, symbol: str, payload_keys: set[str]) -> bool:
+    return (
+        isinstance(left, ast.Constant)
+        and left.value == before
+        and _expression_refs_contract(right, symbol, payload_keys)
+    ) or (
+        isinstance(right, ast.Constant)
+        and right.value == before
+        and _expression_refs_contract(left, symbol, payload_keys)
+    )
+
+
 def _stale_exact_contract_assertions(root: Path, contracts: tuple[dict[str, Any], ...]) -> list[str]:
-    """Find the historical failure mode: old aggregate contract versions frozen in unittest assertions."""
+    """Find historical tests that freeze an aggregate contract at the pre-transition value."""
     tests = root / "tests"
     if not tests.is_dir():
         return []
-    stale: list[str] = []
+    stale: set[str] = set()
     for contract in contracts:
         before = int(contract["from"])
         after = int(contract["to"])
         symbol = str(contract["symbol"])
         if before == after:
             continue
+        payload_keys = _contract_payload_keys(symbol)
         for path in sorted(tests.glob("test_*.py")):
             try:
                 tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
             except (OSError, UnicodeError, SyntaxError) as exc:
                 raise UpdateScenarioError(f"cannot inspect contract regression test {path.name}: {exc}") from exc
             for node in ast.walk(tree):
-                if not isinstance(node, ast.Call):
-                    continue
-                func = node.func
-                if not (isinstance(func, ast.Attribute) and func.attr == "assertEqual" and len(node.args) >= 2):
-                    continue
-                left, right = node.args[0], node.args[1]
-                frozen = (
-                    isinstance(left, ast.Constant) and left.value == before
-                    and isinstance(right, ast.Name) and right.id == symbol
-                ) or (
-                    isinstance(right, ast.Constant) and right.value == before
-                    and isinstance(left, ast.Name) and left.id == symbol
-                )
+                frozen = False
+                if isinstance(node, ast.Call):
+                    func = node.func
+                    if isinstance(func, ast.Attribute) and func.attr == "assertEqual" and len(node.args) >= 2:
+                        frozen = _frozen_contract_pair(
+                            node.args[0], node.args[1],
+                            before=before, symbol=symbol, payload_keys=payload_keys,
+                        )
+                elif isinstance(node, ast.Compare):
+                    if len(node.ops) == 1 and isinstance(node.ops[0], ast.Eq) and len(node.comparators) == 1:
+                        frozen = _frozen_contract_pair(
+                            node.left, node.comparators[0],
+                            before=before, symbol=symbol, payload_keys=payload_keys,
+                        )
                 if frozen:
-                    stale.append(f"{path.relative_to(root).as_posix()}:{getattr(node, 'lineno', '?')}")
-    return stale
+                    stale.add(f"{path.relative_to(root).as_posix()}:{getattr(node, 'lineno', '?')}")
+    return sorted(stale)
 
 
 def _assert_base(root: Path, scenario: UpdateScenario) -> None:

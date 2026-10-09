@@ -167,6 +167,12 @@ _CAPABILITY_SUMMARY_HISTORY: dict[str, dict[str, Any]] = {
         "routineCommands": ["agent begin", "agent cognition", "agent verify", "agent cognition checkpoint", "agent work complete"],
         "diagnostics": ["agent workflow show", "agent capabilities --json", "agent --help"],
     },
+    "0.16.9": {
+        "cliContractVersion": 35,
+        "workflowContractVersion": 23,
+        "routineCommands": ["agent begin", "agent cognition", "agent verify", "agent cognition checkpoint", "agent work complete"],
+        "diagnostics": ["agent workflow show", "agent capabilities --json", "agent --help"],
+    },
 }
 
 _CAPABILITY_RELEASE_CHANGES: dict[str, list[str]] = {
@@ -194,6 +200,9 @@ _CAPABILITY_RELEASE_CHANGES: dict[str, list[str]] = {
         "verification.research-warning-assessment",
         "verification.completion-gate-separation",
         "workflow.actionable-alignment-misuse-hint",
+    ],
+    "0.16.10": [
+        "declarative-update.indirect-contract-assertion-guard",
     ],
 }
 
@@ -340,6 +349,7 @@ def capabilities(root: Path) -> dict[str, Any]:
                 "contractTransitions": True,
                 "contractConstantsOwnedByScenario": True,
                 "staleExactAssertionGuard": True,
+                "indirectContractAssertionGuard": True,
                 "autoChain": True,
                 "freshProcessPerEdge": True,
                 "periodicFreshAutoProcess": True,
