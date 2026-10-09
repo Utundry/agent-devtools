@@ -168,7 +168,11 @@ def align_task(
         }
     elif user_approved:
         if str(current.get("status") or "") != "clarification-required" or not current.get("materialGaps"):
-            raise TaskStateError("user approval requires previously recorded material task gaps")
+            raise TaskStateError(
+                "user approval requires previously recorded material task gaps; "
+                "if begin already reported alignment ready, do not call work align. "
+                "Otherwise record the material gap first with work align --gap ... --proposal ..."
+            )
         resolved = resolution.strip()
         if not resolved:
             raise TaskStateError("user approval requires a compact resolution summary")

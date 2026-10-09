@@ -8,8 +8,8 @@ from typing import Any
 from . import __version__
 from .profiles import load_profile
 
-CLI_CONTRACT_VERSION = 34
-WORKFLOW_CONTRACT_VERSION = 22
+CLI_CONTRACT_VERSION = 35
+WORKFLOW_CONTRACT_VERSION = 23
 
 
 def workflow_contract(root: Path) -> dict[str, Any]:
@@ -161,6 +161,12 @@ _CAPABILITY_SUMMARY_HISTORY: dict[str, dict[str, Any]] = {
         "routineCommands": ["agent begin", "agent cognition", "agent verify", "agent cognition checkpoint", "agent work complete"],
         "diagnostics": ["agent workflow show", "agent capabilities --json", "agent --help"],
     },
+    "0.16.8": {
+        "cliContractVersion": 34,
+        "workflowContractVersion": 22,
+        "routineCommands": ["agent begin", "agent cognition", "agent verify", "agent cognition checkpoint", "agent work complete"],
+        "diagnostics": ["agent workflow show", "agent capabilities --json", "agent --help"],
+    },
 }
 
 _CAPABILITY_RELEASE_CHANGES: dict[str, list[str]] = {
@@ -181,6 +187,13 @@ _CAPABILITY_RELEASE_CHANGES: dict[str, list[str]] = {
         "cognition.batch",
         "cognition.one-line-success",
         "overhead.passive-cli-metrics",
+    ],
+    "0.16.9": [
+        "workflow.begin-once-discipline",
+        "workflow.batch-cognition-preference",
+        "verification.research-warning-assessment",
+        "verification.completion-gate-separation",
+        "workflow.actionable-alignment-misuse-hint",
     ],
 }
 
@@ -275,9 +288,9 @@ def capabilities(root: Path) -> dict[str, Any]:
             "workflow": {"show": True, "validate": True, "pullOnly": True, "routineRequired": False},
             "capabilities": {"json": True, "summary": True, "diff": True, "pullOnly": True, "routineRequired": False},
             "selfUpdate": {"available": True, "latestDiscovery": True, "explicitVersion": True, "checkOnly": True, "freshDownload": True, "identityVerified": True},
-            "begin": {"available": True, "canonicalRoutineEntry": True, "usesWorkEnter": True, "durableContextProjection": True, "knowledgeHealth": True, "interruptionResume": True, "resumeWithoutGoal": True, "profileHintCompatibility": True, "conversationMemoryAuthoritative": False, "projectStateAuthoritative": True, "newStateModel": False},
-            "work": {"enter": True, "start": True, "align": True, "status": True, "complete": True, "finish": True, "report": True, "reportReadOnly": True, "oneActionEntry": True, "handoffEntry": True, "routineEntryFastPath": True, "alignmentPendingOptOut": True, "oneActionCompletion": True, "automaticVerificationReuse": True, "baselineWhenUnverified": True, "taskGapGate": True, "noGapFastPath": True, "semanticCloseout": True},
-            "cognition": {"observation": True, "decision": True, "finding": True, "assumption": True, "requirement": not profile.development, "openQuestion": not profile.development, "evidence": not profile.development, "blocker": True, "resolveBlocker": True, "batch": True, "batchDistinctEvents": True, "batchPerEventSource": True, "toolFailure": True, "toolFailureRetryCeiling": 2, "toolFailureOptionalNonBlocking": True, "toolFailureMandatoryBlocks": True, "status": True, "checkpoint": True, "checkpointPromoteRequired": True, "textOptionAlias": True, "stdin": True, "fromFile": True, "utf8BulkCapture": True, "naturalGuessHints": True, "checkpointSessionOnlyClassification": True, "appendOnlyJournal": True, "possibleStaleCognition": True, "compactHumanOutput": True, "oneLineSuccess": True},
+            "begin": {"available": True, "canonicalRoutineEntry": True, "usesWorkEnter": True, "durableContextProjection": True, "knowledgeHealth": True, "interruptionResume": True, "resumeWithoutGoal": True, "ordinaryFollowupReentryRequired": False, "interruptionRecoveryOnly": True, "profileHintCompatibility": True, "conversationMemoryAuthoritative": False, "projectStateAuthoritative": True, "newStateModel": False},
+            "work": {"enter": True, "start": True, "align": True, "status": True, "complete": True, "finish": True, "report": True, "reportReadOnly": True, "oneActionEntry": True, "handoffEntry": True, "routineEntryFastPath": True, "alignmentPendingOptOut": True, "userApprovalRequiresRecordedGap": True, "oneActionCompletion": True, "automaticVerificationReuse": True, "baselineWhenUnverified": True, "taskGapGate": True, "noGapFastPath": True, "semanticCloseout": True},
+            "cognition": {"observation": True, "decision": True, "finding": True, "assumption": True, "requirement": not profile.development, "openQuestion": not profile.development, "evidence": not profile.development, "blocker": True, "resolveBlocker": True, "batch": True, "batchDistinctEvents": True, "batchPerEventSource": True, "batchPreferredForMultiple": True, "toolFailure": True, "toolFailureRetryCeiling": 2, "toolFailureOptionalNonBlocking": True, "toolFailureMandatoryBlocks": True, "status": True, "checkpoint": True, "checkpointPromoteRequired": True, "textOptionAlias": True, "stdin": True, "fromFile": True, "utf8BulkCapture": True, "naturalGuessHints": True, "checkpointSessionOnlyClassification": True, "appendOnlyJournal": True, "possibleStaleCognition": True, "compactHumanOutput": True, "oneLineSuccess": True},
             "overheadMetrics": {"passive": True, "storage": ".agent-work/cli-overhead.jsonl", "cliCalls": True, "durationMs": True, "stdoutBytes": True, "exitCode": True, "noRoutineCommand": True},
             "knowledge": {"promote": True, "remember": True, "why": True, "lifecycle": True, "supersede": True, "validate": True, "status": True, "researchKinds": not profile.development, "softContradictionWarnings": True, "promotionRequired": False, "routineDirectPromote": False, "checkpointAuthority": True, "canonicalStore": ".agent-knowledge", "durableSqlite": False},
             "source": {"add": not profile.development, "list": not profile.development, "taskSessionProvenance": not profile.development},
@@ -292,6 +305,9 @@ def capabilities(root: Path) -> dict[str, Any]:
                 "researchSourceAwareness": profile.profile_id == "research",
                 "researchMaterialQuestionAwareness": profile.profile_id == "research",
                 "researchStrongWarningGate": profile.profile_id == "research",
+                "researchAssessmentStatus": profile.profile_id == "research",
+                "researchWarningChecksExplicit": profile.profile_id == "research",
+                "completionGateSeparated": profile.profile_id == "research",
                 "granularAttestationEscapeHatch": profile.profile_id == "research",
                 "record": profile.verification_mode == "record",
                 "researchBundle": profile.profile_id == "research",

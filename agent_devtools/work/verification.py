@@ -100,15 +100,30 @@ def record_research_bundle(root: Path, *, checks: dict[str, str], evidence: Iter
         if value not in {"pass", "warn", "fail"}:
             raise VerificationError(f"research verification {name} must be pass, warn or fail")
         normalized[name] = value
-    overall = "fail" if "fail" in normalized.values() else "pass"
-    record = record_verification(root, label="research-bundle", status=overall, evidence=evidence, summary=summary)
+    assessment_status = (
+        "fail" if "fail" in normalized.values()
+        else "warn" if "warn" in normalized.values()
+        else "pass"
+    )
+    gate_status = "fail" if assessment_status == "fail" else "pass"
+    warning_checks = [name for name in RESEARCH_CHECKS if normalized[name] == "warn"]
+    record = record_verification(root, label="research-bundle", status=gate_status, evidence=evidence, summary=summary)
     log = _load(root)
     for item in reversed(log["records"]):
         if item.get("id") == record["id"]:
             item["checks"] = normalized
+            item["assessmentStatus"] = assessment_status
+            item["warningChecks"] = warning_checks
+            item["completionEligible"] = gate_status == "pass"
             break
     atomic_json_write(verification_path(root), log)
-    return {**record, "checks": normalized}
+    return {
+        **record,
+        "checks": normalized,
+        "assessmentStatus": assessment_status,
+        "warningChecks": warning_checks,
+        "completionEligible": gate_status == "pass",
+    }
 
 
 def record_check_report(root: Path, report: dict[str, Any]) -> dict[str, Any] | None:

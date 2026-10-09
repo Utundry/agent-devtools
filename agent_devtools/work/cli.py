@@ -241,10 +241,19 @@ def main_verify(root: Path, args: argparse.Namespace) -> int:
     else:
         item = payload.get("record") or payload.get("latest")
         if item:
-            print(f"verification: {item['status'].upper()} · {item['label']} · {item['completedAtUtc']}")
+            assessment = str(item.get("assessmentStatus") or item["status"]).upper()
+            gate = str(item["status"]).upper()
+            gate_suffix = f" · gate={gate}" if assessment != gate else ""
+            print(f"verification: {assessment} · {item['label']}{gate_suffix} · {item['completedAtUtc']}")
         else:
             print("verification: none")
         if args.verify_command == "research":
+            if item and item.get("warningChecks"):
+                print("warning checks: " + ", ".join(item["warningChecks"]))
+                print(
+                    "result limit: warnings remain; this verification does not prove unperformed "
+                    "execution/real-world validation and does not override unresolved task blockers."
+                )
             for warning in payload.get("contextWarnings", []):
                 print(f"Context warning: {warning['message']}")
     if review_only:

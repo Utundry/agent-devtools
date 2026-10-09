@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from agent_devtools.onboarding import managed_block
-from agent_devtools.workflow import capabilities, workflow_contract
+from agent_devtools.workflow import WORKFLOW_CONTRACT_VERSION, capabilities, workflow_contract
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -13,7 +13,8 @@ ROOT = Path(__file__).resolve().parents[1]
 class R8RoutineFrictionReductionTests(unittest.TestCase):
     def test_workflow_contract_makes_discovery_pull_only(self) -> None:
         payload = workflow_contract(ROOT)
-        self.assertEqual(22, payload["formatVersion"])
+        self.assertEqual(WORKFLOW_CONTRACT_VERSION, payload["formatVersion"])
+        self.assertGreaterEqual(WORKFLOW_CONTRACT_VERSION, 22)
         route = payload["routineRoute"]
         self.assertTrue(route["beginSufficientForKnownRoutine"])
         self.assertTrue(route["diagnosticsPullOnly"])
