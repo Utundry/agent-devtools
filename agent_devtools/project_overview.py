@@ -273,15 +273,22 @@ def build_overview(root: Path) -> dict[str, Any]:
 
     latest_verification = verification.get("latest") if isinstance(verification.get("latest"), dict) else {}
     latest_status = str(latest_verification.get("status") or "").lower()
+    current_blockers = list((current or {}).get("blockers", []))
     attention = {
         "openQuestions": len((current or {}).get("openQuestions", [])),
-        "blockers": len((current or {}).get("blockers", [])),
+        "blockers": len(current_blockers),
+        "latestBlocker": current_blockers[0] if current_blockers else None,
         "verificationWarnings": (
             len(latest_verification.get("warningChecks") or [])
             if latest_status == "warn"
             else 0
         ),
         "verificationFailures": 1 if latest_status == "fail" else 0,
+        "verificationIssueLabel": (
+            latest_verification.get("label")
+            if latest_status in {"warn", "fail"}
+            else None
+        ),
         "incomingUpdates": updates["incoming"],
     }
 
@@ -416,6 +423,17 @@ def render_overview(payload: dict[str, Any]) -> str:
         f"  Current verification failures: {attention['verificationFailures']}",
         f"  Incoming updates:  {attention['incomingUpdates']}",
     ]
+    if attention.get("latestBlocker"):
+        blocker_index = lines.index(f"  Blockers:          {attention['blockers']}")
+        lines.insert(blocker_index + 1, f"  Latest blocker:    {attention['latestBlocker']}")
+    if attention.get("verificationIssueLabel"):
+        failure_index = lines.index(
+            f"  Current verification failures: {attention['verificationFailures']}"
+        )
+        lines.insert(
+            failure_index + 1,
+            f"  Verification issue: {attention['verificationIssueLabel']}",
+        )
     if payload.get("projectVersion") is None:
         lines.remove("  Project version:   n/a")
     return "\n".join(lines)

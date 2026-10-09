@@ -199,6 +199,52 @@ class ProjectOverviewTests(unittest.TestCase):
         finally:
             tmp.cleanup()
 
+    def test_attention_exposes_one_actionable_blocker_pointer(self):
+        tmp, root = self.make_root()
+        try:
+            task_path = root / ".agent-work" / "task.json"
+            task = json.loads(task_path.read_text(encoding="utf-8"))
+            task["blockers"] = ["Первый актуальный блокер", "Второй блокер"]
+            task_path.write_text(json.dumps(task), encoding="utf-8")
+            payload = build_overview(root)
+            self.assertEqual(2, payload["attention"]["blockers"])
+            self.assertEqual("Первый актуальный блокер", payload["attention"]["latestBlocker"])
+            text = render_overview(payload)
+            self.assertIn("Latest blocker:    Первый актуальный блокер", text)
+            self.assertNotIn("Второй блокер", text)
+        finally:
+            tmp.cleanup()
+
+    def test_attention_exposes_latest_verification_issue_label_only_when_actionable(self):
+        tmp, root = self.make_root()
+        try:
+            path = root / ".agent-work" / "verification.json"
+            path.write_text(json.dumps({
+                "records": [{
+                    "label": "full-check",
+                    "status": "fail",
+                    "warningChecks": [],
+                    "completedAtUtc": "2026-10-09T14:00:00Z",
+                }]
+            }), encoding="utf-8")
+            payload = build_overview(root)
+            self.assertEqual("full-check", payload["attention"]["verificationIssueLabel"])
+            self.assertIn("Verification issue: full-check", render_overview(payload))
+
+            path.write_text(json.dumps({
+                "records": [{
+                    "label": "full-check",
+                    "status": "pass",
+                    "warningChecks": [],
+                    "completedAtUtc": "2026-10-09T15:00:00Z",
+                }]
+            }), encoding="utf-8")
+            payload = build_overview(root)
+            self.assertIsNone(payload["attention"]["verificationIssueLabel"])
+            self.assertNotIn("Verification issue:", render_overview(payload))
+        finally:
+            tmp.cleanup()
+
 
 if __name__ == "__main__":
     unittest.main()
