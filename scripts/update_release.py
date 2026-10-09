@@ -303,6 +303,42 @@ def periodic_update(args: argparse.Namespace, *, sleep_fn=time.sleep, max_cycles
         sleep_fn(interval)
 
 
+
+def _refresh_managed_onboarding(root: Path) -> dict:
+    """Refresh the local managed AGENTS.md block with the freshly synchronized runtime.
+
+    Publication has already succeeded at this point, so onboarding refresh is
+    deliberately diagnostic/non-fatal: it must never turn a published release
+    into a fake rollback requirement.
+    """
+    agent = root / "agent.py"
+    if not agent.is_file():
+        return {"status": "skipped", "reason": "agent.py missing"}
+    result = subprocess.run(
+        [sys.executable, str(agent), "onboarding", "ensure", "--json"],
+        cwd=root,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if result.returncode:
+        return {
+            "status": "warn",
+            "error": result.stderr.strip() or result.stdout.strip() or f"exit {result.returncode}",
+        }
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return {"status": "warn", "error": "onboarding ensure returned invalid JSON"}
+    return {
+        "status": "pass",
+        "performed": payload.get("performed", payload.get("action")),
+        "path": payload.get("path"),
+    }
+
+
 def update(args: argparse.Namespace) -> dict:
     scenario_path_raw = getattr(args, "scenario", None)
     scenario = load_scenario(Path(scenario_path_raw)) if scenario_path_raw else None
@@ -427,14 +463,18 @@ def update(args: argparse.Namespace) -> dict:
         status = "published" if args.publish else "prepared"
 
     backup = synchronize(root, clone, args.branch, head, version) if args.publish else None
+    onboarding_refresh = None
     if args.publish:
         git(root, "fetch", "--quiet", "--prune", args.remote, args.branch)
+        onboarding_refresh = _refresh_managed_onboarding(root)
+        if onboarding_refresh.get("status") == "warn":
+            print(f"WARNING: managed onboarding refresh failed: {onboarding_refresh.get('error')}", file=sys.stderr, flush=True)
     report = {
         "status": status, "version": version, "branch": args.branch,
         "originalWorktree": str(root), "head": value(root, "rev-parse", "HEAD"),
         "patch": patch_status, "scenario": scenario_status,
         "scenarioSha256": scenario.digest if scenario is not None else None,
-        "localBackupStash": backup, "artifacts": str(run),
+        "localBackupStash": backup, "onboardingRefresh": onboarding_refresh, "artifacts": str(run),
     }
     (run / "update-result.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     shutil.rmtree(clone)

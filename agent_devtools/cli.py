@@ -22,7 +22,7 @@ from .release import cli as release_cli
 from . import shell as shell_cli
 from .self_update import SelfUpdateError, self_update as perform_self_update
 from .work import cli as work_cli
-from .workflow import capabilities as workflow_capabilities, workflow_contract
+from .workflow import capability_diff, capability_summary, capabilities as workflow_capabilities, workflow_contract
 from . import workspace_snapshot_cli
 
 
@@ -155,7 +155,10 @@ def parser() -> argparse.ArgumentParser:
     workflow_show.add_argument("--details", action="store_true", help="include all workflow responsibilities and commands")
     workflow_validate = workflow_sub.add_parser("validate", help="verify advertised workflow commands against the real CLI")
     workflow_validate.add_argument("--json", action="store_true", dest="json_output")
-    capabilities = sub.add_parser("capabilities", help="machine-readable CLI/profile capability discovery")
+    capabilities = sub.add_parser("capabilities", help="capability discovery; compact summary/diff or full machine-readable contract")
+    capability_view = capabilities.add_mutually_exclusive_group()
+    capability_view.add_argument("--summary", action="store_true", help="show the compact routine-focused capability summary")
+    capability_view.add_argument("--diff", dest="diff_version", metavar="VERSION", help="show semantic capability changes since a bundled prior version")
     capabilities.add_argument("--json", action="store_true", dest="json_output")
     onboarding = sub.add_parser("onboarding", help="shared cross-agent project onboarding contract")
     onboarding_sub = onboarding.add_subparsers(dest="onboarding_command", required=True)
@@ -318,12 +321,38 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "capabilities":
         root = discover_project_root()
-        payload = _capabilities_payload(root, cli_parser)
+        try:
+            if args.diff_version:
+                payload = capability_diff(root, args.diff_version)
+            elif args.summary:
+                payload = capability_summary(root)
+            else:
+                payload = _capabilities_payload(root, cli_parser)
+        except ValueError as exc:
+            print(f"agent capabilities: {exc}", file=sys.stderr)
+            return 2
         if args.json_output:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
+        elif args.diff_version:
+            cli_contract = payload["contracts"]["cli"]
+            workflow_contract_delta = payload["contracts"]["workflow"]
+            print(f"capabilities diff {payload['fromVersion']} -> {payload['toVersion']}")
+            print(f"  contracts: CLI {cli_contract['from']} -> {cli_contract['to']} · workflow {workflow_contract_delta['from']} -> {workflow_contract_delta['to']}")
+            routine_changes = payload["routineAdded"] + payload["routineRemoved"]
+            print("  routine: " + ("changed" if routine_changes else "unchanged"))
+            diagnostic_changes = payload["diagnosticsAdded"] + payload["diagnosticsRemoved"]
+            print("  diagnostics: " + ("changed" if diagnostic_changes else "unchanged"))
+            print("  new: " + (", ".join(payload["newCapabilities"]) or "none"))
+            print("  migration: " + (", ".join(payload["migrationWarnings"]) or "none"))
+        elif args.summary:
+            print(f"Agent DevTools {payload['toolVersion']} · CLI v{payload['cliContractVersion']} · workflow v{payload['workflowContractVersion']} · profile={payload['profile']}")
+            print("  routine: " + " | ".join(payload["routineCommands"]))
+            print("  diagnostics: " + " | ".join(payload["diagnostics"]) + " (pull-only)")
+            print("  release changes: " + (", ".join(payload["releaseChanges"]) or "none"))
+            print("  migration: " + (", ".join(payload["migrationWarnings"]) or "none"))
         else:
             print(f"Agent DevTools {payload['toolVersion']} · CLI contract v{payload['cliContractVersion']} · profile={payload['profile']['profile_id']}")
-            print("capabilities: use --json for the machine-readable contract")
+            print("capabilities: use --summary for the compact view, --diff VERSION for semantic changes, or --json for the full contract")
         return 0
     if args.command == "onboarding":
         root = discover_project_root()

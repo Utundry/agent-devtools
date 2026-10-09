@@ -120,7 +120,7 @@ python devtools/agent/agent.py work complete
 
 Semantic capture is intentionally forgiving without adding a second contract: both `cognition finding "..."` and `cognition finding --text "..."` map to the same event primitive. Human cognition output is compact by default (the newly recorded item plus state counts); use `--json` when the complete machine-readable task projection is needed. A natural but invalid guess such as `cognition add` stays invalid and receives an actionable hint to choose a semantic type; it is not added as an alias or second ingestion API. Add `--subject` when the statement is intended to survive as reusable project knowledge. Subjectless cognition remains session-only, and checkpoint explicitly reports when **no promotion is needed**. Routine agents should not call `knowledge promote` before checkpoint; that command remains an expert primitive for exact/manual workflows.
 
-`workflow validate` checks every command advertised by the workflow contract against the real argparse command tree. Machine-readable capabilities also expose `cliCommands`, derived from that same parser rather than from a second command registry.
+`workflow validate` checks every command advertised by the workflow contract against the real argparse command tree. Machine-readable capabilities also expose `cliCommands`, derived from that same parser rather than from a second command registry. For lightweight discovery use `capabilities --summary`; after an upgrade use `capabilities --diff <previous-version>` to see only contract, routine-surface, diagnostic and migration-relevant semantic changes. Full `capabilities --json` remains the exhaustive pull-only machine contract.
 
 ## What it gives an agent
 

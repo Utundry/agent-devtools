@@ -7,7 +7,7 @@ from typing import Any
 from . import __version__
 from .profiles import load_profile
 
-CLI_CONTRACT_VERSION = 32
+CLI_CONTRACT_VERSION = 33
 WORKFLOW_CONTRACT_VERSION = 22
 
 
@@ -134,6 +134,90 @@ def workflow_contract(root: Path) -> dict[str, Any]:
     }
 
 
+
+_CAPABILITY_SUMMARY_HISTORY: dict[str, dict[str, Any]] = {
+    "0.16.4": {
+        "cliContractVersion": 32,
+        "workflowContractVersion": 22,
+        "routineCommands": ["agent begin", "agent cognition", "agent verify", "agent cognition checkpoint", "agent work complete"],
+        "diagnostics": ["agent workflow show", "agent capabilities --json", "agent --help"],
+    },
+    "0.16.5": {
+        "cliContractVersion": 32,
+        "workflowContractVersion": 22,
+        "routineCommands": ["agent begin", "agent cognition", "agent verify", "agent cognition checkpoint", "agent work complete"],
+        "diagnostics": ["agent workflow show", "agent capabilities --json", "agent --help"],
+    },
+}
+
+_CAPABILITY_RELEASE_CHANGES: dict[str, list[str]] = {
+    "0.16.5": [
+        "declarative-update.contract-transitions",
+        "declarative-update.stale-exact-assertion-guard",
+    ],
+    "0.16.6": [
+        "capabilities.summary",
+        "capabilities.diff",
+        "source-update.onboarding-refresh",
+    ],
+}
+
+
+def capability_summary(root: Path) -> dict[str, Any]:
+    payload = capabilities(root)
+    normal = payload["normalSurface"]
+    return {
+        "format": "agent-devtools-capability-summary",
+        "formatVersion": 1,
+        "toolVersion": payload["toolVersion"],
+        "profile": payload["profile"]["profile_id"],
+        "cliContractVersion": payload["cliContractVersion"],
+        "workflowContractVersion": payload["workflowContractVersion"],
+        "routineCommands": list(normal["commands"]),
+        "diagnostics": list(normal.get("diagnostics", [])),
+        "diagnosticsAreRoutine": bool(normal.get("diagnosticsAreRoutine", False)),
+        "releaseChanges": list(_CAPABILITY_RELEASE_CHANGES.get(payload["toolVersion"], [])),
+        "migrationWarnings": [],
+    }
+
+
+def capability_diff(root: Path, previous_version: str) -> dict[str, Any]:
+    previous_version = str(previous_version or "").strip()
+    previous = _CAPABILITY_SUMMARY_HISTORY.get(previous_version)
+    if previous is None:
+        supported = ", ".join(sorted(_CAPABILITY_SUMMARY_HISTORY)) or "none"
+        raise ValueError(
+            f"capability diff baseline {previous_version!r} is not bundled; supported: {supported}"
+        )
+    current = capability_summary(root)
+    old_routine = set(previous["routineCommands"])
+    new_routine = set(current["routineCommands"])
+    old_diag = set(previous["diagnostics"])
+    new_diag = set(current["diagnostics"])
+    return {
+        "format": "agent-devtools-capability-diff",
+        "formatVersion": 1,
+        "fromVersion": previous_version,
+        "toVersion": current["toolVersion"],
+        "contracts": {
+            "cli": {
+                "from": previous["cliContractVersion"],
+                "to": current["cliContractVersion"],
+            },
+            "workflow": {
+                "from": previous["workflowContractVersion"],
+                "to": current["workflowContractVersion"],
+            },
+        },
+        "routineAdded": sorted(new_routine - old_routine),
+        "routineRemoved": sorted(old_routine - new_routine),
+        "diagnosticsAdded": sorted(new_diag - old_diag),
+        "diagnosticsRemoved": sorted(old_diag - new_diag),
+        "newCapabilities": list(current["releaseChanges"]),
+        "migrationWarnings": list(current["migrationWarnings"]),
+    }
+
+
 def capabilities(root: Path) -> dict[str, Any]:
     profile = load_profile(root)
     return {
@@ -145,7 +229,7 @@ def capabilities(root: Path) -> dict[str, Any]:
         "profile": asdict(profile),
         "commands": {
             "workflow": {"show": True, "validate": True, "pullOnly": True, "routineRequired": False},
-            "capabilities": {"json": True, "pullOnly": True, "routineRequired": False},
+            "capabilities": {"json": True, "summary": True, "diff": True, "pullOnly": True, "routineRequired": False},
             "selfUpdate": {"available": True, "latestDiscovery": True, "explicitVersion": True, "checkOnly": True, "freshDownload": True, "identityVerified": True},
             "begin": {"available": True, "canonicalRoutineEntry": True, "usesWorkEnter": True, "durableContextProjection": True, "knowledgeHealth": True, "interruptionResume": True, "resumeWithoutGoal": True, "profileHintCompatibility": True, "conversationMemoryAuthoritative": False, "projectStateAuthoritative": True, "newStateModel": False},
             "work": {"enter": True, "start": True, "align": True, "status": True, "complete": True, "finish": True, "report": True, "reportReadOnly": True, "oneActionEntry": True, "handoffEntry": True, "routineEntryFastPath": True, "alignmentPendingOptOut": True, "oneActionCompletion": True, "automaticVerificationReuse": True, "baselineWhenUnverified": True, "taskGapGate": True, "noGapFastPath": True, "semanticCloseout": True},

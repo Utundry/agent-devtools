@@ -36,7 +36,7 @@ class RetrievalEfficiencyTests(unittest.TestCase):
         tmp, root = self.make_root()
         try:
             caps = capabilities(root)
-            self.assertEqual(32, CLI_CONTRACT_VERSION)
+            self.assertGreaterEqual(CLI_CONTRACT_VERSION, 32)
             self.assertGreaterEqual(WORKFLOW_CONTRACT_VERSION, 21)
             context = caps["commands"]["context"]
             self.assertTrue(context["canonicalFirstPassRetrieval"])
