@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_devtools.update_scenario import UpdateScenarioError, apply_scenario, load_scenario, scenario_marker
+from agent_devtools.update_scenario import UpdateScenarioError, apply_scenario, load_scenario, preflight_scenarios, scenario_marker
 
 
 class UpdateScenarioTests(unittest.TestCase):
@@ -103,6 +103,38 @@ class UpdateScenarioTests(unittest.TestCase):
             payload["changes"] = [{"op": "write", "path": "../escape.txt", "content": "x"}]
             with self.assertRaisesRegex(UpdateScenarioError, "unsafe scenario path"):
                 load_scenario(self.write_scenario(root, payload))
+        finally:
+            tmp.cleanup()
+
+
+    def test_preflight_is_sparse_and_does_not_mutate_project(self):
+        tmp, root = self.make_root()
+        try:
+            payload = self.base()
+            payload["changes"] = [
+                {"op": "replace", "path": "a.txt", "before": "before", "after": "after"},
+                {"op": "assert_contains", "path": "a.txt", "text": "after"},
+            ]
+            scenario = load_scenario(self.write_scenario(root, payload))
+            result = preflight_scenarios(root, [scenario])
+            self.assertEqual("pass", result["status"])
+            self.assertEqual(1, result["scenarioCount"])
+            self.assertEqual("before\n", (root / "a.txt").read_text())
+            self.assertEqual("1.0.0\n", (root / "VERSION").read_text())
+        finally:
+            tmp.cleanup()
+
+    def test_preflight_catches_assertion_before_real_apply(self):
+        tmp, root = self.make_root()
+        try:
+            payload = self.base()
+            payload["changes"] = [
+                {"op": "assert_contains", "path": "a.txt", "text": "missing-marker"},
+            ]
+            scenario = load_scenario(self.write_scenario(root, payload))
+            with self.assertRaisesRegex(UpdateScenarioError, "assert_contains failed"):
+                preflight_scenarios(root, [scenario])
+            self.assertEqual("before\n", (root / "a.txt").read_text())
         finally:
             tmp.cleanup()
 

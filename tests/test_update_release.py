@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "update_release.py"
@@ -244,6 +245,71 @@ class UpdateReleaseTests(unittest.TestCase):
             self.update()
         self.assertEqual(local, self.run_git(self.root, "rev-parse", "HEAD").strip())
         self.assertEqual("unsaved\n", (self.root / "local.txt").read_text())
+
+
+    def write_incoming_scenario(self, payload: dict, name: str = "update.json") -> Path:
+        incoming = self.root / ".agent-updates" / "incoming"
+        incoming.mkdir(parents=True, exist_ok=True)
+        path = incoming / name
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        return path
+
+    def test_auto_idle_explains_non_applicable_incoming_scenario(self) -> None:
+        self.write_incoming_scenario({
+            "format": "agent-devtools-update-scenario",
+            "formatVersion": 1,
+            "fromVersion": "1.0.1",
+            "toVersion": "1.0.2",
+            "changes": [
+                {"op": "replace", "path": "source.txt", "before": "before", "after": "after"},
+            ],
+        })
+        args = self.args()
+        args.version = None
+        report = updater.auto_update(args)
+        self.assertEqual("idle", report["status"])
+        self.assertEqual(1, report["incomingCount"])
+        self.assertEqual(0, report["applicableCount"])
+        self.assertEqual(1, len(report["blocked"]))
+        self.assertIn("expects source VERSION 1.0.1", report["blocked"][0]["reason"])
+
+    def test_auto_preflight_fails_before_fresh_release_process(self) -> None:
+        self.write_incoming_scenario({
+            "format": "agent-devtools-update-scenario",
+            "formatVersion": 1,
+            "fromVersion": "1.0.0",
+            "toVersion": "1.0.1",
+            "changes": [
+                {"op": "assert_contains", "path": "source.txt", "text": "not-present"},
+            ],
+        })
+        args = self.args()
+        args.version = None
+        with mock.patch.object(updater, "_run_fresh_process") as fresh:
+            with self.assertRaisesRegex(updater.UpdateError, "preflight failed"):
+                updater.auto_update(args)
+            fresh.assert_not_called()
+
+    def test_check_auto_preflights_without_publishing_or_mutating(self) -> None:
+        self.write_incoming_scenario({
+            "format": "agent-devtools-update-scenario",
+            "formatVersion": 1,
+            "fromVersion": "1.0.0",
+            "toVersion": "1.0.1",
+            "changes": [
+                {"op": "replace", "path": "source.txt", "before": "before", "after": "checked"},
+            ],
+        })
+        args = self.args()
+        args.version = None
+        args.auto = True
+        args.periodic = None
+        report = updater.check_update(args)
+        self.assertEqual("pass", report["status"])
+        self.assertEqual("auto", report["mode"])
+        self.assertEqual(1, report["scenarioCount"])
+        self.assertEqual("before\n", (self.root / "source.txt").read_text())
+        self.assertEqual(self.initial, self.run_git(self.remote, "rev-parse", "main").strip())
 
 
 if __name__ == "__main__":

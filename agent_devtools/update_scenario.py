@@ -4,6 +4,8 @@ import ast
 import hashlib
 import json
 import re
+import shutil
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -462,3 +464,54 @@ def apply_scenario(root: Path, scenario: UpdateScenario) -> dict[str, Any]:
         "unchanged": unchanged,
         "changes": rows,
     }
+
+def preflight_scenarios(root: Path, scenarios: tuple[UpdateScenario, ...] | list[UpdateScenario]) -> dict[str, Any]:
+    """Validate one or more scenarios against a sparse temporary projection without mutating the project."""
+    root = root.resolve()
+    sequence = tuple(scenarios)
+    if not sequence:
+        return {
+            "format": "agent-devtools-update-preflight",
+            "formatVersion": 1,
+            "status": "pass",
+            "scenarioCount": 0,
+            "results": [],
+        }
+
+    touched = {"VERSION"}
+    copy_tests = False
+    for scenario in sequence:
+        touched.update(scenario.base_blobs)
+        touched.update(str(item["path"]) for item in scenario.changes)
+        touched.update(str(item["path"]) for item in scenario.contracts)
+        copy_tests = copy_tests or bool(scenario.contracts)
+
+    with tempfile.TemporaryDirectory(prefix="agent-devtools-scenario-preflight-") as td:
+        sandbox = Path(td) / "project"
+        sandbox.mkdir()
+        if copy_tests and (root / "tests").is_dir():
+            shutil.copytree(root / "tests", sandbox / "tests")
+        for rel in sorted(touched):
+            source = _path(root, rel)
+            if not source.is_file():
+                continue
+            target = _path(sandbox, rel)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
+
+        results = []
+        for scenario in sequence:
+            result = apply_scenario(sandbox, scenario)
+            results.append(result)
+            (sandbox / "VERSION").write_text(scenario.to_version + "\n", encoding="utf-8")
+
+    return {
+        "format": "agent-devtools-update-preflight",
+        "formatVersion": 1,
+        "status": "pass",
+        "scenarioCount": len(sequence),
+        "fromVersion": sequence[0].from_version,
+        "toVersion": sequence[-1].to_version,
+        "results": results,
+    }
+

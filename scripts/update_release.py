@@ -26,6 +26,7 @@ from agent_devtools.update_scenario import (
     UpdateScenarioError,
     apply_scenario,
     load_scenario,
+    preflight_scenarios,
     scenario_marker,
 )
 
@@ -136,6 +137,27 @@ def _incoming_scenarios(root: Path) -> list:
         except UpdateScenarioError as exc:
             raise UpdateError(f"Invalid incoming scenario {path.name}: {exc}") from exc
     return scenarios
+
+
+def _incoming_diagnostics(root: Path) -> dict:
+    current = _current_source_version(root)
+    scenarios = _incoming_scenarios(root)
+    applicable = [item for item in scenarios if item.from_version == current]
+    blocked = [
+        {
+            "file": item.path.name,
+            "fromVersion": item.from_version,
+            "toVersion": item.to_version,
+            "reason": f"expects source VERSION {item.from_version}; current is {current}",
+        }
+        for item in scenarios
+        if item.from_version != current
+    ]
+    return {
+        "incomingCount": len(scenarios),
+        "applicableCount": len(applicable),
+        "blocked": blocked,
+    }
 
 
 def discover_auto_chain(root: Path) -> list[Path]:
@@ -303,6 +325,14 @@ def auto_update(args: argparse.Namespace) -> dict:
             break
         scenario_path = chain[0]
         scenario = load_scenario(scenario_path)
+        try:
+            preflight_scenarios(root, [scenario])
+        except UpdateScenarioError as exc:
+            raise UpdateError(f"Scenario preflight failed before release preparation: {exc}") from exc
+        print(
+            f"Scenario preflight PASS: {scenario.from_version} -> {scenario.to_version} · {scenario.path.name}",
+            flush=True,
+        )
         report = _run_fresh_process(
             args,
             root,
@@ -312,14 +342,69 @@ def auto_update(args: argparse.Namespace) -> dict:
         _archive_applied_scenario(root, scenario_path, scenario.digest)
         reports.append(report)
 
+    diagnostics = _incoming_diagnostics(root)
     return {
         "status": "updated" if reports else "idle",
         "fromVersion": started,
         "version": _current_source_version(root),
         "appliedCount": len(reports),
+        **diagnostics,
         "reports": reports,
     }
 
+
+
+def check_update(args: argparse.Namespace) -> dict:
+    entry = Path(args.repo).expanduser().resolve()
+    root = branch_worktree(entry, args.branch)
+    ensure_idle(root)
+    if getattr(args, "version", None):
+        raise UpdateError("--version cannot be combined with --check")
+    if getattr(args, "periodic", None) is not None:
+        raise UpdateError("--periodic cannot be combined with --check")
+
+    if getattr(args, "auto", False):
+        paths = discover_auto_chain(root)
+        scenarios = [load_scenario(path) for path in paths]
+        result = preflight_scenarios(root, scenarios)
+        diagnostics = _incoming_diagnostics(root)
+        return {
+            "status": "pass",
+            "mode": "auto",
+            "version": _current_source_version(root),
+            "scenarioCount": len(scenarios),
+            "chain": [
+                {
+                    "file": item.path.name,
+                    "fromVersion": item.from_version,
+                    "toVersion": item.to_version,
+                    "sha256": item.digest,
+                }
+                for item in scenarios
+            ],
+            **diagnostics,
+            "preflight": result,
+        }
+
+    scenario_path = getattr(args, "scenario", None)
+    if scenario_path:
+        scenario = load_scenario(Path(scenario_path))
+        result = preflight_scenarios(root, [scenario])
+        return {
+            "status": "pass",
+            "mode": "scenario",
+            "version": _current_source_version(root),
+            "scenarioCount": 1,
+            "chain": [{
+                "file": scenario.path.name,
+                "fromVersion": scenario.from_version,
+                "toVersion": scenario.to_version,
+                "sha256": scenario.digest,
+            }],
+            "preflight": result,
+        }
+
+    raise UpdateError("--check requires --auto or --scenario")
 
 def periodic_update(args: argparse.Namespace, *, sleep_fn=time.sleep, max_cycles: int | None = None) -> None:
     interval = float(getattr(args, "periodic", 0) or 0)
@@ -550,15 +635,19 @@ def main(argv: list[str] | None = None) -> int:
     source.add_argument("--auto", action="store_true", help="apply the maximal unambiguous scenario chain from .agent-updates/incoming")
     source.add_argument("--periodic", type=float, metavar="SECONDS", help="stay in foreground and run --auto at this interval")
     parser.add_argument("--retry-failed", action="store_true", help="in periodic mode retry an unchanged failed scenario/catalog")
+    parser.add_argument("--check", action="store_true", help="read-only declarative scenario preflight; requires --auto or --scenario")
     parser.add_argument("--publish", action="store_true", help="publish and update the original branch")
     parser.add_argument("--result-file", help=argparse.SUPPRESS)
     parser.add_argument("--suppress-report", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     try:
-        if args.periodic is not None:
+        if args.check:
+            report = check_update(args)
+        elif args.periodic is not None:
             periodic_update(args)
             return 0
-        report = auto_update(args) if args.auto else update(args)
+        else:
+            report = auto_update(args) if args.auto else update(args)
     except KeyboardInterrupt:
         print("Periodic update stopped", file=sys.stderr)
         return 130

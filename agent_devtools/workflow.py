@@ -8,7 +8,7 @@ from typing import Any
 from . import __version__
 from .profiles import load_profile
 
-CLI_CONTRACT_VERSION = 35
+CLI_CONTRACT_VERSION = 36
 WORKFLOW_CONTRACT_VERSION = 23
 
 
@@ -179,6 +179,18 @@ _CAPABILITY_SUMMARY_HISTORY: dict[str, dict[str, Any]] = {
         "routineCommands": ["agent begin", "agent cognition", "agent verify", "agent cognition checkpoint", "agent work complete"],
         "diagnostics": ["agent workflow show", "agent capabilities --json", "agent --help"],
     },
+    "0.16.11": {
+        "cliContractVersion": 35,
+        "workflowContractVersion": 23,
+        "routineCommands": ["agent begin", "agent cognition", "agent verify", "agent cognition checkpoint", "agent work complete"],
+        "diagnostics": ["agent workflow show", "agent capabilities --json", "agent --help"],
+    },
+    "0.16.12": {
+        "cliContractVersion": 35,
+        "workflowContractVersion": 23,
+        "routineCommands": ["agent begin", "agent cognition", "agent verify", "agent cognition checkpoint", "agent work complete"],
+        "diagnostics": ["agent workflow show", "agent capabilities --json", "agent --help"],
+    },
 }
 
 _CAPABILITY_RELEASE_CHANGES: dict[str, list[str]] = {
@@ -214,6 +226,16 @@ _CAPABILITY_RELEASE_CHANGES: dict[str, list[str]] = {
         "context.passive-efficiency-telemetry",
         "context.repeat-projection-detection",
         "context.conservative-reference-signal",
+    ],
+    "0.16.12": [
+        "work-report.semantic-history-truth",
+        "work-report.verification-warning-projection",
+    ],
+    "0.16.13": [
+        "project.overview",
+        "declarative-update.sparse-preflight",
+        "declarative-update.check-only",
+        "declarative-update.idle-diagnostics",
     ],
 }
 
@@ -312,6 +334,7 @@ def capabilities(root: Path) -> dict[str, Any]:
             "work": {"enter": True, "start": True, "align": True, "status": True, "complete": True, "finish": True, "report": True, "reportReadOnly": True, "oneActionEntry": True, "handoffEntry": True, "routineEntryFastPath": True, "alignmentPendingOptOut": True, "userApprovalRequiresRecordedGap": True, "oneActionCompletion": True, "automaticVerificationReuse": True, "baselineWhenUnverified": True, "taskGapGate": True, "noGapFastPath": True, "semanticCloseout": True},
             "cognition": {"observation": True, "decision": True, "finding": True, "assumption": True, "requirement": not profile.development, "openQuestion": not profile.development, "evidence": not profile.development, "blocker": True, "resolveBlocker": True, "batch": True, "batchDistinctEvents": True, "batchPerEventSource": True, "batchPreferredForMultiple": True, "toolFailure": True, "toolFailureRetryCeiling": 2, "toolFailureOptionalNonBlocking": True, "toolFailureMandatoryBlocks": True, "status": True, "checkpoint": True, "checkpointPromoteRequired": True, "textOptionAlias": True, "stdin": True, "fromFile": True, "utf8BulkCapture": True, "naturalGuessHints": True, "checkpointSessionOnlyClassification": True, "appendOnlyJournal": True, "possibleStaleCognition": True, "compactHumanOutput": True, "oneLineSuccess": True},
             "overheadMetrics": {"passive": True, "storage": ".agent-work/cli-overhead.jsonl + .agent-work/context-usage.sqlite3", "cliCalls": True, "durationMs": True, "stdoutBytes": True, "exitCode": True, "contextTokens": True, "retrievalReferenceRate": True, "repeatProjectionDetection": True, "noRoutineCommand": True},
+            "projectOverview": {"available": True, "readOnly": True, "humanReadable": True, "json": True, "aggregatesExistingStateOnly": True, "noDashboardService": True},
             "knowledge": {"promote": True, "remember": True, "why": True, "lifecycle": True, "supersede": True, "validate": True, "status": True, "researchKinds": not profile.development, "softContradictionWarnings": True, "promotionRequired": False, "routineDirectPromote": False, "checkpointAuthority": True, "canonicalStore": ".agent-knowledge", "durableSqlite": False},
             "source": {"add": not profile.development, "list": not profile.development, "taskSessionProvenance": not profile.development},
             "context": {"available": True, "affected": profile.development, "prepare": True, "current": True, "why": True, "expand": True, "stageAware": True, "hierarchicalScope": True, "budgeted": True, "deduplicate": True, "selectionReasons": True, "crossTaskLexicalIsolation": True, "possiblyRelatedCues": True, "possiblyRelatedSeparateBudget": True, "canonicalFirstPassRetrieval": True, "manualDurableSearchFallbackOnly": True, "avoidRedundantDurableRescan": True, "usageSqliteDisposable": True, "efficiencyTelemetry": True, "repeatProjectionDetection": True, "conservativeReferenceSignal": True, "referenceSignalIsProofOfUse": False},
@@ -357,6 +380,9 @@ def capabilities(root: Path) -> dict[str, Any]:
                 "technicalWorkspace": ".agent-updates/",
                 "trackedScenarios": False,
                 "scenarioSnapshotPerRun": True,
+                "sparsePreflight": True,
+                "checkOnly": True,
+                "idleDiagnostics": True,
                 "contractTransitions": True,
                 "contractConstantsOwnedByScenario": True,
                 "staleExactAssertionGuard": True,
@@ -384,7 +410,7 @@ def capabilities(root: Path) -> dict[str, Any]:
                 else ["agent begin", "agent cognition", "agent verify", "agent cognition checkpoint", "agent work complete"]
             ),
             "advancedPrimitives": ["agent task update", "agent work enter", "agent work finish", "agent knowledge promote", "agent checkpoint create", "agent resume"],
-            "optionalReadOnly": ["agent work report"],
+            "optionalReadOnly": ["agent work report", "agent project overview"],
             "diagnostics": ["agent workflow show", "agent capabilities --json", "agent --help"],
             "diagnosticsAreRoutine": False,
             "advancedPrimitivesAreRoutine": False,

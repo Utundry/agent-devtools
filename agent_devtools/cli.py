@@ -19,6 +19,7 @@ from .presets import PresetError, apply_preset, get_preset, list_presets
 from .onboarding import ensure as ensure_onboarding, status as onboarding_status
 from .profiles import ProfileError, get_profile, list_profiles, load_profile, set_profile
 from . import preserve as preserve_cli
+from . import project_overview as project_overview_cli
 from . import handoff_cli
 from .release import cli as release_cli
 from . import shell as shell_cli
@@ -55,7 +56,7 @@ def _metric_command(raw_argv: list[str]) -> str:
     if len(raw_argv) > 1 and not str(raw_argv[1]).startswith("-") and first in {
         "workflow", "profile", "onboarding", "changes", "check", "release", "context",
         "source", "verify", "cognition", "knowledge", "work", "task", "handoff",
-        "preserve", "checkpoint", "workspace-snapshot", "preset",
+        "preserve", "checkpoint", "workspace-snapshot", "preset", "project",
     }:
         return first + " " + str(raw_argv[1])
     return first
@@ -236,6 +237,8 @@ def parser() -> argparse.ArgumentParser:
     self_update.add_argument("--check", action="store_true", help="read-only update availability check")
     self_update.add_argument("--timeout", type=float, default=30.0, help="network timeout in seconds")
     self_update.add_argument("--json", action="store_true", dest="json_output")
+    project = sub.add_parser("project", help="human-facing project observability")
+    project_overview_cli.configure_parser(project)
     changes = sub.add_parser("changes", help="canonical project change-set and patch discovery")
     changes_cli.configure_parser(changes)
     check = sub.add_parser("check", help="portable verification facade")
@@ -446,6 +449,8 @@ def _main_impl(argv: list[str] | None = None) -> int:
             if payload.get("performed"):
                 print(f"  installed: {payload.get('installedVersion')}")
         return 0
+    if args.command == "project":
+        return project_overview_cli.main(discover_project_root(), args)
     if args.command == "changes":
         return changes_cli.main(discover_project_root(), args)
     if args.command == "check":
