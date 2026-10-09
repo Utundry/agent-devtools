@@ -164,7 +164,7 @@ class ContextRecallCliFrictionTests(unittest.TestCase):
         try:
             caps = capabilities(root)
             self.assertGreaterEqual(CLI_CONTRACT_VERSION, 31)
-            self.assertEqual(21, WORKFLOW_CONTRACT_VERSION)
+            self.assertGreaterEqual(WORKFLOW_CONTRACT_VERSION, 21)
             self.assertTrue(caps["commands"]["context"]["possiblyRelatedCues"])
             self.assertTrue(caps["commands"]["cognition"]["compactHumanOutput"])
             semantics = caps["exitCodeSemantics"]

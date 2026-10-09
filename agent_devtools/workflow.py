@@ -8,7 +8,7 @@ from . import __version__
 from .profiles import load_profile
 
 CLI_CONTRACT_VERSION = 32
-WORKFLOW_CONTRACT_VERSION = 21
+WORKFLOW_CONTRACT_VERSION = 22
 
 
 def workflow_contract(root: Path) -> dict[str, Any]:
@@ -30,7 +30,7 @@ def workflow_contract(root: Path) -> dict[str, Any]:
             "Phases describe responsibilities, not seven separate command invocations. Routine work uses begin, project-native execution, checkpoint when semantic closeout needs review, and work complete.",
             "Use work complete for routine completion: reuse a successful check only after validating its current inputs, outputs, task identity and coverage; otherwise run the affected policy. No visible changes and no reusable evidence require a baseline check. work finish is the strict no-execution primitive; work complete --no-cache explicitly requests physical execution.",
             "Read relevant durable knowledge when needed; begin is the canonical first-pass retrieval for durable project memory. Trust its selected + possibly-related projection before doing any generic manual rescan of .agent-knowledge; use exact filesystem search only when that projection is insufficient for a specific reason or when exact repository text outside durable memory is needed. Promote only new reusable knowledge and reuse exact existing statements instead of creating duplicates.",
-            "AGENTS.md defines the mandatory project workflow; the CLI is authoritative for current syntax and capabilities.",
+            "AGENTS.md defines the mandatory project workflow; the CLI is authoritative for current syntax and capabilities. Routine discovery is pull-based: do not run workflow show, capabilities --json, or help as a preamble when begin and the known normal surface are sufficient; inspect them only when syntax, feature availability, profile state, or recovery behavior is actually uncertain.",
             "Agent DevTools orchestrates project-native tools; it does not replace Git, build, test, release, or domain tooling.",
             "Canonical project change discovery includes untracked files governed by the source contract; plain git diff is not a complete handoff inventory.",
             "Session state and caches are disposable; durable project knowledge is tracked in .agent-knowledge/.",
@@ -52,6 +52,10 @@ def workflow_contract(root: Path) -> dict[str, Any]:
             "entry": "begin",
             "entryPrimitive": "work enter",
             "entryRule": "Routine agents use begin; work enter is a lower-level primitive.",
+            "beginSufficientForKnownRoutine": True,
+            "diagnosticsPullOnly": True,
+            "diagnosticCommands": ["workflow show", "capabilities --json", "--help"],
+            "manualAlignmentAfterReady": False,
             "execution": "Use project-native tools; record only meaningful new findings or decisions.",
             "completion": "work complete",
             "alreadyVerifiedCompletion": "work finish",
@@ -140,8 +144,8 @@ def capabilities(root: Path) -> dict[str, Any]:
         "toolVersion": __version__,
         "profile": asdict(profile),
         "commands": {
-            "workflow": {"show": True, "validate": True},
-            "capabilities": {"json": True},
+            "workflow": {"show": True, "validate": True, "pullOnly": True, "routineRequired": False},
+            "capabilities": {"json": True, "pullOnly": True, "routineRequired": False},
             "selfUpdate": {"available": True, "latestDiscovery": True, "explicitVersion": True, "checkOnly": True, "freshDownload": True, "identityVerified": True},
             "begin": {"available": True, "canonicalRoutineEntry": True, "usesWorkEnter": True, "durableContextProjection": True, "knowledgeHealth": True, "interruptionResume": True, "resumeWithoutGoal": True, "profileHintCompatibility": True, "conversationMemoryAuthoritative": False, "projectStateAuthoritative": True, "newStateModel": False},
             "work": {"enter": True, "start": True, "align": True, "status": True, "complete": True, "finish": True, "report": True, "reportReadOnly": True, "oneActionEntry": True, "handoffEntry": True, "routineEntryFastPath": True, "alignmentPendingOptOut": True, "oneActionCompletion": True, "automaticVerificationReuse": True, "baselineWhenUnverified": True, "taskGapGate": True, "noGapFastPath": True, "semanticCloseout": True},
@@ -210,6 +214,8 @@ def capabilities(root: Path) -> dict[str, Any]:
             ),
             "advancedPrimitives": ["agent task update", "agent work enter", "agent work finish", "agent knowledge promote", "agent checkpoint create", "agent resume"],
             "optionalReadOnly": ["agent work report"],
+            "diagnostics": ["agent workflow show", "agent capabilities --json", "agent --help"],
+            "diagnosticsAreRoutine": False,
             "advancedPrimitivesAreRoutine": False,
         },
         "tracked": ["AGENTS.md", "agent-tools.json", "agent-check.policy.json", ".agent-knowledge/"],

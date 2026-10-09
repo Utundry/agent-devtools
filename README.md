@@ -99,12 +99,10 @@ python devtools/agent/agent.py self-update
 
 It discovers the release pinned by the canonical handoff, freshly downloads that exact installer, checks its release identity, updates the disposable runtime, and verifies the newly installed `toolVersion`. Use `self-update --check` for a read-only availability check or `self-update --version X.Y.Z` for a deterministic target.
 
-After bootstrap, the agent should read `AGENTS.md` and use the installed runtime as the source of truth:
+After bootstrap, the agent should read `AGENTS.md` and use the installed runtime as the source of truth. For ordinary work, do not run discovery commands as a ritual: start with `begin`. `workflow show`, `workflow validate`, `capabilities --json`, and CLI `--help` are pull-only diagnostics for genuine syntax, feature, profile, or recovery uncertainty.
 
 ```bash
-python devtools/agent/agent.py workflow show
-python devtools/agent/agent.py workflow validate
-python devtools/agent/agent.py capabilities --json
+python devtools/agent/agent.py begin --goal "..."
 ```
 
 For ordinary substantial work, the canonical routine inside the **Agent Work Lifecycle** is intentionally small:
@@ -149,7 +147,7 @@ python devtools/agent/agent.py cognition checkpoint
 python devtools/agent/agent.py work complete
 ```
 
-`work enter` remains available as the lower-level lifecycle primitive, but agents should not use it as the routine entrypoint. When `checkpoint` or `work complete` cannot proceed, follow the executable next action printed by the command instead of guessing a lower-level syntax.
+`work enter` remains available as the lower-level lifecycle primitive, but agents should not use it as the routine entrypoint. `begin` already applies the no-material-gaps fast path for an ordinary new task; if it reports alignment ready, do not add a separate `work align` call. When `checkpoint` or `work complete` cannot proceed, follow the executable next action printed by the command instead of guessing a lower-level syntax.
 
 For research, verification is similarly guided and this is the canonical route (do not substitute generic `verify record` in routine research):
 
@@ -184,7 +182,7 @@ An optional failure is non-blocking: use a fallback or skip the artifact and con
 
 ### Canonical agent surface
 
-Routine agents use a deliberately small surface: `begin`, `cognition`, profile-appropriate `verify`, `cognition checkpoint`, and `work complete`. Lower-level commands such as `task update`, `work enter`, `work finish`, `knowledge promote`, `checkpoint create`, and `resume` remain available for expert, compatibility, and recovery scenarios but are not the normal path. `begin --profile <current-profile>` is accepted as a compatibility hint, and obvious `task update --add-finding/--add-assumption/--add-decision/--done` aliases are accepted to prevent syntax thrashing without promoting `task update` to the routine surface.
+Routine agents use a deliberately small surface: `begin`, `cognition`, profile-appropriate `verify`, `cognition checkpoint`, and `work complete`. Diagnostic discovery commands (`workflow show`, `capabilities --json`, CLI `--help`) are also not routine steps: inspect them only when the known surface is insufficient or uncertain. Lower-level commands such as `task update`, `work enter`, `work align`, `work finish`, `knowledge promote`, `checkpoint create`, and `resume` remain available for expert, compatibility and recovery scenarios but are not the normal path. `begin --profile <current-profile>` is accepted as a compatibility hint, and obvious `task update --add-finding/--add-assumption/--add-decision/--done` aliases are accepted to prevent syntax thrashing without promoting `task update` to the routine surface.
 
 ### Bulk semantic capture and final report
 

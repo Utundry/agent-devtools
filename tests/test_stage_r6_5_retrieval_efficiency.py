@@ -37,7 +37,7 @@ class RetrievalEfficiencyTests(unittest.TestCase):
         try:
             caps = capabilities(root)
             self.assertEqual(32, CLI_CONTRACT_VERSION)
-            self.assertEqual(21, WORKFLOW_CONTRACT_VERSION)
+            self.assertGreaterEqual(WORKFLOW_CONTRACT_VERSION, 21)
             context = caps["commands"]["context"]
             self.assertTrue(context["canonicalFirstPassRetrieval"])
             self.assertTrue(context["manualDurableSearchFallbackOnly"])

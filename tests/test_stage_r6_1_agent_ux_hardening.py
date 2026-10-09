@@ -97,7 +97,7 @@ class AgentUxHardeningTests(unittest.TestCase):
         try:
             caps = capabilities(root)
             self.assertGreaterEqual(CLI_CONTRACT_VERSION, 28)
-            self.assertEqual(21, WORKFLOW_CONTRACT_VERSION)
+            self.assertGreaterEqual(WORKFLOW_CONTRACT_VERSION, 21)
             self.assertTrue(caps["commands"]["cognition"]["naturalGuessHints"])
             self.assertTrue(caps["commands"]["verification"]["researchContextWarnings"])
             self.assertNotIn("agent cognition add", caps["normalSurface"]["commands"])
