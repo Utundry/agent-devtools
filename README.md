@@ -89,6 +89,8 @@ Scenario format v1 deliberately has no shell/Python hooks. Supported transformat
 
 Update execution state is technical, disposable state under Git-ignored `.agent-updates/`: incoming scenarios, isolated run directories, logs, copied scenario snapshots, artifacts, and temporary recovery helpers. Scenarios are not durable project knowledge and are not tracked by default; reusable lessons and architectural decisions belong in `.agent-knowledge/`.
 
+For rapid fixes, drop one or more scenarios into `.agent-updates/incoming/` and run `python scripts/update_release.py --auto --publish`. Auto follows the unique reachable `fromVersion -> toVersion` chain from the current `VERSION`, applies each scenario through the same canonical release path, and moves successful inputs to `.agent-updates/applied/`. Forks and cycles fail closed. `python scripts/update_release.py --periodic 60 --publish` stays in the foreground and repeats auto every 60 seconds; Ctrl+C stops it. Periodic mode is not a daemon and suppresses an unchanged failed scenario/catalog until its content or `VERSION` changes, unless `--retry-failed` is explicit.
+
 Once Agent DevTools is installed, updating it is a single semantic action:
 
 ```bash

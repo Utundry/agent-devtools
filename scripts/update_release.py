@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -113,6 +114,193 @@ def synchronize(root: Path, clone: Path, branch: str, expected_head: str, versio
     print(f"Local edits saved in stash {backup}; retained without automatic apply", flush=True)
     git(root, "merge", "--ff-only", target)
     return backup
+
+def _update_home(root: Path) -> Path:
+    return root / ".agent-updates"
+
+
+def _current_source_version(root: Path) -> str:
+    try:
+        return (root / "VERSION").read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        raise UpdateError(f"Cannot read project VERSION: {exc}") from exc
+
+
+def _incoming_scenarios(root: Path) -> list:
+    incoming = _update_home(root) / "incoming"
+    incoming.mkdir(parents=True, exist_ok=True)
+    scenarios = []
+    for path in sorted(incoming.glob("*.json")):
+        try:
+            scenarios.append(load_scenario(path))
+        except UpdateScenarioError as exc:
+            raise UpdateError(f"Invalid incoming scenario {path.name}: {exc}") from exc
+    return scenarios
+
+
+def discover_auto_chain(root: Path) -> list[Path]:
+    current = _current_source_version(root)
+    by_from: dict[str, list] = {}
+    for scenario in _incoming_scenarios(root):
+        by_from.setdefault(scenario.from_version, []).append(scenario)
+
+    chain: list[Path] = []
+    seen = {current}
+    while current in by_from:
+        choices = by_from[current]
+        if len(choices) != 1:
+            names = ", ".join(sorted(item.path.name for item in choices))
+            raise UpdateError(
+                f"Ambiguous update chain from VERSION {current}: {names}"
+            )
+        scenario = choices[0]
+        if scenario.to_version in seen:
+            raise UpdateError(
+                f"Update scenario cycle detected at VERSION {scenario.to_version}"
+            )
+        chain.append(scenario.path)
+        seen.add(scenario.to_version)
+        current = scenario.to_version
+    return chain
+
+
+def _archive_applied_scenario(root: Path, scenario_path: Path, digest: str) -> Path:
+    applied = _update_home(root) / "applied"
+    applied.mkdir(parents=True, exist_ok=True)
+    destination = applied / f"{scenario_path.stem}-{digest[:12]}.json"
+    if destination.exists():
+        existing = hashlib.sha256(destination.read_bytes()).hexdigest()
+        if existing != digest:
+            raise UpdateError(f"Applied scenario archive collision: {destination.name}")
+        scenario_path.unlink(missing_ok=True)
+        return destination
+    shutil.move(str(scenario_path), str(destination))
+    return destination
+
+
+def _auto_catalog_key(root: Path) -> str:
+    digest = hashlib.sha256()
+    digest.update((_current_source_version(root) + "\0").encode("utf-8"))
+    incoming = _update_home(root) / "incoming"
+    if incoming.is_dir():
+        for path in sorted(incoming.glob("*.json")):
+            digest.update(path.name.encode("utf-8"))
+            digest.update(b"\0")
+            digest.update(path.read_bytes())
+            digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def _periodic_state_path(root: Path) -> Path:
+    return _update_home(root) / "periodic-state.json"
+
+
+def _load_periodic_state(root: Path) -> dict:
+    path = _periodic_state_path(root)
+    if not path.is_file():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _save_periodic_failure(root: Path, key: str, error: str) -> None:
+    path = _periodic_state_path(root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_suffix(".tmp")
+    temp.write_text(json.dumps({
+        "format": "agent-devtools-periodic-update-state",
+        "formatVersion": 1,
+        "failedKey": key,
+        "error": error,
+    }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    temp.replace(path)
+
+
+def _clear_periodic_state(root: Path) -> None:
+    _periodic_state_path(root).unlink(missing_ok=True)
+
+
+def auto_update(args: argparse.Namespace) -> dict:
+    if not getattr(args, "publish", False):
+        raise UpdateError("--auto requires --publish so each successful scenario advances the canonical worktree")
+    if getattr(args, "version", None):
+        raise UpdateError("--version cannot be combined with --auto")
+    entry = Path(args.repo).expanduser().resolve()
+    root = branch_worktree(entry, args.branch)
+    ensure_idle(root)
+    started = _current_source_version(root)
+    reports = []
+
+    while True:
+        chain = discover_auto_chain(root)
+        if not chain:
+            break
+        scenario_path = chain[0]
+        scenario = load_scenario(scenario_path)
+        values = vars(args).copy()
+        values.update({
+            "version": None,
+            "patch": None,
+            "scenario": str(scenario_path),
+            "auto": False,
+            "periodic": None,
+        })
+        report = update(argparse.Namespace(**values))
+        _archive_applied_scenario(root, scenario_path, scenario.digest)
+        reports.append(report)
+
+    return {
+        "status": "updated" if reports else "idle",
+        "fromVersion": started,
+        "version": _current_source_version(root),
+        "appliedCount": len(reports),
+        "reports": reports,
+    }
+
+
+def periodic_update(args: argparse.Namespace, *, sleep_fn=time.sleep, max_cycles: int | None = None) -> None:
+    interval = float(getattr(args, "periodic", 0) or 0)
+    if interval < 1.0:
+        raise UpdateError("--periodic interval must be at least 1 second")
+    if not getattr(args, "publish", False):
+        raise UpdateError("--periodic requires --publish")
+    if getattr(args, "version", None):
+        raise UpdateError("--version cannot be combined with --periodic")
+
+    entry = Path(args.repo).expanduser().resolve()
+    root = branch_worktree(entry, args.branch)
+    cycles = 0
+    while True:
+        incoming = _update_home(root) / "incoming"
+        has_scenarios = incoming.is_dir() and any(incoming.glob("*.json"))
+        if has_scenarios:
+            key = _auto_catalog_key(root)
+            state = _load_periodic_state(root)
+            suppressed = (
+                not getattr(args, "retry_failed", False)
+                and state.get("failedKey") == key
+            )
+            if not suppressed:
+                values = vars(args).copy()
+                values["auto"] = True
+                values["periodic"] = None
+                try:
+                    report = auto_update(argparse.Namespace(**values))
+                except (UpdateError, UpdateScenarioError, OSError, subprocess.SubprocessError) as exc:
+                    _save_periodic_failure(root, key, str(exc))
+                    print(f"Periodic update failed and is suppressed until input or VERSION changes: {exc}", file=sys.stderr, flush=True)
+                else:
+                    _clear_periodic_state(root)
+                    if report["appliedCount"]:
+                        print(json.dumps(report, indent=2), flush=True)
+
+        cycles += 1
+        if max_cycles is not None and cycles >= max_cycles:
+            return
+        sleep_fn(interval)
 
 
 def update(args: argparse.Namespace) -> dict:
@@ -262,10 +450,19 @@ def main(argv: list[str] | None = None) -> int:
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--patch", help="optional binary Git patch to apply to committed source")
     source.add_argument("--scenario", help="declarative JSON update scenario")
+    source.add_argument("--auto", action="store_true", help="apply the maximal unambiguous scenario chain from .agent-updates/incoming")
+    source.add_argument("--periodic", type=float, metavar="SECONDS", help="stay in foreground and run --auto at this interval")
+    parser.add_argument("--retry-failed", action="store_true", help="in periodic mode retry an unchanged failed scenario/catalog")
     parser.add_argument("--publish", action="store_true", help="publish and update the original branch")
     args = parser.parse_args(argv)
     try:
-        report = update(args)
+        if args.periodic is not None:
+            periodic_update(args)
+            return 0
+        report = auto_update(args) if args.auto else update(args)
+    except KeyboardInterrupt:
+        print("Periodic update stopped", file=sys.stderr)
+        return 130
     except (UpdateError, UpdateScenarioError, OSError, subprocess.SubprocessError) as exc:
         print(f"FAIL: {exc}", file=sys.stderr)
         return 1

@@ -188,6 +188,12 @@ def capabilities(root: Path) -> dict[str, Any]:
                 "technicalWorkspace": ".agent-updates/",
                 "trackedScenarios": False,
                 "scenarioSnapshotPerRun": True,
+                "autoChain": True,
+                "periodicForeground": True,
+                "periodicDaemon": False,
+                "failedCatalogSuppression": True,
+                "incomingDirectory": ".agent-updates/incoming/",
+                "appliedDirectory": ".agent-updates/applied/",
             },
         },
         "exitCodeSemantics": {
