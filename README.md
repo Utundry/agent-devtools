@@ -77,6 +77,16 @@ python AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py \
 
 ### Updating an existing installation
 
+### Declarative source updates
+
+Agent DevTools source releases can now be prepared from a small JSON scenario instead of a generated one-off Python publisher. The stable `scripts/update_release.py` owns clone isolation, Git safety, qualification, publication, retry and synchronization; the scenario contains only version intent, optional exact baseline guards, and declarative file transformations.
+
+```bash
+python scripts/update_release.py --scenario update-0.16.1.json --publish
+```
+
+Scenario format v1 deliberately has no shell/Python hooks. Supported transformations are `replace`, `write`, `delete`, and `assert_contains`; `baseBlobs` can pin exact Git blob identities. The scenario SHA-256 is recorded in the update commit so a retry can verify provenance instead of reconstructing partial state.
+
 Once Agent DevTools is installed, updating it is a single semantic action:
 
 ```bash

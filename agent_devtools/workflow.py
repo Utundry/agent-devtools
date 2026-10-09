@@ -177,6 +177,15 @@ def capabilities(root: Path) -> dict[str, Any]:
             "checkpoint": True,
             "workspaceSnapshot": {"create": not profile.development, "inspect": True, "restore": not profile.development},
             "release": profile.development,
+            "declarativeUpdate": {
+                "available": profile.development,
+                "format": "agent-devtools-update-scenario",
+                "formatVersion": 1,
+                "stdlibOnly": True,
+                "arbitraryHooks": False,
+                "isolatedPreparation": True,
+                "provenanceSha256": True,
+            },
         },
         "exitCodeSemantics": {
             "0": "successful or clean action",

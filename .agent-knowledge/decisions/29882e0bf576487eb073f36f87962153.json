@@ -1,0 +1,26 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "29882e0bf576487eb073f36f87962153",
+  "kind": "decision",
+  "subject": "release-tooling/declarative-update-executor",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Future Agent DevTools source releases should use the stable declarative update executor plus JSON scenario rather than generating one-off Python publishers. Scenarios are data only: exact baseline guards and bounded file transformations; Git isolation, qualification, recovery/provenance and publication remain centralized in the executor/canonical release builder.",
+  "scope": [],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "ea5e9a6f-a64c-4a3c-9ff6-640c811a86d1",
+    "taskGoal": "Implement R7 Declarative Update Executor: stable stdlib JSON scenario engine over the existing safe isolated updater.",
+    "eventId": "c7f44742c8684558bd9efac760793657"
+  },
+  "taskId": "ea5e9a6f-a64c-4a3c-9ff6-640c811a86d1",
+  "taskGoal": "Implement R7 Declarative Update Executor: stable stdlib JSON scenario engine over the existing safe isolated updater.",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-09T06:18:44Z",
+  "updatedAtUtc": "2026-10-09T06:18:44Z"
+}

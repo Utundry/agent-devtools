@@ -79,7 +79,7 @@ class UpdateReleaseTests(unittest.TestCase):
     def args(self, **kwargs) -> argparse.Namespace:
         return argparse.Namespace(**dict(
             repo=str(self.root), branch="main", remote="origin", version="1.0.1",
-            patch=None, publish=True, **kwargs,
+            patch=None, scenario=None, publish=True, **kwargs,
         ))
 
     def update(self, **kwargs) -> dict:
@@ -183,6 +183,48 @@ class UpdateReleaseTests(unittest.TestCase):
         artifacts = Path(report["artifacts"])
         self.assertEqual("1.0.1", (artifacts / "AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py").read_text())
         self.assertEqual(report, json.loads((artifacts / "update-result.json").read_text()))
+
+    def test_declarative_scenario_applies_and_retry_is_provenance_idempotent(self) -> None:
+        scenario = self.base / "update.json"
+        scenario.write_text(json.dumps({
+            "format": "agent-devtools-update-scenario",
+            "formatVersion": 1,
+            "fromVersion": "1.0.0",
+            "toVersion": "1.0.1",
+            "title": "fixture scenario",
+            "commitMessage": "Apply fixture scenario",
+            "changes": [
+                {"op": "replace", "path": "source.txt", "before": "before", "after": "scenario-after"},
+                {"op": "write", "path": "scenario-new.txt", "content": "created\n"}
+            ]
+        }))
+        first = self.update(version=None, scenario=str(scenario))
+        self.assertEqual("published", first["status"])
+        self.assertEqual("applied", first["scenario"])
+        self.assertEqual("scenario-after\n", (self.root / "source.txt").read_text())
+        self.assertEqual("created\n", (self.root / "scenario-new.txt").read_text())
+        self.assertEqual("1.0.1\n", (self.root / "VERSION").read_text())
+        second = self.update(version=None, scenario=str(scenario))
+        self.assertEqual("already-published", second["status"])
+        self.assertIn("update-1.0.1-", second["artifacts"])
+        self.assertFalse((Path(second["artifacts"]) / "build-release.log").exists())
+        self.assertEqual("already-applied", second["scenario"])
+        self.assertEqual(first["scenarioSha256"], second["scenarioSha256"])
+
+    def test_scenario_version_mismatch_fails_without_touching_original(self) -> None:
+        scenario = self.base / "bad-update.json"
+        scenario.write_text(json.dumps({
+            "format": "agent-devtools-update-scenario",
+            "formatVersion": 1,
+            "fromVersion": "0.9.9",
+            "toVersion": "1.0.1",
+            "changes": [
+                {"op": "replace", "path": "source.txt", "before": "before", "after": "bad"}
+            ]
+        }))
+        with self.assertRaisesRegex(updater.UpdateError, "expects source VERSION"):
+            self.update(version=None, scenario=str(scenario))
+        self.assertEqual("before\n", (self.root / "source.txt").read_text())
 
     def test_diverged_remote_fails_without_touching_local_changes(self) -> None:
         other = self.base / "remote writer"

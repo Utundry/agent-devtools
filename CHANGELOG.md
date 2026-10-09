@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- R7 introduces the Declarative Update Executor: `scripts/update_release.py --scenario <json>` applies a strict stdlib-only scenario in the existing isolated preparation clone, then reuses the canonical release builder and publication/synchronization path.
+- Scenario format v1 supports exact `baseBlobs` plus idempotent `replace`, guarded `write`, hash-guarded `delete`, and `assert_contains`; arbitrary shell/Python hooks are intentionally forbidden. Scenario SHA-256 is committed as provenance so retries and already-published verification are deterministic.
+- This replaces generated one-off publisher/recovery scripts as the intended future release-update mechanism while preserving `--patch` compatibility.
+
 - Stage R6.5 removes redundant durable-memory retrieval from the normal agent path: `begin` is explicitly the canonical first-pass semantic retrieval, and generic `rg`/`grep`/`find` rescans of `.agent-knowledge` are fallback-only when the projection is insufficient for a specific reason or an exact file/line is required.
 - Capabilities expose `canonicalFirstPassRetrieval`, `manualDurableSearchFallbackOnly`, and `avoidRedundantDurableRescan`. No retrieval scoring, storage, service, dependency, or routine command changes; CLI contract advances to v32 while workflow contract remains v21.
 

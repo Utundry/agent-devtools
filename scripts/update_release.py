@@ -17,6 +17,17 @@ import sys
 import tempfile
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from agent_devtools.update_scenario import (
+    UpdateScenarioError,
+    apply_scenario,
+    load_scenario,
+    scenario_marker,
+)
+
 
 class UpdateError(RuntimeError):
     pass
@@ -105,7 +116,15 @@ def synchronize(root: Path, clone: Path, branch: str, expected_head: str, versio
 
 
 def update(args: argparse.Namespace) -> dict:
-    if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:[-+][A-Za-z0-9._-]+)?", args.version):
+    scenario_path_raw = getattr(args, "scenario", None)
+    scenario = load_scenario(Path(scenario_path_raw)) if scenario_path_raw else None
+    requested_version = getattr(args, "version", None)
+    version = scenario.to_version if scenario is not None else str(requested_version or "")
+    if scenario is not None and requested_version and requested_version != scenario.to_version:
+        raise UpdateError(
+            f"--version {requested_version} does not match scenario toVersion {scenario.to_version}"
+        )
+    if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:[-+][A-Za-z0-9._-]+)?", version):
         raise UpdateError("Invalid release version")
     entry = Path(args.repo).expanduser().resolve()
     root = branch_worktree(entry, args.branch)
@@ -117,12 +136,17 @@ def update(args: argparse.Namespace) -> dict:
         remote_url = str((root / remote_url).resolve())
     identity = value(root, "var", "GIT_AUTHOR_IDENT")
     name, email = re.match(r"^(.*) <([^>]+)>", identity).groups()
-    patch = Path(args.patch).expanduser().resolve() if args.patch else None
+    patch = Path(args.patch).expanduser().resolve() if getattr(args, "patch", None) else None
+    scenario_path = Path(scenario_path_raw).expanduser().resolve() if scenario_path_raw else None
+    if patch is not None and scenario is not None:
+        raise UpdateError("--patch and --scenario are mutually exclusive")
     if patch is not None and not patch.is_file():
         raise UpdateError(f"Patch not found: {patch}")
+    if scenario_path is not None and not scenario_path.is_file():
+        raise UpdateError(f"Scenario not found: {scenario_path}")
     output = root / "build"
     output.mkdir(exist_ok=True)
-    run = Path(tempfile.mkdtemp(prefix=f"update-{args.version}-", dir=output))
+    run = Path(tempfile.mkdtemp(prefix=f"update-{version}-", dir=output))
     clone = run / "repo"
     print(f"Branch: {args.branch}; original worktree: {root}", flush=True)
     print(f"Preparing committed source; log and artifacts: {run}", flush=True)
@@ -140,18 +164,19 @@ def update(args: argparse.Namespace) -> dict:
     elif not ancestor(clone, remote_head, head):
         raise UpdateError("Local and remote branches diverged; original files are unchanged")
 
-    tag = f"refs/tags/v{args.version}"
+    tag = f"refs/tags/v{version}"
     refs = dict(
         reversed(line.split("\t", 1))
         for line in git(clone, "ls-remote", args.remote, tag, tag + "^{}").stdout.splitlines()
     )
     published = refs.get(tag + "^{}", refs.get(tag))
     patch_status = "not-requested"
+    scenario_status = "not-requested"
     if published:
         git(clone, "fetch", "--quiet", args.remote, tag)
         if not ancestor(clone, published, remote_head):
             raise UpdateError("Existing release tag does not belong to the remote branch")
-        if value(clone, "show", f"{published}:VERSION") != args.version:
+        if value(clone, "show", f"{published}:VERSION") != version:
             raise UpdateError("Existing release tag records another version")
         if patch:
             marker = patch_marker(patch)
@@ -159,17 +184,45 @@ def update(args: argparse.Namespace) -> dict:
             reversible = git(clone, "apply", "--reverse", "--check", "--binary", str(patch), check=False).returncode == 0
             if not recorded and not reversible:
                 raise UpdateError("Cannot verify the supplied patch in this release; use a new version")
-        print(f"Release v{args.version} already published; no rebuild", flush=True)
+        if scenario is not None:
+            marker = scenario_marker(scenario)
+            recorded = marker in git(clone, "log", published, "--format=%B", "--fixed-strings", "--grep", marker).stdout.splitlines()
+            if not recorded:
+                raise UpdateError("Cannot verify the supplied scenario in this release; use a new version")
+            scenario_status = "already-applied"
+        print(f"Release v{version} already published; no rebuild", flush=True)
         status = "already-published"
     else:
         if patch:
             patch_status = apply_patch(clone, patch)
+        if scenario is not None:
+            marker = scenario_marker(scenario)
+            recorded = marker in git(clone, "log", "HEAD", "--format=%B", "--fixed-strings", "--grep", marker).stdout.splitlines()
+            if recorded:
+                if value(clone, "show", "HEAD:VERSION") != scenario.to_version:
+                    raise UpdateError(
+                        f"Scenario provenance is present, but source VERSION is not {scenario.to_version}"
+                    )
+                scenario_status = "already-applied"
+            else:
+                source_version = value(clone, "show", "HEAD:VERSION")
+                if source_version != scenario.from_version:
+                    raise UpdateError(
+                        f"Scenario expects source VERSION {scenario.from_version}, found {source_version}"
+                    )
+                try:
+                    result = apply_scenario(clone, scenario)
+                except UpdateScenarioError as exc:
+                    raise UpdateError(str(exc)) from exc
+                git(clone, "add", "-A")
+                git(clone, "commit", "--allow-empty", "-m", scenario.commit_message, "-m", marker)
+                scenario_status = "applied" if result["applied"] else "already-applied"
         builder = clone / "scripts" / "build_release.py"
         if not builder.is_file():
             raise UpdateError("Canonical scripts/build_release.py is missing")
-        if value(clone, "show", "HEAD:VERSION") == args.version:
+        if value(clone, "show", "HEAD:VERSION") == version:
             raise UpdateError("Source already has this version without a published tag; choose the next version")
-        command = [sys.executable, str(builder), "--version", args.version]
+        command = [sys.executable, str(builder), "--version", version]
         if args.publish:
             command += ["--publish", "--remote", args.remote]
         print("Running canonical release builder (bootstrap, tests, commit/tag/push)", flush=True)
@@ -183,13 +236,15 @@ def update(args: argparse.Namespace) -> dict:
             shutil.copy2(clone / "bootstrap" / filename, run / filename)
         status = "published" if args.publish else "prepared"
 
-    backup = synchronize(root, clone, args.branch, head, args.version) if args.publish else None
+    backup = synchronize(root, clone, args.branch, head, version) if args.publish else None
     if args.publish:
         git(root, "fetch", "--quiet", "--prune", args.remote, args.branch)
     report = {
-        "status": status, "version": args.version, "branch": args.branch,
+        "status": status, "version": version, "branch": args.branch,
         "originalWorktree": str(root), "head": value(root, "rev-parse", "HEAD"),
-        "patch": patch_status, "localBackupStash": backup, "artifacts": str(run),
+        "patch": patch_status, "scenario": scenario_status,
+        "scenarioSha256": scenario.digest if scenario is not None else None,
+        "localBackupStash": backup, "artifacts": str(run),
     }
     (run / "update-result.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     shutil.rmtree(clone)
@@ -201,13 +256,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repo", default=".", help="any worktree of the source repository")
     parser.add_argument("--branch", default="main")
     parser.add_argument("--remote", default="origin")
-    parser.add_argument("--version", required=True)
-    parser.add_argument("--patch", help="optional binary Git patch to apply to committed source")
+    parser.add_argument("--version", help="target version; optional when --scenario provides toVersion")
+    source = parser.add_mutually_exclusive_group()
+    source.add_argument("--patch", help="optional binary Git patch to apply to committed source")
+    source.add_argument("--scenario", help="declarative JSON update scenario")
     parser.add_argument("--publish", action="store_true", help="publish and update the original branch")
     args = parser.parse_args(argv)
     try:
         report = update(args)
-    except (UpdateError, OSError, subprocess.SubprocessError) as exc:
+    except (UpdateError, UpdateScenarioError, OSError, subprocess.SubprocessError) as exc:
         print(f"FAIL: {exc}", file=sys.stderr)
         return 1
     print(json.dumps(report, indent=2))

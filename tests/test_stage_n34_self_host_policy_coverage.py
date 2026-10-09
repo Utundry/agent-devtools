@@ -32,6 +32,18 @@ class SelfHostPolicyCoverageTests(unittest.TestCase):
         for path in paths:
             self.assertIn(RESERVED_GLOBAL, by_file[path])
 
+    def test_declarative_update_engine_is_classified_as_core(self) -> None:
+        path = "agent_devtools/update_scenario.py"
+        _mask, by_file = self.policy.classify((path,))
+        self.assertIn("core", by_file[path])
+        self.assertNotIn(RESERVED_UNKNOWN, by_file[path])
+        self.assertNotIn(RESERVED_GLOBAL, by_file[path])
+
+        plan = self.policy.plan("affected", (path,))
+        self.assertFalse(plan.fallback_full)
+        self.assertEqual((), plan.fallback_reasons)
+        self.assertEqual(["compile", "tests"], sorted(item["id"] for item in plan.selected))
+
     def test_changes_and_workflow_are_classified_without_global_fallback(self) -> None:
         paths = (
             "agent_devtools/changes.py",

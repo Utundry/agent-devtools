@@ -1,0 +1,21 @@
+{
+  "format": "agent-devtools-update-scenario",
+  "formatVersion": 1,
+  "fromVersion": "0.16.0",
+  "toVersion": "0.16.1",
+  "title": "Example declarative update",
+  "commitMessage": "Apply example declarative update",
+  "changes": [
+    {
+      "op": "replace",
+      "path": "README.md",
+      "before": "old stable text",
+      "after": "new stable text"
+    },
+    {
+      "op": "write",
+      "path": "docs/example.txt",
+      "content": "new file\n"
+    }
+  ]
+}
