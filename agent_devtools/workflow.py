@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -148,6 +149,12 @@ _CAPABILITY_SUMMARY_HISTORY: dict[str, dict[str, Any]] = {
         "routineCommands": ["agent begin", "agent cognition", "agent verify", "agent cognition checkpoint", "agent work complete"],
         "diagnostics": ["agent workflow show", "agent capabilities --json", "agent --help"],
     },
+    "0.16.6": {
+        "cliContractVersion": 33,
+        "workflowContractVersion": 22,
+        "routineCommands": ["agent begin", "agent cognition", "agent verify", "agent cognition checkpoint", "agent work complete"],
+        "diagnostics": ["agent workflow show", "agent capabilities --json", "agent --help"],
+    },
 }
 
 _CAPABILITY_RELEASE_CHANGES: dict[str, list[str]] = {
@@ -160,7 +167,33 @@ _CAPABILITY_RELEASE_CHANGES: dict[str, list[str]] = {
         "capabilities.diff",
         "source-update.onboarding-refresh",
     ],
+    "0.16.7": [
+        "declarative-update.fresh-process-per-edge",
+        "declarative-update.periodic-fresh-auto-process",
+    ],
 }
+
+
+def _version_tuple(value: str) -> tuple[int, int, int]:
+    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:[-+].*)?", str(value or "").strip())
+    if not match:
+        raise ValueError(f"unsupported semantic version for capability diff: {value!r}")
+    return tuple(int(part) for part in match.groups())
+
+
+def _release_changes_between(previous_version: str, current_version: str) -> list[str]:
+    previous_key = _version_tuple(previous_version)
+    current_key = _version_tuple(current_version)
+    if previous_key > current_key:
+        raise ValueError(
+            f"capability diff baseline {previous_version!r} is newer than current {current_version!r}"
+        )
+    collected: list[str] = []
+    for version in sorted(_CAPABILITY_RELEASE_CHANGES, key=_version_tuple):
+        key = _version_tuple(version)
+        if previous_key < key <= current_key:
+            collected.extend(_CAPABILITY_RELEASE_CHANGES[version])
+    return list(dict.fromkeys(collected))
 
 
 def capability_summary(root: Path) -> dict[str, Any]:
@@ -213,7 +246,7 @@ def capability_diff(root: Path, previous_version: str) -> dict[str, Any]:
         "routineRemoved": sorted(old_routine - new_routine),
         "diagnosticsAdded": sorted(new_diag - old_diag),
         "diagnosticsRemoved": sorted(old_diag - new_diag),
-        "newCapabilities": list(current["releaseChanges"]),
+        "newCapabilities": _release_changes_between(previous_version, current["toolVersion"]),
         "migrationWarnings": list(current["migrationWarnings"]),
     }
 
@@ -280,6 +313,8 @@ def capabilities(root: Path) -> dict[str, Any]:
                 "contractConstantsOwnedByScenario": True,
                 "staleExactAssertionGuard": True,
                 "autoChain": True,
+                "freshProcessPerEdge": True,
+                "periodicFreshAutoProcess": True,
                 "periodicForeground": True,
                 "periodicDaemon": False,
                 "failedCatalogSuppression": True,

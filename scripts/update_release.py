@@ -223,6 +223,69 @@ def _clear_periodic_state(root: Path) -> None:
     _periodic_state_path(root).unlink(missing_ok=True)
 
 
+
+def _run_fresh_process(
+    args: argparse.Namespace,
+    root: Path,
+    *,
+    mode: str,
+    scenario_path: Path | None = None,
+) -> dict:
+    """Run the current synchronized updater implementation in a fresh Python process."""
+    script = root / "scripts" / "update_release.py"
+    if not script.is_file():
+        raise UpdateError(f"Fresh updater script not found: {script}")
+    result_dir = _update_home(root) / "fresh-results"
+    result_dir.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        prefix=f"{mode}-",
+        suffix=".json",
+        dir=result_dir,
+        delete=False,
+    ) as handle:
+        result_path = Path(handle.name)
+    result_path.unlink(missing_ok=True)
+
+    command = [
+        sys.executable,
+        str(script),
+        "--repo",
+        str(root),
+        "--branch",
+        args.branch,
+        "--remote",
+        args.remote,
+        "--publish",
+        "--result-file",
+        str(result_path),
+        "--suppress-report",
+    ]
+    if mode == "scenario":
+        if scenario_path is None:
+            raise UpdateError("Fresh scenario execution requires scenario_path")
+        command += ["--scenario", str(scenario_path)]
+    elif mode == "auto":
+        command += ["--auto"]
+    else:
+        raise UpdateError(f"Unsupported fresh updater mode: {mode}")
+
+    try:
+        completed = subprocess.run(command, cwd=root)
+        if completed.returncode:
+            raise UpdateError(
+                f"Fresh {mode} updater process failed with exit status {completed.returncode}"
+            )
+        try:
+            payload = json.loads(result_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            raise UpdateError(f"Fresh {mode} updater did not produce a valid result") from exc
+        if not isinstance(payload, dict):
+            raise UpdateError(f"Fresh {mode} updater result is not an object")
+        return payload
+    finally:
+        result_path.unlink(missing_ok=True)
+
+
 def auto_update(args: argparse.Namespace) -> dict:
     if not getattr(args, "publish", False):
         raise UpdateError("--auto requires --publish so each successful scenario advances the canonical worktree")
@@ -240,15 +303,12 @@ def auto_update(args: argparse.Namespace) -> dict:
             break
         scenario_path = chain[0]
         scenario = load_scenario(scenario_path)
-        values = vars(args).copy()
-        values.update({
-            "version": None,
-            "patch": None,
-            "scenario": str(scenario_path),
-            "auto": False,
-            "periodic": None,
-        })
-        report = update(argparse.Namespace(**values))
+        report = _run_fresh_process(
+            args,
+            root,
+            mode="scenario",
+            scenario_path=scenario_path,
+        )
         _archive_applied_scenario(root, scenario_path, scenario.digest)
         reports.append(report)
 
@@ -284,11 +344,8 @@ def periodic_update(args: argparse.Namespace, *, sleep_fn=time.sleep, max_cycles
                 and state.get("failedKey") == key
             )
             if not suppressed:
-                values = vars(args).copy()
-                values["auto"] = True
-                values["periodic"] = None
                 try:
-                    report = auto_update(argparse.Namespace(**values))
+                    report = _run_fresh_process(args, root, mode="auto")
                 except (UpdateError, UpdateScenarioError, OSError, subprocess.SubprocessError) as exc:
                     _save_periodic_failure(root, key, str(exc))
                     print(f"Periodic update failed and is suppressed until input or VERSION changes: {exc}", file=sys.stderr, flush=True)
@@ -494,6 +551,8 @@ def main(argv: list[str] | None = None) -> int:
     source.add_argument("--periodic", type=float, metavar="SECONDS", help="stay in foreground and run --auto at this interval")
     parser.add_argument("--retry-failed", action="store_true", help="in periodic mode retry an unchanged failed scenario/catalog")
     parser.add_argument("--publish", action="store_true", help="publish and update the original branch")
+    parser.add_argument("--result-file", help=argparse.SUPPRESS)
+    parser.add_argument("--suppress-report", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     try:
         if args.periodic is not None:
@@ -506,7 +565,12 @@ def main(argv: list[str] | None = None) -> int:
     except (UpdateError, UpdateScenarioError, OSError, subprocess.SubprocessError) as exc:
         print(f"FAIL: {exc}", file=sys.stderr)
         return 1
-    print(json.dumps(report, indent=2))
+    if args.result_file:
+        result_path = Path(args.result_file).expanduser().resolve()
+        result_path.parent.mkdir(parents=True, exist_ok=True)
+        result_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    if not args.suppress_report:
+        print(json.dumps(report, indent=2))
     return 0
 
 
