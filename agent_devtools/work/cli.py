@@ -1031,26 +1031,36 @@ def main_work(root: Path, args: argparse.Namespace) -> int:
     elif args.work_command == "report":
         print("WORK REPORT")
         print(f"Status: {payload['status']} · task={payload['taskId']}")
-        print(f"Goal: {payload['goal']}")
-        if payload["definitionOfDone"]:
-            print("Done when: " + "; ".join(payload["definitionOfDone"]))
-        if payload["summary"]:
-            print(f"Summary: {payload['summary']}")
-        for key, title in (
-            ("decisions", "Decisions"),
-            ("findings", "Findings"),
-            ("assumptions", "Assumptions"),
-            ("requirements", "Requirements"),
-            ("openQuestions", "Open questions"),
-            ("evidence", "Evidence"),
-            ("blockers", "Blockers"),
+        print(f"Recorded goal: {payload['goal']}")
+        semantic_history = []
+        for key, kind in (
+            ("decisions", "decision"),
+            ("findings", "finding"),
+            ("assumptions", "assumption"),
+            ("requirements", "requirement"),
+            ("openQuestions", "question"),
+            ("evidence", "evidence"),
+            ("blockers", "blocker"),
         ):
-            values = payload[key]
-            if values:
-                print(f"{title}: " + "; ".join(values))
+            semantic_history.extend((kind, value) for value in payload[key])
+        if semantic_history:
+            print(
+                f"Unscoped semantic history: {len(semantic_history)} event(s); "
+                "not auto-classified as current/superseded"
+            )
+            for kind, value in semantic_history:
+                print(f"  [unscoped {kind}] {value}")
         latest = payload["verification"].get("latest")
         if latest:
-            print(f"Verification: {latest['status'].upper()} · {latest['label']} · {latest['completedAtUtc']}")
+            assessment = str(latest.get("assessmentStatus") or latest["status"]).upper()
+            gate = str(latest["status"]).upper()
+            print(
+                f"Verification: {assessment} · {latest['label']} · "
+                f"gate={gate} · {latest['completedAtUtc']}"
+            )
+            warnings = list(latest.get("warningChecks") or [])
+            if warnings:
+                print("Warning checks: " + ", ".join(warnings))
         else:
             print("Verification: none")
         print(f"Knowledge: {payload['knowledge']['records']} record(s)")

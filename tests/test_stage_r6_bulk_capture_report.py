@@ -126,11 +126,17 @@ class BulkCaptureAndReportTests(unittest.TestCase):
                 self.assertEqual(0, main_work(root, args))
             text = out.getvalue()
             self.assertIn("WORK REPORT", text)
-            self.assertIn("Goal: Исследовать NAS", text)
-            self.assertIn("Decisions:", text)
-            self.assertIn("Findings:", text)
-            self.assertIn("Verification:", text)
-            self.assertIn("Open questions:", text)
+            self.assertIn("Recorded goal: Исследовать NAS", text)
+            self.assertIn(
+                "Unscoped semantic history: 4 event(s); not auto-classified as current/superseded",
+                text,
+            )
+            self.assertIn("[unscoped decision] Рекомендовать ZFS + репликацию", text)
+            self.assertIn("[unscoped finding] Найдено: ZFS сохраняет checksum metadata", text)
+            self.assertIn("[unscoped question] Проверить фактический RTO", text)
+            self.assertIn("[unscoped evidence] vendor docs", text)
+            self.assertIn("Verification: WARN · research-bundle · gate=PASS", text)
+            self.assertIn("Warning checks: unresolved_questions", text)
         finally:
             tmp.cleanup()
 
