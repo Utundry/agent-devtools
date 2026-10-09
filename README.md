@@ -12,7 +12,7 @@ requirement → research/context → finding/assumption → decision → verific
 
 Agent DevTools keeps that chain close to the project, with Python standard library + SQLite only, no mandatory cloud service, daemon, embeddings, vector database, or external Python package.
 
-Current version: **0.15.5**.
+Current version: **0.16.0**.
 
 ## 60-second start
 
@@ -34,7 +34,7 @@ https://github.com/Utundry/agent-devtools
 
 For manual or automation-oriented installation, the current version-pinned bootstrap is:
 
-https://raw.githubusercontent.com/Utundry/agent-devtools/v0.15.5/bootstrap/AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py
+https://raw.githubusercontent.com/Utundry/agent-devtools/v0.16.0/bootstrap/AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py
 
 The raw Python bootstrap is an installer URL; the `AGENT-START-HERE.md` URL is the preferred **agent handoff** URL. If the environment cannot access the network, attach the bootstrap file instead.
 
