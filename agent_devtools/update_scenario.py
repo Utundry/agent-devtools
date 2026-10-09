@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 import re
@@ -25,6 +26,7 @@ class UpdateScenario:
     title: str
     commit_message: str
     base_blobs: dict[str, str]
+    contracts: tuple[dict[str, Any], ...]
     changes: tuple[dict[str, Any], ...]
 
 
@@ -88,6 +90,34 @@ def load_scenario(path: Path) -> UpdateScenario:
             raise UpdateScenarioError(f"invalid Git blob SHA-1 for {rel}")
         base_blobs[rel] = digest
 
+    contracts_raw = payload.get("contracts", {})
+    if not isinstance(contracts_raw, dict):
+        raise UpdateScenarioError("scenario contracts must be an object")
+    contracts: list[dict[str, Any]] = []
+    for raw_name, raw_contract in contracts_raw.items():
+        name = str(raw_name or "").strip()
+        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", name):
+            raise UpdateScenarioError(f"invalid contract name: {name!r}")
+        if not isinstance(raw_contract, dict):
+            raise UpdateScenarioError(f"contract {name} must be an object")
+        rel = _safe_rel(raw_contract.get("path"))
+        symbol = str(raw_contract.get("symbol") or "").strip()
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", symbol):
+            raise UpdateScenarioError(f"invalid contract symbol for {name}: {symbol!r}")
+        before = raw_contract.get("from")
+        after = raw_contract.get("to")
+        if isinstance(before, bool) or not isinstance(before, int) or before < 0:
+            raise UpdateScenarioError(f"contract {name} from must be a non-negative integer")
+        if isinstance(after, bool) or not isinstance(after, int) or after < 0:
+            raise UpdateScenarioError(f"contract {name} to must be a non-negative integer")
+        contracts.append({
+            "name": name,
+            "path": rel,
+            "symbol": symbol,
+            "from": before,
+            "to": after,
+        })
+
     changes_raw = payload.get("changes")
     if not isinstance(changes_raw, list) or not changes_raw:
         raise UpdateScenarioError("scenario changes must be a non-empty array")
@@ -131,6 +161,7 @@ def load_scenario(path: Path) -> UpdateScenario:
         title=title,
         commit_message=commit_message,
         base_blobs=base_blobs,
+        contracts=tuple(contracts),
         changes=tuple(changes),
     )
 
@@ -144,6 +175,124 @@ def _project_version(root: Path) -> str:
         return (root / "VERSION").read_text(encoding="utf-8").strip()
     except OSError as exc:
         raise UpdateScenarioError(f"cannot read project VERSION: {exc}") from exc
+
+
+
+def _contract_value(root: Path, contract: dict[str, Any]) -> tuple[Path, str, re.Match[str]]:
+    rel = str(contract["path"])
+    symbol = str(contract["symbol"])
+    path = _path(root, rel)
+    if not path.is_file():
+        raise UpdateScenarioError(f"contract source file missing: {rel}")
+    text = path.read_text(encoding="utf-8")
+    pattern = re.compile(
+        rf"(?m)^({re.escape(symbol)}[ \t]*=[ \t]*)([0-9]+)([ \t]*(?:#.*)?)$"
+    )
+    matches = list(pattern.finditer(text))
+    if len(matches) != 1:
+        raise UpdateScenarioError(
+            f"contract symbol must have exactly one integer assignment: "
+            f"{contract['name']} ({rel}:{symbol}), found {len(matches)}"
+        )
+    return path, text, matches[0]
+
+
+def _validate_contract_preimages(root: Path, contracts: tuple[dict[str, Any], ...]) -> None:
+    for contract in contracts:
+        _, _, match = _contract_value(root, contract)
+        current = int(match.group(2))
+        before = int(contract["from"])
+        after = int(contract["to"])
+        if current not in {before, after}:
+            raise UpdateScenarioError(
+                f"contract {contract['name']} expects {before} or already-applied {after}, found {current}"
+            )
+
+
+def _apply_contracts(root: Path, contracts: tuple[dict[str, Any], ...]) -> tuple[int, int, list[dict[str, Any]]]:
+    applied = 0
+    unchanged = 0
+    rows: list[dict[str, Any]] = []
+    for contract in contracts:
+        path, text, match = _contract_value(root, contract)
+        current = int(match.group(2))
+        before = int(contract["from"])
+        after = int(contract["to"])
+        if current == after:
+            unchanged += 1
+            rows.append({
+                "name": contract["name"],
+                "path": contract["path"],
+                "symbol": contract["symbol"],
+                "from": before,
+                "to": after,
+                "status": "unchanged" if before == after else "already-applied",
+            })
+            continue
+        if current != before:
+            raise UpdateScenarioError(
+                f"contract {contract['name']} expects {before}, found {current}"
+            )
+        replacement = match.group(1) + str(after) + match.group(3)
+        updated = text[:match.start()] + replacement + text[match.end():]
+        path.write_text(updated, encoding="utf-8")
+        applied += 1
+        rows.append({
+            "name": contract["name"],
+            "path": contract["path"],
+            "symbol": contract["symbol"],
+            "from": before,
+            "to": after,
+            "status": "applied",
+        })
+    return applied, unchanged, rows
+
+
+def _assert_contract_targets(root: Path, contracts: tuple[dict[str, Any], ...]) -> None:
+    for contract in contracts:
+        _, _, match = _contract_value(root, contract)
+        current = int(match.group(2))
+        expected = int(contract["to"])
+        if current != expected:
+            raise UpdateScenarioError(
+                f"contract {contract['name']} target mismatch: expected {expected}, found {current}"
+            )
+
+
+def _stale_exact_contract_assertions(root: Path, contracts: tuple[dict[str, Any], ...]) -> list[str]:
+    """Find the historical failure mode: old aggregate contract versions frozen in unittest assertions."""
+    tests = root / "tests"
+    if not tests.is_dir():
+        return []
+    stale: list[str] = []
+    for contract in contracts:
+        before = int(contract["from"])
+        after = int(contract["to"])
+        symbol = str(contract["symbol"])
+        if before == after:
+            continue
+        for path in sorted(tests.glob("test_*.py")):
+            try:
+                tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            except (OSError, UnicodeError, SyntaxError) as exc:
+                raise UpdateScenarioError(f"cannot inspect contract regression test {path.name}: {exc}") from exc
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                func = node.func
+                if not (isinstance(func, ast.Attribute) and func.attr == "assertEqual" and len(node.args) >= 2):
+                    continue
+                left, right = node.args[0], node.args[1]
+                frozen = (
+                    isinstance(left, ast.Constant) and left.value == before
+                    and isinstance(right, ast.Name) and right.id == symbol
+                ) or (
+                    isinstance(right, ast.Constant) and right.value == before
+                    and isinstance(left, ast.Name) and left.id == symbol
+                )
+                if frozen:
+                    stale.append(f"{path.relative_to(root).as_posix()}:{getattr(node, 'lineno', '?')}")
+    return stale
 
 
 def _assert_base(root: Path, scenario: UpdateScenario) -> None:
@@ -162,6 +311,8 @@ def _assert_base(root: Path, scenario: UpdateScenario) -> None:
 def apply_scenario(root: Path, scenario: UpdateScenario) -> dict[str, Any]:
     root = root.resolve()
     _assert_base(root, scenario)
+    _validate_contract_preimages(root, scenario.contracts)
+    contract_applied, contract_unchanged, contract_rows = _apply_contracts(root, scenario.contracts)
     applied = 0
     unchanged = 0
     rows: list[dict[str, str]] = []
@@ -244,12 +395,25 @@ def apply_scenario(root: Path, scenario: UpdateScenario) -> dict[str, Any]:
             applied += 1
             rows.append({"op": op, "path": rel, "status": "applied"})
 
+    _assert_contract_targets(root, scenario.contracts)
+    stale = _stale_exact_contract_assertions(root, scenario.contracts)
+    if stale:
+        raise UpdateScenarioError(
+            "stale exact contract-version assertion(s) freeze a historical aggregate version: "
+            + ", ".join(stale)
+            + "; historical regression tests should assert their capability/minimum, "
+              "while the update scenario owns the public contract transition"
+        )
+
     return {
         "format": "agent-devtools-update-scenario-result",
         "formatVersion": 1,
         "scenarioSha256": scenario.digest,
         "fromVersion": scenario.from_version,
         "toVersion": scenario.to_version,
+        "contractApplied": contract_applied,
+        "contractUnchanged": contract_unchanged,
+        "contracts": contract_rows,
         "applied": applied,
         "unchanged": unchanged,
         "changes": rows,

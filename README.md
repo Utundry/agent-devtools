@@ -85,7 +85,7 @@ Agent DevTools source releases can now be prepared from a small JSON scenario in
 python scripts/update_release.py --scenario .agent-updates/incoming/update-0.16.1.json --publish
 ```
 
-Scenario format v1 deliberately has no shell/Python hooks. Supported transformations are `replace`, `write`, `delete`, and `assert_contains`; `baseBlobs` can pin exact Git blob identities. The scenario SHA-256 is recorded in the update commit so a retry can verify provenance instead of reconstructing partial state.
+Scenario format v1 deliberately has no shell/Python hooks. Supported transformations are `replace`, `write`, `delete`, and `assert_contains`; `baseBlobs` can pin exact Git blob identities. Optional `contracts` declarations own public integer contract transitions such as `WORKFLOW_CONTRACT_VERSION: 22 -> 23`: the engine verifies the preimage, updates the declared constant itself, verifies the target, and fails on stale historical `assertEqual(old, CONTRACT_VERSION)` regression assertions. Historical feature tests should assert the capability or the minimum contract version at which it was introduced, not freeze the current aggregate version. The scenario SHA-256 is recorded in the update commit so a retry can verify provenance instead of reconstructing partial state.
 
 Update execution state is technical, disposable state under Git-ignored `.agent-updates/`: incoming scenarios, isolated run directories, logs, copied scenario snapshots, artifacts, and temporary recovery helpers. Scenarios are not durable project knowledge and are not tracked by default; reusable lessons and architectural decisions belong in `.agent-knowledge/`.
 
