@@ -140,7 +140,7 @@ Agent DevTools is intentionally published as a **0.x project**. It is already us
 
 ## Author and contact
 
-**Nikolay Laptev** (`Utundry`)
+**Nikolay Laptev**
 
 Email: `caveboy@yandex.ru`
 

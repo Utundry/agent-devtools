@@ -62,5 +62,5 @@ Do not ask the user to restate stack information that can be inferred from the r
 If the environment cannot download or execute the bootstrap, tell the user exactly which capability is unavailable. If the bootstrap file was attached directly, use the attached file instead of fetching it again.
 
 Project: https://github.com/Utundry/agent-devtools
-Author: Nikolay Laptev (`Utundry`) — caveboy@yandex.ru
+Author: Nikolay Laptev — caveboy@yandex.ru
 License: MIT
