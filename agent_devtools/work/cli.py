@@ -17,7 +17,7 @@ from .semantic_closeout import semantic_checkpoint
 from .verification import RESEARCH_CHECKS, VerificationError, latest_verification, record_verification, verification_status, record_research_bundle
 from .sources import SourceError, add_source, list_sources
 from agent_devtools.profiles import ProfileError, load_profile
-from agent_devtools.work.context_projection import ContextProjectionError, prepare_context
+from agent_devtools.work.context_projection import ContextProjectionError, context_efficiency_status, prepare_context
 
 
 def configure_task_parser(parser: argparse.ArgumentParser) -> None:
@@ -962,6 +962,7 @@ def _work_report(root: Path) -> dict:
         "verification": verification_status(root),
         "knowledge": knowledge_status(root),
         "semanticJournal": journal_status(root, task_id),
+        "contextEfficiency": context_efficiency_status(root, task_id),
         "readOnly": True,
     }
 

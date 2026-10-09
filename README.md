@@ -124,7 +124,7 @@ Semantic capture is intentionally forgiving without adding a second contract: bo
 
 ## What it gives an agent
 
-Agent DevTools passively records lightweight CLI-overhead rows under disposable `.agent-work/cli-overhead.jsonl` (command class, duration, stdout bytes and exit code). Measurement requires no extra routine command and stores no submitted cognition text or command arguments.
+Agent DevTools passively records lightweight CLI-overhead rows under disposable `.agent-work/cli-overhead.jsonl` (command class, duration, stdout bytes and exit code). Durable-context efficiency is measured separately in disposable `.agent-work/context-usage.sqlite3`: each projection records primary/possibly-related token cost, selected records, and whether the immediately preceding projection for the same task was identical. Later subject-bearing cognition provides a conservative reference signal for previously selected knowledge. That signal is deliberately not called proof of use: it is a cheap lower-bound proxy that avoids an LLM scorer, embeddings, provider token APIs, or another service. `work report` exposes the accumulated context-efficiency summary without adding a routine command. Measurement stores no submitted cognition text or command arguments.
 
 Agent DevTools is intentionally a harness, not an autonomous platform. Its main capabilities are:
 

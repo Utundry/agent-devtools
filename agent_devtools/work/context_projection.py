@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import sqlite3
+import uuid
 from contextlib import closing
 from pathlib import Path
 from typing import Any, Iterable
@@ -454,6 +456,269 @@ def _record_usage(root: Path, *, task_id: str, stage: str, selected: list[dict[s
     return None
 
 
+
+def _ensure_efficiency_schema(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS context_projections (
+            seq INTEGER PRIMARY KEY AUTOINCREMENT,
+            projection_id TEXT NOT NULL UNIQUE,
+            task_id TEXT NOT NULL DEFAULT '',
+            stage TEXT NOT NULL,
+            fingerprint TEXT NOT NULL,
+            journal_seq INTEGER NOT NULL DEFAULT 0,
+            primary_tokens INTEGER NOT NULL,
+            related_tokens INTEGER NOT NULL,
+            primary_records INTEGER NOT NULL,
+            related_records INTEGER NOT NULL,
+            repeated INTEGER NOT NULL DEFAULT 0,
+            created_at_utc TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS context_projection_items (
+            projection_id TEXT NOT NULL,
+            knowledge_id TEXT NOT NULL,
+            mode TEXT NOT NULL,
+            subject TEXT NOT NULL DEFAULT '',
+            estimated_tokens INTEGER NOT NULL,
+            PRIMARY KEY (projection_id, knowledge_id, mode)
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_context_projections_task_seq "
+        "ON context_projections(task_id, seq)"
+    )
+
+
+def _journal_seq(root: Path, task_id: str) -> int:
+    if not task_id:
+        return 0
+    try:
+        from .journal import events_for_task
+        events = events_for_task(root, task_id)
+    except Exception:
+        return 0
+    return int(events[-1]["seq"]) if events else 0
+
+
+def _projection_fingerprint(
+    *,
+    task_id: str,
+    task_updated_at: str,
+    stage: str,
+    query: str,
+    scope: list[str],
+    paths: list[str],
+    primary: list[dict[str, Any]],
+    related: list[dict[str, Any]],
+) -> str:
+    payload = {
+        "taskId": task_id,
+        "taskUpdatedAtUtc": task_updated_at,
+        "stage": stage,
+        "query": query,
+        "scope": scope,
+        "paths": paths,
+        "primaryIds": [str(item.get("id") or "") for item in primary],
+        "relatedIds": [str(item.get("id") or "") for item in related],
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _record_projection_efficiency(
+    root: Path,
+    *,
+    task_id: str,
+    task_updated_at: str,
+    stage: str,
+    query: str,
+    scope: list[str],
+    paths: list[str],
+    primary: list[dict[str, Any]],
+    related: list[dict[str, Any]],
+    primary_tokens: int,
+    related_tokens: int,
+) -> tuple[dict[str, Any] | None, str | None]:
+    path = usage_path(root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    projection_id = uuid.uuid4().hex
+    fingerprint = _projection_fingerprint(
+        task_id=task_id,
+        task_updated_at=task_updated_at,
+        stage=stage,
+        query=query,
+        scope=scope,
+        paths=paths,
+        primary=primary,
+        related=related,
+    )
+    try:
+        with closing(sqlite3.connect(path)) as conn:
+            with conn:
+                _ensure_efficiency_schema(conn)
+                previous = conn.execute(
+                    "SELECT fingerprint FROM context_projections "
+                    "WHERE task_id = ? ORDER BY seq DESC LIMIT 1",
+                    (task_id,),
+                ).fetchone()
+                repeated = bool(previous and str(previous[0]) == fingerprint)
+                journal_seq = _journal_seq(root, task_id)
+                conn.execute(
+                    """
+                    INSERT INTO context_projections
+                        (projection_id, task_id, stage, fingerprint, journal_seq,
+                         primary_tokens, related_tokens, primary_records, related_records,
+                         repeated, created_at_utc)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        projection_id,
+                        task_id,
+                        stage,
+                        fingerprint,
+                        journal_seq,
+                        int(primary_tokens),
+                        int(related_tokens),
+                        len(primary),
+                        len(related),
+                        1 if repeated else 0,
+                        utc_now(),
+                    ),
+                )
+                rows = []
+                for mode, items in (("primary", primary), ("related", related)):
+                    for item in items:
+                        rows.append(
+                            (
+                                projection_id,
+                                str(item.get("id") or ""),
+                                mode,
+                                str(item.get("subject") or ""),
+                                _estimate_tokens(item),
+                            )
+                        )
+                if rows:
+                    conn.executemany(
+                        "INSERT INTO context_projection_items "
+                        "(projection_id, knowledge_id, mode, subject, estimated_tokens) "
+                        "VALUES (?, ?, ?, ?, ?)",
+                        rows,
+                    )
+    except (sqlite3.Error, OSError) as exc:
+        return None, f"context efficiency tracking unavailable: {exc}"
+    return {
+        "projectionId": projection_id,
+        "repeatedProjection": repeated,
+        "primaryTokens": int(primary_tokens),
+        "relatedTokens": int(related_tokens),
+        "totalTokens": int(primary_tokens) + int(related_tokens),
+        "primaryRecords": len(primary),
+        "relatedRecords": len(related),
+        "referenceSignal": "later-subject-bearing-cognition",
+        "referenceSignalIsProofOfUse": False,
+    }, None
+
+
+def context_efficiency_status(root: Path, task_id: str | None = None) -> dict[str, Any]:
+    state = load_task_state(root)
+    selected_task_id = str(task_id or ((state or {}).get("taskId") if isinstance(state, dict) else "") or "")
+    path = usage_path(root)
+    empty = {
+        "format": "agent-devtools-context-efficiency",
+        "formatVersion": 1,
+        "taskId": selected_task_id or None,
+        "trackingAvailable": False,
+        "projections": 0,
+        "repeatProjections": 0,
+        "primaryTokens": 0,
+        "relatedTokens": 0,
+        "primarySelections": 0,
+        "relatedSelections": 0,
+        "referencedPrimarySelections": 0,
+        "referencedRelatedSelections": 0,
+        "primaryReferenceRate": None,
+        "relatedReferenceRate": None,
+        "referenceSignal": "later-subject-bearing-cognition",
+        "referenceSignalIsProofOfUse": False,
+    }
+    if not path.is_file():
+        return empty
+    try:
+        with closing(sqlite3.connect(path)) as conn:
+            table = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='context_projections'"
+            ).fetchone()
+            if not table:
+                return empty
+            projections = conn.execute(
+                "SELECT projection_id, journal_seq, primary_tokens, related_tokens, "
+                "primary_records, related_records, repeated "
+                "FROM context_projections WHERE task_id = ? ORDER BY seq",
+                (selected_task_id,),
+            ).fetchall()
+            items = conn.execute(
+                """
+                SELECT i.projection_id, i.mode, i.subject, p.journal_seq
+                FROM context_projection_items i
+                JOIN context_projections p ON p.projection_id = i.projection_id
+                WHERE p.task_id = ?
+                """,
+                (selected_task_id,),
+            ).fetchall()
+    except (sqlite3.Error, OSError):
+        return empty
+
+    try:
+        from .journal import events_for_task
+        events = events_for_task(root, selected_task_id) if selected_task_id else []
+    except Exception:
+        events = []
+
+    referenced_primary = 0
+    referenced_related = 0
+    for _projection_id, mode, subject, journal_seq in items:
+        subject = str(subject or "").strip()
+        referenced = False
+        if subject:
+            for event in events:
+                if int(event.get("seq") or 0) <= int(journal_seq or 0):
+                    continue
+                event_subject = str(event.get("subject") or "").strip()
+                if event_subject and _scope_relation(subject, event_subject):
+                    referenced = True
+                    break
+        if referenced and mode == "primary":
+            referenced_primary += 1
+        elif referenced and mode == "related":
+            referenced_related += 1
+
+    primary_selections = sum(int(row[4]) for row in projections)
+    related_selections = sum(int(row[5]) for row in projections)
+    return {
+        **empty,
+        "trackingAvailable": True,
+        "projections": len(projections),
+        "repeatProjections": sum(int(row[6]) for row in projections),
+        "primaryTokens": sum(int(row[2]) for row in projections),
+        "relatedTokens": sum(int(row[3]) for row in projections),
+        "primarySelections": primary_selections,
+        "relatedSelections": related_selections,
+        "referencedPrimarySelections": referenced_primary,
+        "referencedRelatedSelections": referenced_related,
+        "primaryReferenceRate": (
+            round(referenced_primary / primary_selections, 4) if primary_selections else None
+        ),
+        "relatedReferenceRate": (
+            round(referenced_related / related_selections, 4) if related_selections else None
+        ),
+    }
+
+
 def last_projection_path(root: Path) -> Path:
     return default_work_root(root) / "last-context-projection.json"
 
@@ -598,9 +863,29 @@ def prepare_context(
         "canonicalDurableStore": ".agent-knowledge",
         "runtimeProjectionState": ".agent-work",
     }
+    runtime_warnings: list[str] = []
     usage_warning = _record_usage(root, task_id=task_id, stage=selected_stage, selected=selected)
     if usage_warning:
-        payload["runtimeWarnings"] = [usage_warning]
+        runtime_warnings.append(usage_warning)
+    efficiency, efficiency_warning = _record_projection_efficiency(
+        root,
+        task_id=task_id,
+        task_updated_at=str((state or {}).get("updatedAtUtc") or "") if isinstance(state, dict) else "",
+        stage=selected_stage,
+        query=query,
+        scope=query_scopes,
+        paths=query_paths,
+        primary=selected,
+        related=possibly_related,
+        primary_tokens=estimated,
+        related_tokens=related_estimated,
+    )
+    if efficiency is not None:
+        payload["efficiency"] = efficiency
+    if efficiency_warning:
+        runtime_warnings.append(efficiency_warning)
+    if runtime_warnings:
+        payload["runtimeWarnings"] = runtime_warnings
     atomic_json_write(last_projection_path(root), payload)
     return payload
 
