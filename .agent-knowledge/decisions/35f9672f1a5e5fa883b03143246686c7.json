@@ -1,0 +1,35 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "35f9672f1a5e5fa883b03143246686c7",
+  "kind": "decision",
+  "subject": "release-tooling/resolved-runtime-state",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "After CLI inputs are normalized into resolved semantic state, downstream update/release logic must use only the resolved values. Raw argparse fields are input syntax, not authoritative runtime state.",
+  "scope": [
+    "agent-devtools/release-tooling"
+  ],
+  "confidence": "high",
+  "evidenceRefs": [
+    "release:0.16.0",
+    "release:0.16.1"
+  ],
+  "anchors": [
+    "scripts/update_release.py",
+    "tests/test_update_release.py"
+  ],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskGoal": "Preserve reusable R7 declarative-update, recovery, and automatic-update lessons after successful 0.16.2 dogfood."
+  },
+  "taskId": null,
+  "taskGoal": "Preserve reusable R7 declarative-update, recovery, and automatic-update lessons after successful 0.16.2 dogfood.",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-09T06:56:14Z",
+  "updatedAtUtc": "2026-10-09T06:56:14Z",
+  "createdBy": {
+    "agentEnvironment": "ChatGPT GPT-5.6 Sol"
+  }
+}

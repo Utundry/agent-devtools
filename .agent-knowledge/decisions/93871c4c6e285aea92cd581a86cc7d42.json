@@ -1,0 +1,37 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "93871c4c6e285aea92cd581a86cc7d42",
+  "kind": "decision",
+  "subject": "release-tooling/update-runtime-directory",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "All update execution state belongs under Git-ignored .agent-updates/: incoming scenarios, isolated run directories, logs, copied scenario snapshots, artifacts, periodic state, and transient recovery helpers. Git stores product/source changes and reusable semantic knowledge, not update execution debris.",
+  "scope": [
+    "agent-devtools/release-tooling"
+  ],
+  "confidence": "high",
+  "evidenceRefs": [
+    "release:0.16.1",
+    "release:0.16.2",
+    "scenario-sha256:169f65c0ec020f9c5e1e91f4cfe7da8c87e88206c2fdea3db06fae31b938e3ae"
+  ],
+  "anchors": [
+    "scripts/update_release.py",
+    ".gitignore",
+    "agent-tools.json"
+  ],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskGoal": "Preserve reusable R7 declarative-update, recovery, and automatic-update lessons after successful 0.16.2 dogfood."
+  },
+  "taskId": null,
+  "taskGoal": "Preserve reusable R7 declarative-update, recovery, and automatic-update lessons after successful 0.16.2 dogfood.",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-09T06:56:14Z",
+  "updatedAtUtc": "2026-10-09T06:56:14Z",
+  "createdBy": {
+    "agentEnvironment": "ChatGPT GPT-5.6 Sol"
+  }
+}

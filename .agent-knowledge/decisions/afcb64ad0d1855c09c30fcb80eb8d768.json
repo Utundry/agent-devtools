@@ -1,0 +1,34 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "afcb64ad0d1855c09c30fcb80eb8d768",
+  "kind": "decision",
+  "subject": "release-tooling/recovery-state-recognition",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Recovery transformations must recognize BEFORE, AFTER, and known PARTIAL semantic states. Exact whole-block textual matching is not a durable recovery contract; valid partial progress must be preserved and resumed.",
+  "scope": [
+    "agent-devtools/release-tooling"
+  ],
+  "confidence": "high",
+  "evidenceRefs": [
+    "release:0.16.0"
+  ],
+  "anchors": [
+    "scripts/update_release.py",
+    "tests/test_update_release.py"
+  ],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskGoal": "Preserve reusable R7 declarative-update, recovery, and automatic-update lessons after successful 0.16.2 dogfood."
+  },
+  "taskId": null,
+  "taskGoal": "Preserve reusable R7 declarative-update, recovery, and automatic-update lessons after successful 0.16.2 dogfood.",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-09T06:56:14Z",
+  "updatedAtUtc": "2026-10-09T06:56:14Z",
+  "createdBy": {
+    "agentEnvironment": "ChatGPT GPT-5.6 Sol"
+  }
+}
