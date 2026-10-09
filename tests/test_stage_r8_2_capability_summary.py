@@ -9,7 +9,7 @@ from pathlib import Path
 
 from agent_devtools import __version__
 from agent_devtools.cli import parser
-from agent_devtools.workflow import capability_diff, capability_summary, capabilities
+from agent_devtools.workflow import CLI_CONTRACT_VERSION, WORKFLOW_CONTRACT_VERSION, capability_diff, capability_summary, capabilities
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,18 +19,18 @@ class CapabilitySummaryTests(unittest.TestCase):
     def test_summary_is_compact_and_routine_focused(self) -> None:
         summary = capability_summary(ROOT)
         self.assertEqual(__version__, summary["toolVersion"])
-        self.assertEqual(33, summary["cliContractVersion"])
-        self.assertEqual(22, summary["workflowContractVersion"])
+        self.assertEqual(CLI_CONTRACT_VERSION, summary["cliContractVersion"])
+        self.assertEqual(WORKFLOW_CONTRACT_VERSION, summary["workflowContractVersion"])
         self.assertLessEqual(len(summary["routineCommands"]), 5)
         self.assertFalse(summary["diagnosticsAreRoutine"])
         self.assertIsInstance(summary["releaseChanges"], list)
-        self.assertIn("declarative-update.fresh-process-per-edge", summary["releaseChanges"])
+        self.assertNotIn("cliCommands", summary)
 
     def test_diff_from_0165_is_semantic_not_full_payload(self) -> None:
         diff = capability_diff(ROOT, "0.16.5")
         self.assertEqual("0.16.5", diff["fromVersion"])
         self.assertEqual(__version__, diff["toVersion"])
-        self.assertEqual({"from": 32, "to": 33}, diff["contracts"]["cli"])
+        self.assertEqual({"from": 32, "to": CLI_CONTRACT_VERSION}, diff["contracts"]["cli"])
         self.assertEqual([], diff["routineAdded"])
         self.assertEqual([], diff["routineRemoved"])
         self.assertIn("capabilities.diff", diff["newCapabilities"])

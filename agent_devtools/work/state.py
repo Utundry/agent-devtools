@@ -249,6 +249,7 @@ def update_task(
     summary: str | None = None,
     next_step: str | None = None,
     semantic_subjects: dict[str, str] | None = None,
+    semantic_source: str = "task.update",
 ) -> dict[str, Any]:
     state = load_task_state(root)
     if state is None:
@@ -312,8 +313,9 @@ def update_task(
     state["updatedAtUtc"] = utc_now()
     previous_state = load_task_state(root)
     atomic_json_write(task_state_path(root), state)
+    event_source = str(semantic_source or "task.update").strip() or "task.update"
     journal_events = [
-        {"kind": kind, "text": text, "subject": subject, "metadata": {"source": "task.update"}}
+        {"kind": kind, "text": text, "subject": subject, "metadata": {"source": event_source}}
         for kind, text, subject in new_events
     ]
     if resolved:

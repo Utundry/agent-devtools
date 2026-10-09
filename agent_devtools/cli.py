@@ -5,6 +5,7 @@ import json
 import shutil
 import sqlite3
 import sys
+import time
 from pathlib import Path
 
 from . import __version__
@@ -12,6 +13,7 @@ from .check import cli as check_cli
 from . import changes_cli
 from .bootstrap import BootstrapError, apply_plan as apply_bootstrap_plan, build_plan as build_bootstrap_plan
 from .context import cli as context_cli
+from .core.workspace import default_work_root
 from .project import discover_project_root
 from .presets import PresetError, apply_preset, get_preset, list_presets
 from .onboarding import ensure as ensure_onboarding, status as onboarding_status
@@ -24,6 +26,67 @@ from .self_update import SelfUpdateError, self_update as perform_self_update
 from .work import cli as work_cli
 from .workflow import capability_diff, capability_summary, capabilities as workflow_capabilities, workflow_contract
 from . import workspace_snapshot_cli
+
+
+
+_METRIC_DEPTH = 0
+
+
+class _CountingStdout:
+    def __init__(self, target) -> None:
+        self._target = target
+        self.bytes_written = 0
+
+    def write(self, value: str):
+        self.bytes_written += len(str(value).encode("utf-8"))
+        return self._target.write(value)
+
+    def flush(self):
+        return self._target.flush()
+
+    def __getattr__(self, name):
+        return getattr(self._target, name)
+
+
+def _metric_command(raw_argv: list[str]) -> str:
+    if not raw_argv:
+        return ""
+    first = str(raw_argv[0])
+    if len(raw_argv) > 1 and not str(raw_argv[1]).startswith("-") and first in {
+        "workflow", "profile", "onboarding", "changes", "check", "release", "context",
+        "source", "verify", "cognition", "knowledge", "work", "task", "handoff",
+        "preserve", "checkpoint", "workspace-snapshot", "preset",
+    }:
+        return first + " " + str(raw_argv[1])
+    return first
+
+
+def _record_cli_metric(
+    root: Path,
+    *,
+    command: str,
+    duration_ms: float,
+    stdout_bytes: int,
+    exit_code: int,
+) -> None:
+    try:
+        path = default_work_root(root) / "cli-overhead.jsonl"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        row = {
+            "format": "agent-devtools-cli-overhead",
+            "formatVersion": 1,
+            "toolVersion": __version__,
+            "command": command,
+            "durationMs": round(float(duration_ms), 3),
+            "stdoutBytes": int(stdout_bytes),
+            "exitCode": int(exit_code),
+            "recordedAtUnixNs": time.time_ns(),
+        }
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n")
+    except (OSError, ValueError, TypeError):
+        # Passive instrumentation must never make the user's actual command fail.
+        return
 
 
 def _fts5_available() -> bool:
@@ -220,7 +283,7 @@ def parser() -> argparse.ArgumentParser:
     return p
 
 
-def main(argv: list[str] | None = None) -> int:
+def _main_impl(argv: list[str] | None = None) -> int:
     raw_argv = list(sys.argv[1:] if argv is None else argv)
     hint = _natural_guess_hint(raw_argv)
     if hint:
@@ -449,3 +512,35 @@ def main(argv: list[str] | None = None) -> int:
             print(f"agent preset: {exc}", file=sys.stderr)
             return 2
     return _not_implemented(args.command)
+
+
+def main(argv: list[str] | None = None) -> int:
+    global _METRIC_DEPTH
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
+    if _METRIC_DEPTH:
+        return _main_impl(raw_argv)
+
+    target = sys.stdout
+    counted = _CountingStdout(target)
+    started = time.perf_counter()
+    exit_code = 2
+    _METRIC_DEPTH += 1
+    sys.stdout = counted
+    try:
+        exit_code = _main_impl(raw_argv)
+        return exit_code
+    finally:
+        sys.stdout = target
+        _METRIC_DEPTH -= 1
+        try:
+            root = discover_project_root()
+        except Exception:
+            root = None
+        if root is not None:
+            _record_cli_metric(
+                root,
+                command=_metric_command(raw_argv),
+                duration_ms=(time.perf_counter() - started) * 1000.0,
+                stdout_bytes=counted.bytes_written,
+                exit_code=exit_code,
+            )

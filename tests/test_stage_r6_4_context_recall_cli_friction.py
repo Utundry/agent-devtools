@@ -153,9 +153,10 @@ class ContextRecallCliFrictionTests(unittest.TestCase):
                 )
             self.assertEqual(0, rc)
             text = out2.getvalue()
-            self.assertIn("Second detailed finding", text)
+            self.assertEqual(["recorded: finding · finding/two"], text.splitlines())
+            self.assertNotIn("Second detailed finding", text)
             self.assertNotIn("First detailed finding", text)
-            self.assertIn("findings=2", text)
+            self.assertNotIn("findings=2", text)
         finally:
             tmp.cleanup()
 

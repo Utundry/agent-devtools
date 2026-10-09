@@ -8,7 +8,7 @@ from typing import Any
 from . import __version__
 from .profiles import load_profile
 
-CLI_CONTRACT_VERSION = 33
+CLI_CONTRACT_VERSION = 34
 WORKFLOW_CONTRACT_VERSION = 22
 
 
@@ -155,6 +155,12 @@ _CAPABILITY_SUMMARY_HISTORY: dict[str, dict[str, Any]] = {
         "routineCommands": ["agent begin", "agent cognition", "agent verify", "agent cognition checkpoint", "agent work complete"],
         "diagnostics": ["agent workflow show", "agent capabilities --json", "agent --help"],
     },
+    "0.16.7": {
+        "cliContractVersion": 33,
+        "workflowContractVersion": 22,
+        "routineCommands": ["agent begin", "agent cognition", "agent verify", "agent cognition checkpoint", "agent work complete"],
+        "diagnostics": ["agent workflow show", "agent capabilities --json", "agent --help"],
+    },
 }
 
 _CAPABILITY_RELEASE_CHANGES: dict[str, list[str]] = {
@@ -170,6 +176,11 @@ _CAPABILITY_RELEASE_CHANGES: dict[str, list[str]] = {
     "0.16.7": [
         "declarative-update.fresh-process-per-edge",
         "declarative-update.periodic-fresh-auto-process",
+    ],
+    "0.16.8": [
+        "cognition.batch",
+        "cognition.one-line-success",
+        "overhead.passive-cli-metrics",
     ],
 }
 
@@ -266,7 +277,8 @@ def capabilities(root: Path) -> dict[str, Any]:
             "selfUpdate": {"available": True, "latestDiscovery": True, "explicitVersion": True, "checkOnly": True, "freshDownload": True, "identityVerified": True},
             "begin": {"available": True, "canonicalRoutineEntry": True, "usesWorkEnter": True, "durableContextProjection": True, "knowledgeHealth": True, "interruptionResume": True, "resumeWithoutGoal": True, "profileHintCompatibility": True, "conversationMemoryAuthoritative": False, "projectStateAuthoritative": True, "newStateModel": False},
             "work": {"enter": True, "start": True, "align": True, "status": True, "complete": True, "finish": True, "report": True, "reportReadOnly": True, "oneActionEntry": True, "handoffEntry": True, "routineEntryFastPath": True, "alignmentPendingOptOut": True, "oneActionCompletion": True, "automaticVerificationReuse": True, "baselineWhenUnverified": True, "taskGapGate": True, "noGapFastPath": True, "semanticCloseout": True},
-            "cognition": {"observation": True, "decision": True, "finding": True, "assumption": True, "requirement": not profile.development, "openQuestion": not profile.development, "evidence": not profile.development, "blocker": True, "resolveBlocker": True, "toolFailure": True, "toolFailureRetryCeiling": 2, "toolFailureOptionalNonBlocking": True, "toolFailureMandatoryBlocks": True, "status": True, "checkpoint": True, "checkpointPromoteRequired": True, "textOptionAlias": True, "stdin": True, "fromFile": True, "utf8BulkCapture": True, "naturalGuessHints": True, "checkpointSessionOnlyClassification": True, "appendOnlyJournal": True, "possibleStaleCognition": True, "compactHumanOutput": True},
+            "cognition": {"observation": True, "decision": True, "finding": True, "assumption": True, "requirement": not profile.development, "openQuestion": not profile.development, "evidence": not profile.development, "blocker": True, "resolveBlocker": True, "batch": True, "batchDistinctEvents": True, "batchPerEventSource": True, "toolFailure": True, "toolFailureRetryCeiling": 2, "toolFailureOptionalNonBlocking": True, "toolFailureMandatoryBlocks": True, "status": True, "checkpoint": True, "checkpointPromoteRequired": True, "textOptionAlias": True, "stdin": True, "fromFile": True, "utf8BulkCapture": True, "naturalGuessHints": True, "checkpointSessionOnlyClassification": True, "appendOnlyJournal": True, "possibleStaleCognition": True, "compactHumanOutput": True, "oneLineSuccess": True},
+            "overheadMetrics": {"passive": True, "storage": ".agent-work/cli-overhead.jsonl", "cliCalls": True, "durationMs": True, "stdoutBytes": True, "exitCode": True, "noRoutineCommand": True},
             "knowledge": {"promote": True, "remember": True, "why": True, "lifecycle": True, "supersede": True, "validate": True, "status": True, "researchKinds": not profile.development, "softContradictionWarnings": True, "promotionRequired": False, "routineDirectPromote": False, "checkpointAuthority": True, "canonicalStore": ".agent-knowledge", "durableSqlite": False},
             "source": {"add": not profile.development, "list": not profile.development, "taskSessionProvenance": not profile.development},
             "context": {"available": True, "affected": profile.development, "prepare": True, "current": True, "why": True, "expand": True, "stageAware": True, "hierarchicalScope": True, "budgeted": True, "deduplicate": True, "selectionReasons": True, "crossTaskLexicalIsolation": True, "possiblyRelatedCues": True, "possiblyRelatedSeparateBudget": True, "canonicalFirstPassRetrieval": True, "manualDurableSearchFallbackOnly": True, "avoidRedundantDurableRescan": True, "usageSqliteDisposable": True},

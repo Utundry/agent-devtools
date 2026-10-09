@@ -264,6 +264,12 @@ def configure_cognition_parser(parser: argparse.ArgumentParser) -> None:
         if name != "blocker":
             cmd.add_argument("--subject", help="optional durable-knowledge subject for reusable/durable classification")
         cmd.add_argument("--json", action="store_true", dest="json_output")
+    batch = sub.add_parser("batch", help="record multiple typed semantic events from one UTF-8 JSON array")
+    batch_source = batch.add_mutually_exclusive_group(required=True)
+    batch_source.add_argument("--stdin", action="store_true", dest="stdin_input", help="read a UTF-8 JSON event array from stdin")
+    batch_source.add_argument("--from-file", type=Path, help="read a UTF-8 JSON event array from a file")
+    batch.add_argument("--json", action="store_true", dest="json_output")
+
     resolve = sub.add_parser("resolve-blocker", help="resolve an exact recorded blocker")
     resolve.add_argument("text")
     resolve.add_argument("--json", action="store_true", dest="json_output")
@@ -320,6 +326,161 @@ def _cognition_text(root: Path, args: argparse.Namespace) -> str:
     if not value.strip():
         raise TaskStateError("cognition text source is empty")
     return value
+
+
+_COGNITION_BATCH_KINDS = {
+    "observation",
+    "decision",
+    "finding",
+    "assumption",
+    "requirement",
+    "open-question",
+    "question",
+    "evidence",
+    "blocker",
+}
+
+_COGNITION_BATCH_STATE = {
+    "decision": ("add_decisions", "decisions"),
+    "finding": ("add_findings", "findings"),
+    "assumption": ("add_assumptions", "assumptions"),
+    "requirement": ("add_requirements", "requirements"),
+    "open-question": ("add_open_questions", "openQuestions"),
+    "evidence": ("add_evidence", "evidence"),
+    "blocker": ("add_blockers", "blockers"),
+}
+
+
+def _read_cognition_batch(root: Path, args: argparse.Namespace) -> list[dict]:
+    stdin_requested = bool(getattr(args, "stdin_input", False))
+    from_file = getattr(args, "from_file", None)
+    if int(stdin_requested) + int(from_file is not None) != 1:
+        raise TaskStateError("cognition batch requires exactly one of --stdin or --from-file")
+    if stdin_requested:
+        raw = sys.stdin.read()
+    else:
+        path = Path(from_file).expanduser()
+        if not path.is_absolute():
+            path = root / path
+        path = path.resolve()
+        if not path.is_file():
+            raise TaskStateError(f"cognition batch --from-file is not a readable file: {path}")
+        try:
+            raw = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            raise TaskStateError(f"cannot read cognition batch UTF-8 JSON from {path}: {exc}") from exc
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise TaskStateError(f"cognition batch input must be a JSON array: {exc}") from exc
+    if not isinstance(payload, list) or not payload:
+        raise TaskStateError("cognition batch input must be a non-empty JSON array")
+    if len(payload) > 100:
+        raise TaskStateError("cognition batch accepts at most 100 semantic events per invocation")
+
+    state = load_task_state(root)
+    if state is None:
+        raise TaskStateError("no task state exists; use begin or work start first")
+    normalized: list[dict] = []
+    seen_state_items: set[tuple[str, str]] = set()
+    for index, raw_item in enumerate(payload):
+        if not isinstance(raw_item, dict):
+            raise TaskStateError(f"cognition batch item {index} must be an object")
+        kind = str(raw_item.get("kind") or "").strip()
+        if kind not in _COGNITION_BATCH_KINDS:
+            raise TaskStateError(f"cognition batch item {index} has unsupported kind: {kind!r}")
+        if kind == "question":
+            kind = "open-question"
+        text = str(raw_item.get("text") or "").strip()
+        if not text:
+            raise TaskStateError(f"cognition batch item {index} requires non-empty text")
+        subject = str(raw_item.get("subject") or "").strip()
+        if kind == "blocker" and subject:
+            raise TaskStateError(f"cognition batch item {index}: blocker does not accept subject")
+        source = str(raw_item.get("source") or "cognition.batch").strip() or "cognition.batch"
+        if kind != "observation":
+            _arg_name, state_key = _COGNITION_BATCH_STATE[kind]
+            dedupe_key = (state_key, text)
+            if dedupe_key in seen_state_items or text in list(state.get(state_key, [])):
+                raise TaskStateError(
+                    f"cognition batch item {index} duplicates existing {kind} text; "
+                    "batch capture must not silently collapse separate semantic events"
+                )
+            seen_state_items.add(dedupe_key)
+        normalized.append({
+            "kind": kind,
+            "text": text,
+            "subject": subject,
+            "source": source,
+        })
+    return normalized
+
+
+def _record_cognition_batch(root: Path, args: argparse.Namespace) -> dict:
+    items = _read_cognition_batch(root, args)
+    state = load_task_state(root)
+    assert state is not None
+    task_id = str(state.get("taskId") or "")
+    recorded: list[dict] = []
+    warnings: list[dict] = []
+
+    for item in items:
+        kind = item["kind"]
+        text = item["text"]
+        subject = item["subject"]
+        source = item["source"]
+        if kind == "observation":
+            event = append_event(
+                root,
+                task_id=task_id,
+                kind="observation",
+                text=text,
+                subject=subject,
+                metadata={"source": source, "capture": "batch"},
+                created_at_utc=utc_now(),
+            )
+        else:
+            arg_name, state_key = _COGNITION_BATCH_STATE[kind]
+            kwargs = {arg_name: [text], "semantic_source": source}
+            if subject and kind != "blocker":
+                kwargs["semantic_subjects"] = {state_key: subject}
+            before_events = int(journal_status(root, task_id)["events"])
+            state = update_task(root, **kwargs)
+            status = journal_status(root, task_id)
+            if int(status["events"]) != before_events + 1 or not status["lastEvent"]:
+                raise TaskStateError(f"cognition batch failed to preserve a distinct {kind} semantic event")
+            event = status["lastEvent"]
+
+        if subject and kind not in {"blocker", "observation"}:
+            knowledge_kind = "open_question" if kind == "open-question" else kind
+            warnings.extend(
+                soft_contradictions(root, kind=knowledge_kind, text=text, subject=subject)
+            )
+        recorded.append({
+            "id": event["id"],
+            "kind": kind,
+            "subject": subject or None,
+            "source": source,
+            "text": text,
+        })
+
+    final_state = load_task_state(root)
+    assert final_state is not None
+    counts: dict[str, int] = {}
+    for item in recorded:
+        counts[item["kind"]] = counts.get(item["kind"], 0) + 1
+    return {
+        "format": "agent-devtools-cognition-batch",
+        "formatVersion": 1,
+        "taskId": task_id,
+        "recorded": recorded,
+        "count": len(recorded),
+        "byKind": dict(sorted(counts.items())),
+        "knowledgeWarnings": warnings,
+        "journal": journal_status(root, task_id),
+        "status": final_state.get("status"),
+    }
+
 
 def _tool_failure_recovery(root: Path, args: argparse.Namespace) -> tuple[dict, dict]:
     state = load_task_state(root)
@@ -408,6 +569,16 @@ def _tool_failure_recovery(root: Path, args: argparse.Namespace) -> tuple[dict, 
 
 def main_cognition(root: Path, args: argparse.Namespace) -> int:
     try:
+        if args.cognition_command == "batch":
+            payload = _record_cognition_batch(root, args)
+            if args.json_output:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+            else:
+                by_kind = " · ".join(f"{kind}={count}" for kind, count in payload["byKind"].items())
+                print(f"recorded: {payload['count']} cognition events" + (f" · {by_kind}" if by_kind else ""))
+                for warning in payload.get("knowledgeWarnings", []):
+                    print(f"KNOWLEDGE WARNING {warning['recordId']} · {warning['subject']} · {warning['statement']}")
+            return 0
         if args.cognition_command == "tool-failure":
             payload, state = _tool_failure_recovery(root, args)
             if args.json_output:
@@ -560,17 +731,7 @@ def main_cognition(root: Path, args: argparse.Namespace) -> int:
             label = args.cognition_command
             if subject:
                 label += f" · {subject}"
-            print(f"Cognition: {label} · recorded")
-            if semantic_text:
-                print("  " + semantic_text.replace("\n", "\n  "))
-            counts = (
-                f"decisions={len(payload['decisions'])} · findings={len(payload['findings'])} · "
-                f"assumptions={len(payload['assumptions'])} · requirements={len(payload['requirements'])} · "
-                f"open={len(payload['openQuestions'])} · evidence={len(payload['evidence'])} · blockers={len(payload['blockers'])}"
-            )
-            print("  state: " + counts)
-        if payload["nextAction"]:
-            print(f"next: {payload['nextAction']}")
+            print(f"recorded: {label}")
         for warning in payload.get("knowledgeWarnings", []):
             print(f"KNOWLEDGE WARNING {warning['recordId']} · {warning['subject']} · {warning['statement']}")
     return 0
