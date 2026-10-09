@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Stage R6.5 removes redundant durable-memory retrieval from the normal agent path: `begin` is explicitly the canonical first-pass semantic retrieval, and generic `rg`/`grep`/`find` rescans of `.agent-knowledge` are fallback-only when the projection is insufficient for a specific reason or an exact file/line is required.
+- Capabilities expose `canonicalFirstPassRetrieval`, `manualDurableSearchFallbackOnly`, and `avoidRedundantDurableRescan`. No retrieval scoring, storage, service, dependency, or routine command changes; CLI contract advances to v32 while workflow contract remains v21.
+
 - Stage R6.4 adds bounded cross-task recall without weakening R6.2 isolation: durable records below the primary selection gate may surface as at most three `possiblyRelated` cues when deterministic source-task-goal/domain overlap exists. These cues use a separate mini-budget and never consume the primary C3 token budget.
 - Routine cognition human output is now compact: the newly recorded semantic item plus task-state counts replaces full accumulated-history reprinting; `cognition status` and `--json` retain complete inspection paths.
 - Research verification help now states the compact/granular mutual exclusion directly, and capabilities/workflow document semantic exit-code classes (`0` clean success, documented `1` actionable gate/review state, `2` invalid/contract failure). CLI contract advances to v31; workflow contract remains v21 and no new routine command is introduced.

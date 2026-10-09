@@ -7,7 +7,7 @@ from typing import Any
 from . import __version__
 from .profiles import load_profile
 
-CLI_CONTRACT_VERSION = 31
+CLI_CONTRACT_VERSION = 32
 WORKFLOW_CONTRACT_VERSION = 21
 
 
@@ -29,7 +29,7 @@ def workflow_contract(root: Path) -> dict[str, Any]:
             "The Agent Work Lifecycle canonical routine is begin -> work -> checkpoint -> complete. begin is the normal entry facade over work enter plus durable context projection; lower-level commands remain authoritative primitives.",
             "Phases describe responsibilities, not seven separate command invocations. Routine work uses begin, project-native execution, checkpoint when semantic closeout needs review, and work complete.",
             "Use work complete for routine completion: reuse a successful check only after validating its current inputs, outputs, task identity and coverage; otherwise run the affected policy. No visible changes and no reusable evidence require a baseline check. work finish is the strict no-execution primitive; work complete --no-cache explicitly requests physical execution.",
-            "Read relevant durable knowledge when needed; promote only new reusable knowledge and reuse exact existing statements instead of creating duplicates.",
+            "Read relevant durable knowledge when needed; begin is the canonical first-pass retrieval for durable project memory. Trust its selected + possibly-related projection before doing any generic manual rescan of .agent-knowledge; use exact filesystem search only when that projection is insufficient for a specific reason or when exact repository text outside durable memory is needed. Promote only new reusable knowledge and reuse exact existing statements instead of creating duplicates.",
             "AGENTS.md defines the mandatory project workflow; the CLI is authoritative for current syntax and capabilities.",
             "Agent DevTools orchestrates project-native tools; it does not replace Git, build, test, release, or domain tooling.",
             "Canonical project change discovery includes untracked files governed by the source contract; plain git diff is not a complete handoff inventory.",
@@ -61,7 +61,13 @@ def workflow_contract(root: Path) -> dict[str, Any]:
             "contextIndex": "Optional; created only by explicit context operations, reused by briefings when present.",
             "knowledgePromotion": "Event-driven; checkpoint is read-only by default and prints executable next actions. checkpoint --promote-required is the explicit convenience path for required decisions/requirements only. Zero new records is valid when no durable candidate exists.",
             "knowledgeLifecycle": "Tracked .agent-knowledge JSON is canonical durable state; supersession is relation-derived and append-friendly.",
-            "contextProjection": "Budgeted stage-aware projection from active durable knowledge with compact primary cues plus a separately bounded possibly-related cross-task cue channel; runtime usage state is disposable.",
+            "contextProjection": "Budgeted stage-aware projection from active durable knowledge with compact primary cues plus a separately bounded possibly-related cross-task cue channel; begin is the canonical first-pass durable retrieval and generic .agent-knowledge rescans are fallback-only; runtime usage state is disposable.",
+            "durableRetrieval": {
+                "firstPass": "begin",
+                "trustProjectionFirst": True,
+                "genericKnowledgeRescanRoutine": False,
+                "fallbackRule": "Use exact filesystem search only when projected durable context is insufficient for a specific reason, an exact file/line is required, or repository content outside durable knowledge must be searched.",
+            },
             "interactiveShell": "Optional UX over the same top-level CLI dispatcher; no shell-only state or write path.",
             "semanticJournal": "Append-only disposable SQLite session journal; cognition checkpoint classifies durable candidates before closeout.",
             "semanticCapture": "Use cognition with positional text, --text, --stdin or --from-file; add --subject only for reusable semantics, then let checkpoint classify required/advisory/session-only outcomes.",
@@ -142,7 +148,7 @@ def capabilities(root: Path) -> dict[str, Any]:
             "cognition": {"observation": True, "decision": True, "finding": True, "assumption": True, "requirement": not profile.development, "openQuestion": not profile.development, "evidence": not profile.development, "blocker": True, "resolveBlocker": True, "toolFailure": True, "toolFailureRetryCeiling": 2, "toolFailureOptionalNonBlocking": True, "toolFailureMandatoryBlocks": True, "status": True, "checkpoint": True, "checkpointPromoteRequired": True, "textOptionAlias": True, "stdin": True, "fromFile": True, "utf8BulkCapture": True, "naturalGuessHints": True, "checkpointSessionOnlyClassification": True, "appendOnlyJournal": True, "possibleStaleCognition": True, "compactHumanOutput": True},
             "knowledge": {"promote": True, "remember": True, "why": True, "lifecycle": True, "supersede": True, "validate": True, "status": True, "researchKinds": not profile.development, "softContradictionWarnings": True, "promotionRequired": False, "routineDirectPromote": False, "checkpointAuthority": True, "canonicalStore": ".agent-knowledge", "durableSqlite": False},
             "source": {"add": not profile.development, "list": not profile.development, "taskSessionProvenance": not profile.development},
-            "context": {"available": True, "affected": profile.development, "prepare": True, "current": True, "why": True, "expand": True, "stageAware": True, "hierarchicalScope": True, "budgeted": True, "deduplicate": True, "selectionReasons": True, "crossTaskLexicalIsolation": True, "possiblyRelatedCues": True, "possiblyRelatedSeparateBudget": True, "usageSqliteDisposable": True},
+            "context": {"available": True, "affected": profile.development, "prepare": True, "current": True, "why": True, "expand": True, "stageAware": True, "hierarchicalScope": True, "budgeted": True, "deduplicate": True, "selectionReasons": True, "crossTaskLexicalIsolation": True, "possiblyRelatedCues": True, "possiblyRelatedSeparateBudget": True, "canonicalFirstPassRetrieval": True, "manualDurableSearchFallbackOnly": True, "avoidRedundantDurableRescan": True, "usageSqliteDisposable": True},
             "shell": {"available": True, "interactive": True, "batchCommand": True, "sameDispatcher": True, "shellOnlyState": False},
             "changes": {"status": profile.development, "patch": profile.development, "canonicalUntracked": profile.development, "workspaceLocalMarks": profile.development},
             "verification": {

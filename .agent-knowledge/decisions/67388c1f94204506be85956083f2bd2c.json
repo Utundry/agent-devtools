@@ -1,0 +1,26 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "67388c1f94204506be85956083f2bd2c",
+  "kind": "decision",
+  "subject": "context/retrieval-efficiency",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "After begin returns selected and possiblyRelated durable context, agents should treat that projection as the canonical first-pass semantic retrieval and must not routinely rescan .agent-knowledge with rg/find/grep. Exact filesystem search remains a fallback only when the projection is insufficient for a specific reason, when an exact file/line is required, or when searching repository content outside durable knowledge.",
+  "scope": [],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "f46c4b01-06b1-4ae2-b106-360c64662443",
+    "taskGoal": "Implement R6.5 Retrieval Efficiency: begin is canonical first-pass durable retrieval and redundant .agent-knowledge rescans are fallback-only.",
+    "eventId": "5bfed80c066a41efb3c2e3874bf766c1"
+  },
+  "taskId": "f46c4b01-06b1-4ae2-b106-360c64662443",
+  "taskGoal": "Implement R6.5 Retrieval Efficiency: begin is canonical first-pass durable retrieval and redundant .agent-knowledge rescans are fallback-only.",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-09T05:59:19Z",
+  "updatedAtUtc": "2026-10-09T05:59:19Z"
+}
