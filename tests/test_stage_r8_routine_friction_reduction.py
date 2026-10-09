@@ -36,10 +36,21 @@ class R8RoutineFrictionReductionTests(unittest.TestCase):
         self.assertIn("If `begin` reports alignment ready, do not run `work align`", block)
         self.assertNotIn("Before substantial work, run `python devtools/agent/agent.py workflow show`", block)
 
-    def test_readme_normal_path_is_begin_first(self) -> None:
-        text = (ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn("For ordinary work, do not run discovery commands as a ritual", text)
-        self.assertIn('python devtools/agent/agent.py begin --goal "..."', text)
+    def test_human_readme_defers_agent_workflow_to_agent_handoff(self) -> None:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        handoff = (ROOT / "AGENT-START-HERE.md").read_text(encoding="utf-8")
+        self.assertIn(
+            "Agent DevTools is infrastructure **for the agent**",
+            readme,
+        )
+        self.assertNotIn(
+            'python devtools/agent/agent.py begin --goal "..."',
+            readme,
+        )
+        self.assertIn(
+            'python devtools/agent/agent.py begin --goal "<user\'s actual task>"',
+            handoff,
+        )
 
 
 if __name__ == "__main__":

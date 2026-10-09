@@ -15,6 +15,19 @@ python agent.py capabilities --json
 3. Prefer declarative project behavior over framework-specific branches in the portable engine.
 4. Keep disposable state out of durable project knowledge.
 
+## Maintainer documentation
+
+The public `README.md` is intentionally user-facing and does not document the internal source-release workflow.
+
+Before working on release, self-hosting, bootstrap, or updater internals, also read:
+
+- `docs/MAINTAINER-RELEASES.md` — declarative source-update and release pipeline;
+- `docs/SELF-HOSTING.md` — dogfood/self-hosting policy;
+- `docs/ARCHITECTURE.md` — architectural boundaries;
+- `docs/PORTABILITY-CONTRACT.md` — portable-core constraints.
+
+Consumer `self-update` and maintainer source release are separate workflows; do not expose maintainer release mechanics as required user operations.
+
 ## Verification
 
 The minimum pull-request gate is:

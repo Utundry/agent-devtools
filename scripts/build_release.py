@@ -24,12 +24,11 @@ if str(ROOT) not in sys.path:
 from agent_devtools.changes import ChangeSetError, discover_changes
 
 VERSION_FILE = ROOT / "agent_devtools" / "__init__.py"
-README = ROOT / "README.md"
 HANDOFF = ROOT / "AGENT-START-HERE.md"
 PUBLIC_VERSION = ROOT / "VERSION"
 INSTALLER = ROOT / "bootstrap" / "AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py"
 KIT = ROOT / "bootstrap" / "agent-devtools-bootstrap-kit.zip"
-MANAGED_FILES = (VERSION_FILE, README, HANDOFF, PUBLIC_VERSION, INSTALLER, KIT)
+MANAGED_FILES = (VERSION_FILE, HANDOFF, PUBLIC_VERSION, INSTALLER, KIT)
 SAFE_VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][A-Za-z0-9._-]+)?$")
 PINNED_URL = "https://raw.githubusercontent.com/Utundry/agent-devtools/v{version}/bootstrap/AGENT-DEVTOOLS-BOOTSTRAP-RUN-ME.py"
 DEFAULT_REMOTE = "origin"
@@ -162,10 +161,8 @@ def _replace_all_required(path: Path, old: str, new: str) -> int:
 
 def _set_version(current: str, requested: str) -> None:
     _replace_once(VERSION_FILE, f'__version__ = "{current}"', f'__version__ = "{requested}"')
-    _replace_once(README, f"Current version: **{current}**.", f"Current version: **{requested}**.")
     old_url = PINNED_URL.format(version=current)
     new_url = PINNED_URL.format(version=requested)
-    _replace_all_required(README, old_url, new_url)
     _replace_all_required(HANDOFF, old_url, new_url)
     PUBLIC_VERSION.write_text(requested + "\n", encoding="utf-8")
     _invalidate_version_bytecode()

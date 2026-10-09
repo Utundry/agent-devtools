@@ -28,8 +28,6 @@ class ReleaseBuilderTests(unittest.TestCase):
             original_bytes = b'__version__ = "1.0.0"\n'
             version_file.write_bytes(original_bytes)
             old_url = builder.PINNED_URL.format(version="1.0.0")
-            readme = root / "README.md"
-            readme.write_text(f"Current version: **1.0.0**.\n{old_url}\n")
             handoff = root / "AGENT-START-HERE.md"
             handoff.write_text(old_url)
             public = root / "VERSION"
@@ -37,9 +35,9 @@ class ReleaseBuilderTests(unittest.TestCase):
             frozen_time = 1700000000
             os.utime(version_file, (frozen_time, frozen_time))
             py_compile.compile(str(version_file), doraise=True)
-            original = builder.VERSION_FILE, builder.README, builder.HANDOFF, builder.PUBLIC_VERSION
+            original = builder.VERSION_FILE, builder.HANDOFF, builder.PUBLIC_VERSION
             try:
-                builder.VERSION_FILE, builder.README, builder.HANDOFF, builder.PUBLIC_VERSION = version_file, readme, handoff, public
+                builder.VERSION_FILE, builder.HANDOFF, builder.PUBLIC_VERSION = version_file, handoff, public
                 builder._set_version("1.0.0", "1.0.1")
                 os.utime(version_file, (frozen_time, frozen_time))
                 command = [sys.executable, "-c", "import agent_devtools; print(agent_devtools.__version__)"]
@@ -49,7 +47,7 @@ class ReleaseBuilderTests(unittest.TestCase):
                 os.utime(version_file, (frozen_time, frozen_time))
                 self.assertEqual("1.0.0", subprocess.check_output(command, cwd=root, text=True).strip())
             finally:
-                builder.VERSION_FILE, builder.README, builder.HANDOFF, builder.PUBLIC_VERSION = original
+                builder.VERSION_FILE, builder.HANDOFF, builder.PUBLIC_VERSION = original
 
     def test_safe_public_versions(self) -> None:
         self.assertIsNotNone(builder.SAFE_VERSION.fullmatch("0.8.2"))
@@ -63,7 +61,7 @@ class ReleaseBuilderTests(unittest.TestCase):
             with self.assertRaisesRegex(builder.ReleaseBuilderError, "exactly one"):
                 builder._replace_once(path, "old", "new")
 
-    def test_release_version_rewrites_runtime_readme_handoff_and_version_file(self) -> None:
+    def test_release_version_rewrites_runtime_handoff_and_version_file_without_readme(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             version_file = root / "agent_devtools" / "__init__.py"
@@ -73,30 +71,33 @@ class ReleaseBuilderTests(unittest.TestCase):
             version_file.parent.mkdir(parents=True)
             version_file.write_text('__version__ = "0.8.1"\n', encoding="utf-8")
             old_url = builder.PINNED_URL.format(version="0.8.1")
-            readme.write_text(f"Current version: **0.8.1**.\n{old_url}\n", encoding="utf-8")
+            readme.write_text(
+                "# Agent DevTools\n\nHuman-facing landing page without a release version.\n",
+                encoding="utf-8",
+            )
+            original_readme = readme.read_bytes()
             handoff.write_text(old_url + "\n", encoding="utf-8")
             public_version.write_text("0.8.1\n", encoding="utf-8")
 
             original = (
-                builder.VERSION_FILE, builder.README, builder.HANDOFF, builder.PUBLIC_VERSION
+                builder.VERSION_FILE, builder.HANDOFF, builder.PUBLIC_VERSION
             )
             try:
                 builder.VERSION_FILE = version_file
-                builder.README = readme
                 builder.HANDOFF = handoff
                 builder.PUBLIC_VERSION = public_version
                 builder._set_version("0.8.1", "0.8.2")
             finally:
                 (
-                    builder.VERSION_FILE, builder.README, builder.HANDOFF, builder.PUBLIC_VERSION
+                    builder.VERSION_FILE, builder.HANDOFF, builder.PUBLIC_VERSION
                 ) = original
 
             self.assertIn('__version__ = "0.8.2"', version_file.read_text(encoding="utf-8"))
-            self.assertIn("Current version: **0.8.2**.", readme.read_text(encoding="utf-8"))
             new_url = builder.PINNED_URL.format(version="0.8.2")
-            self.assertIn(new_url, readme.read_text(encoding="utf-8"))
             self.assertIn(new_url, handoff.read_text(encoding="utf-8"))
             self.assertEqual("0.8.2\n", public_version.read_text(encoding="utf-8"))
+            self.assertEqual(original_readme, readme.read_bytes())
+            self.assertNotIn("README.md", {path.name for path in builder.MANAGED_FILES})
 
     def test_snapshot_restore_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as td:
