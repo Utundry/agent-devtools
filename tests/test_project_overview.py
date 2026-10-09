@@ -138,6 +138,67 @@ class ProjectOverviewTests(unittest.TestCase):
         finally:
             tmp.cleanup()
 
+    def test_attention_uses_only_latest_verification_not_historical_counts(self):
+        tmp, root = self.make_root()
+        try:
+            work = root / ".agent-work"
+            (work / "verification.json").write_text(json.dumps({
+                "records": [
+                    {
+                        "label": "research-bundle",
+                        "status": "pass",
+                        "assessmentStatus": "warn",
+                        "warningChecks": ["assumptions", "unresolved_questions"],
+                        "completedAtUtc": "2026-10-09T10:00:00Z",
+                    },
+                    {
+                        "label": "research-bundle",
+                        "status": "pass",
+                        "assessmentStatus": "pass",
+                        "warningChecks": [],
+                        "completedAtUtc": "2026-10-09T11:00:00Z",
+                    },
+                ]
+            }), encoding="utf-8")
+            payload = build_overview(root)
+            self.assertEqual(1, payload["verification"]["warn"])
+            self.assertEqual(1, payload["verification"]["pass"])
+            self.assertEqual(0, payload["attention"]["verificationWarnings"])
+            self.assertEqual(0, payload["attention"]["verificationFailures"])
+        finally:
+            tmp.cleanup()
+
+    def test_attention_projects_latest_warn_checks_and_latest_failure(self):
+        tmp, root = self.make_root()
+        try:
+            path = root / ".agent-work" / "verification.json"
+            path.write_text(json.dumps({
+                "records": [{
+                    "label": "research-bundle",
+                    "status": "pass",
+                    "assessmentStatus": "warn",
+                    "warningChecks": ["assumptions", "unresolved_questions"],
+                    "completedAtUtc": "2026-10-09T12:00:00Z",
+                }]
+            }), encoding="utf-8")
+            payload = build_overview(root)
+            self.assertEqual(2, payload["attention"]["verificationWarnings"])
+            self.assertEqual(0, payload["attention"]["verificationFailures"])
+
+            path.write_text(json.dumps({
+                "records": [{
+                    "label": "check",
+                    "status": "fail",
+                    "warningChecks": [],
+                    "completedAtUtc": "2026-10-09T13:00:00Z",
+                }]
+            }), encoding="utf-8")
+            payload = build_overview(root)
+            self.assertEqual(0, payload["attention"]["verificationWarnings"])
+            self.assertEqual(1, payload["attention"]["verificationFailures"])
+        finally:
+            tmp.cleanup()
+
 
 if __name__ == "__main__":
     unittest.main()

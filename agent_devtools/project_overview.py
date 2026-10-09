@@ -271,11 +271,17 @@ def build_overview(root: Path) -> dict[str, Any]:
     repository = _repository_stats(root)
     work_root = _work_root(root)
 
+    latest_verification = verification.get("latest") if isinstance(verification.get("latest"), dict) else {}
+    latest_status = str(latest_verification.get("status") or "").lower()
     attention = {
         "openQuestions": len((current or {}).get("openQuestions", [])),
         "blockers": len((current or {}).get("blockers", [])),
-        "verificationWarnings": verification["warn"],
-        "verificationFailures": verification["fail"],
+        "verificationWarnings": (
+            len(latest_verification.get("warningChecks") or [])
+            if latest_status == "warn"
+            else 0
+        ),
+        "verificationFailures": 1 if latest_status == "fail" else 0,
         "incomingUpdates": updates["incoming"],
     }
 
@@ -406,8 +412,8 @@ def render_overview(payload: dict[str, Any]) -> str:
         "Attention",
         f"  Current open questions: {attention['openQuestions']}",
         f"  Blockers:          {attention['blockers']}",
-        f"  Verification WARN: {attention['verificationWarnings']}",
-        f"  Verification FAIL: {attention['verificationFailures']}",
+        f"  Current verification warnings: {attention['verificationWarnings']}",
+        f"  Current verification failures: {attention['verificationFailures']}",
         f"  Incoming updates:  {attention['incomingUpdates']}",
     ]
     if payload.get("projectVersion") is None:
