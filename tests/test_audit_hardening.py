@@ -134,10 +134,12 @@ class VerificationIntegrityTests(unittest.TestCase):
 
     def test_changed_hard_deadline_does_not_reuse_prior_long_pass(self):
         with tempfile.TemporaryDirectory() as td:
-            root = Path(td); project(root, 'import time\ntime.sleep(0.05)\n', timeoutSeconds=1)
+            # Keep a wide scheduler margin: this is a cache-identity regression
+            # test, not a sub-10ms process-timer precision test.
+            root = Path(td); project(root, 'import time\ntime.sleep(0.5)\n', timeoutSeconds=1)
             self.assertEqual(0, run(root)[0])
             path = root / 'agent-tools.json'; config = json.loads(path.read_text())
-            config['check']['commands']['probe']['timeoutSeconds'] = 0.005
+            config['check']['commands']['probe']['timeoutSeconds'] = 0.05
             path.write_text(json.dumps(config))
             code, result = run(root)
             self.assertEqual(1, code)
