@@ -194,6 +194,8 @@ def _fallback_files(root: Path) -> list[str]:
             continue
         if any(part in ignored for part in rel.parts):
             continue
+        if len(rel.parts) >= 2 and rel.parts[:2] == ("devtools", "agent"):
+            continue
         try:
             if path.is_file() and not path.is_symlink():
                 result.append(rel.as_posix())
@@ -207,6 +209,9 @@ def _repository_stats(root: Path) -> dict[str, Any]:
     tracked = [item for item in (tracked_raw or "").split("\0") if item] if tracked_raw is not None else _fallback_files(root)
     branch_raw = _git(root, "rev-parse", "--abbrev-ref", "HEAD")
     status_raw = _git(root, "status", "--porcelain")
+    status_lines = [line for line in (status_raw or "").splitlines() if line]
+    untracked_files = sum(1 for line in status_lines if line.startswith("??"))
+    tracked_changes = len(status_lines) - untracked_files
     test_cases = 0
     for rel in tracked:
         if not (rel.startswith("tests/") and rel.endswith(".py")):
@@ -225,6 +230,8 @@ def _repository_stats(root: Path) -> dict[str, Any]:
             else "clean" if status_raw is not None
             else None
         ),
+        "trackedChanges": tracked_changes if status_raw is not None else None,
+        "untrackedFiles": untracked_files if status_raw is not None else None,
         "files": len(tracked),
         "pythonFiles": sum(1 for item in tracked if item.endswith(".py")),
         "testCases": test_cases,
@@ -322,6 +329,28 @@ def render_overview(payload: dict[str, Any]) -> str:
     kinds = cognition.get("byKind", {})
     lifecycle = knowledge.get("byLifecycle", {})
 
+    git_summary = f"{repo.get('branch') or 'n/a'} · {repo.get('workingTree') or 'n/a'}"
+    if repo.get("workingTree") == "dirty":
+        details = []
+        if repo.get("trackedChanges"):
+            details.append(f"{repo['trackedChanges']} tracked")
+        if repo.get("untrackedFiles"):
+            details.append(f"{repo['untrackedFiles']} untracked")
+        if details:
+            git_summary += " (" + ", ".join(details) + ")"
+
+    active_work = work.get("currentStatus") == "active"
+    work_status_line = (
+        f"  Current:           {work['currentStatus'] or 'none'}"
+        if active_work
+        else f"  Last work:         {work['currentStatus'] or 'none'}"
+    )
+    work_goal_line = (
+        f"  Goal:              {work['currentGoal'] or '—'}"
+        if active_work
+        else f"  Last goal:         {work['currentGoal'] or '—'}"
+    )
+
     lines = [
         "AGENT DEVTOOLS · PROJECT OVERVIEW",
         "",
@@ -329,12 +358,12 @@ def render_overview(payload: dict[str, Any]) -> str:
         f"  Tool version:      {payload['toolVersion']}",
         f"  Project version:   {payload['projectVersion'] or 'n/a'}",
         f"  Profile:           {payload['profile'] or 'unknown'}",
-        f"  Git:               {(repo.get('branch') or 'n/a')} · {(repo.get('workingTree') or 'n/a')}",
+        f"  Git:               {git_summary}",
         "",
         "Work",
         f"  Sessions seen:     {work['sessionsSeen']}",
-        f"  Current:           {work['currentStatus'] or 'none'}",
-        f"  Goal:              {work['currentGoal'] or '—'}",
+        work_status_line,
+        work_goal_line,
         "",
         "Cognition",
         f"  Semantic events:   {cognition['events']}",
@@ -342,7 +371,7 @@ def render_overview(payload: dict[str, Any]) -> str:
         f"  Decisions:         {kinds.get('decision', 0)}",
         f"  Requirements:      {kinds.get('requirement', 0)}",
         f"  Assumptions:       {kinds.get('assumption', 0)}",
-        f"  Questions:         {kinds.get('question', 0)}",
+        f"  Questions recorded:{kinds.get('question', 0):>4}",
         f"  Evidence:          {kinds.get('evidence', 0)}",
         "",
         "Knowledge",
@@ -371,16 +400,18 @@ def render_overview(payload: dict[str, Any]) -> str:
         f"  Files:             {repo['files']}",
         f"  Python files:      {repo['pythonFiles']}",
         f"  Test cases:        {repo['testCases']}",
-        f"  Work state:        {_human_bytes(storage['workBytes'])}",
+        f"  Runtime state:     {_human_bytes(storage['workBytes'])}",
         f"  Durable knowledge: {_human_bytes(storage['knowledgeBytes'])}",
         "",
         "Attention",
-        f"  Open questions:    {attention['openQuestions']}",
+        f"  Current open questions: {attention['openQuestions']}",
         f"  Blockers:          {attention['blockers']}",
         f"  Verification WARN: {attention['verificationWarnings']}",
         f"  Verification FAIL: {attention['verificationFailures']}",
         f"  Incoming updates:  {attention['incomingUpdates']}",
     ]
+    if payload.get("projectVersion") is None:
+        lines.remove("  Project version:   n/a")
     return "\n".join(lines)
 
 
