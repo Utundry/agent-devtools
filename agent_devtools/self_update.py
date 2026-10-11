@@ -59,12 +59,29 @@ def _fetch(url: str, timeout: float) -> bytes:
 
 
 def _run(argv: Sequence[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        list(argv),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        check=False,
+    # Do not use PIPE here. The downloaded single-file installer launches an
+    # inner bootstrap process, which may in turn launch validation children.
+    # On Windows, inherited stdout/stderr pipe handles can keep communicate()
+    # waiting for EOF after the direct child has already completed. Regular
+    # temporary files preserve captured output without that descendant-handle
+    # lifetime coupling.
+    args = list(argv)
+    with tempfile.TemporaryFile(mode="w+b") as stdout_file, tempfile.TemporaryFile(mode="w+b") as stderr_file:
+        proc = subprocess.run(
+            args,
+            stdout=stdout_file,
+            stderr=stderr_file,
+            check=False,
+        )
+        stdout_file.seek(0)
+        stderr_file.seek(0)
+        stdout = stdout_file.read().decode("utf-8", errors="replace")
+        stderr = stderr_file.read().decode("utf-8", errors="replace")
+    return subprocess.CompletedProcess(
+        args=proc.args,
+        returncode=proc.returncode,
+        stdout=stdout,
+        stderr=stderr,
     )
 
 

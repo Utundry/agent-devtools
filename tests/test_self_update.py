@@ -5,9 +5,10 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from agent_devtools import __version__
-from agent_devtools.self_update import SelfUpdateError, extract_pinned_release, self_update
+from agent_devtools.self_update import SelfUpdateError, _run, extract_pinned_release, self_update
 
 
 class SelfUpdateTests(unittest.TestCase):
@@ -95,6 +96,23 @@ class SelfUpdateTests(unittest.TestCase):
             )
             self.assertEqual("up-to-date", payload["status"])
             self.assertFalse(payload["performed"])
+
+    def test_runner_captures_utf8_without_subprocess_pipes(self) -> None:
+        def fake_run(argv, **kwargs):
+            self.assertIsNot(kwargs.get("stdout"), subprocess.PIPE)
+            self.assertIsNot(kwargs.get("stderr"), subprocess.PIPE)
+            self.assertNotIn("text", kwargs)
+            kwargs["stdout"].write("обновление завершено\n".encode("utf-8"))
+            kwargs["stderr"].write("диагностика\n".encode("utf-8"))
+            return subprocess.CompletedProcess(args=list(argv), returncode=7)
+
+        with patch("agent_devtools.self_update.subprocess.run", side_effect=fake_run):
+            proc = _run(["synthetic", "child"])
+
+        self.assertEqual(["synthetic", "child"], proc.args)
+        self.assertEqual(7, proc.returncode)
+        self.assertEqual("обновление завершено\n", proc.stdout)
+        self.assertEqual("диагностика\n", proc.stderr)
 
 
 if __name__ == "__main__":

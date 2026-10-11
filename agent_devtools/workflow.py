@@ -312,6 +312,9 @@ _CAPABILITY_RELEASE_CHANGES: dict[str, list[str]] = {
         "verification.summary-from-file",
         "verification.executed-evidence-references",
     ],
+    "0.16.22": [
+        "self-update.windows-inherited-pipe-handle-hardening",
+    ],
 }
 
 
