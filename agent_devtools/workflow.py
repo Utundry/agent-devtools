@@ -8,7 +8,7 @@ from typing import Any
 from . import __version__
 from .profiles import load_profile
 
-CLI_CONTRACT_VERSION = 36
+CLI_CONTRACT_VERSION = 37
 WORKFLOW_CONTRACT_VERSION = 23
 
 
@@ -215,6 +215,24 @@ _CAPABILITY_SUMMARY_HISTORY: dict[str, dict[str, Any]] = {
         "routineCommands": ["agent begin", "agent cognition", "agent verify", "agent cognition checkpoint", "agent work complete"],
         "diagnostics": ["agent workflow show", "agent capabilities --json", "agent --help"],
     },
+    "0.16.17": {
+        "cliContractVersion": 36,
+        "workflowContractVersion": 23,
+        "routineCommands": ["agent begin", "agent cognition", "agent verify", "agent cognition checkpoint", "agent work complete"],
+        "diagnostics": ["agent workflow show", "agent capabilities --json", "agent --help"],
+    },
+    "0.16.18": {
+        "cliContractVersion": 36,
+        "workflowContractVersion": 23,
+        "routineCommands": ["agent begin", "agent cognition", "agent verify", "agent cognition checkpoint", "agent work complete"],
+        "diagnostics": ["agent workflow show", "agent capabilities --json", "agent --help"],
+    },
+    "0.16.19": {
+        "cliContractVersion": 36,
+        "workflowContractVersion": 23,
+        "routineCommands": ["agent begin", "agent cognition", "agent verify", "agent cognition checkpoint", "agent work complete"],
+        "diagnostics": ["agent workflow show", "agent capabilities --json", "agent --help"],
+    },
 }
 
 _CAPABILITY_RELEASE_CHANGES: dict[str, list[str]] = {
@@ -275,6 +293,11 @@ _CAPABILITY_RELEASE_CHANGES: dict[str, list[str]] = {
     ],
     "0.16.17": [
         "project.overview.actionable-attention-pointers",
+    ],
+    "0.16.20": [
+        "verification.executed-command-evidence",
+        "verification.attestation-explicit-kind",
+        "verification.output-preview-and-digest",
     ],
 }
 
@@ -392,6 +415,11 @@ def capabilities(root: Path) -> dict[str, Any]:
                 "completionGateSeparated": profile.profile_id == "research",
                 "granularAttestationEscapeHatch": profile.profile_id == "research",
                 "record": profile.verification_mode == "record",
+                "run": True,
+                "executedEvidence": True,
+                "attestationExplicitKind": True,
+                "outputPreviewAndDigest": True,
+                "directArgvWithoutShell": True,
                 "researchBundle": profile.profile_id == "research",
                 "researchCanonicalCommand": "verify research" if profile.profile_id == "research" else None,
                 "resumableChunks": profile.verification_mode == "check",

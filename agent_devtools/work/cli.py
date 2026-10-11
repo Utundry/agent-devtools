@@ -14,7 +14,7 @@ from .state import TaskStateError, align_task, clear_task, complete_task, load_t
 from .knowledge import KnowledgeError, conflicts as knowledge_conflicts, effective_lifecycle_statuses, effective_statuses, explain as explain_knowledge, knowledge_status, load_records as load_knowledge_records, promote as promote_knowledge, remember as remember_knowledge, set_lifecycle as set_knowledge_lifecycle, supersede as supersede_knowledge, validate_knowledge, soft_contradictions
 from .journal import SemanticJournalError, append_event, events_for_task, journal_status, possible_stale_cognition
 from .semantic_closeout import semantic_checkpoint
-from .verification import RESEARCH_CHECKS, VerificationError, latest_verification, record_verification, verification_status, record_research_bundle
+from .verification import RESEARCH_CHECKS, VerificationError, latest_verification, record_verification, verification_status, record_research_bundle, run_verification_command
 from .sources import SourceError, add_source, list_sources
 from agent_devtools.profiles import ProfileError, load_profile
 from agent_devtools.work.context_projection import ContextProjectionError, context_efficiency_status, prepare_context
@@ -70,6 +70,13 @@ def configure_verify_parser(parser: argparse.ArgumentParser) -> None:
     record.add_argument("--evidence", action="append", default=[])
     record.add_argument("--summary", default="")
     record.add_argument("--json", action="store_true", dest="json_output")
+    run = sub.add_parser("run", help="execute a command and record machine-captured verification evidence")
+    run.add_argument("--label", default="command")
+    run.add_argument("--summary", default="")
+    run.add_argument("--timeout", type=float, default=None, help="optional command timeout in seconds")
+    run.add_argument("--output-limit", type=int, default=1600, help="maximum UTF-8 preview characters retained per stream")
+    run.add_argument("--json", action="store_true", dest="json_output")
+    run.add_argument("argv", nargs=argparse.REMAINDER, help="command argv after `--`; executed directly without a shell")
     status = sub.add_parser("status", help="show latest profile-neutral verification evidence")
     status.add_argument("--json", action="store_true", dest="json_output")
     research = sub.add_parser("research", help="review or record the structured research verification bundle")
@@ -180,6 +187,16 @@ def main_verify(root: Path, args: argparse.Namespace) -> int:
         if args.verify_command == "record":
             item = record_verification(root, label=args.label, status=args.status, evidence=args.evidence, summary=args.summary)
             payload = {"format": "agent-devtools-verification", "formatVersion": 1, "record": item}
+        elif args.verify_command == "run":
+            item = run_verification_command(
+                root,
+                command=args.argv,
+                label=args.label,
+                summary=args.summary,
+                timeout=args.timeout,
+                output_limit=args.output_limit,
+            )
+            payload = {"format": "agent-devtools-verification", "formatVersion": 1, "record": item}
         elif args.verify_command == "research":
             raw_checks = {
                 "arithmetic": args.arithmetic,
@@ -245,6 +262,15 @@ def main_verify(root: Path, args: argparse.Namespace) -> int:
             gate = str(item["status"]).upper()
             gate_suffix = f" · gate={gate}" if assessment != gate else ""
             print(f"verification: {assessment} · {item['label']}{gate_suffix} · {item['completedAtUtc']}")
+            kind = str(item.get("verificationKind") or "attestation")
+            if kind == "executed-command":
+                command_text = " ".join(str(part) for part in item.get("command", []))
+                timeout_text = " · timed out" if item.get("timedOut") else ""
+                print(f"evidence: executed · exit={item.get('exitCode')} · {command_text}{timeout_text}")
+            elif kind == "attestation":
+                print("evidence: attested · command not executed by Agent DevTools")
+            elif kind == "machine-check":
+                print("evidence: machine-check")
         else:
             print("verification: none")
         if args.verify_command == "research":
@@ -258,7 +284,7 @@ def main_verify(root: Path, args: argparse.Namespace) -> int:
                 print(f"Context warning: {warning['message']}")
     if review_only:
         return 1
-    if args.verify_command in {"record", "research"} and payload["record"]["status"] == "fail":
+    if args.verify_command in {"record", "run", "research"} and payload["record"]["status"] == "fail":
         return 1
     return 0
 

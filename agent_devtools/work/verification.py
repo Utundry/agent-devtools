@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import subprocess
+import time
 import uuid
 from pathlib import Path
 from typing import Any, Iterable
@@ -37,13 +40,25 @@ def _load(root: Path) -> dict[str, Any]:
     return raw
 
 
-def record_verification(root: Path, *, label: str, status: str, evidence: Iterable[str] = (), summary: str = "") -> dict[str, Any]:
+def record_verification(
+    root: Path,
+    *,
+    label: str,
+    status: str,
+    evidence: Iterable[str] = (),
+    summary: str = "",
+    verification_kind: str = "attestation",
+    details: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     label = label.strip()
     status = status.strip().lower()
+    verification_kind = verification_kind.strip()
     if not label:
         raise VerificationError("verification label is required")
     if status not in {"pass", "fail"}:
         raise VerificationError("verification status must be pass or fail")
+    if not verification_kind:
+        raise VerificationError("verification kind is required")
     log = _load(root)
     record = {
         "id": uuid.uuid4().hex,
@@ -51,15 +66,23 @@ def record_verification(root: Path, *, label: str, status: str, evidence: Iterab
         "status": status,
         "evidence": [str(item).strip() for item in evidence if str(item).strip()],
         "summary": summary.strip(),
-        "verificationKind": "attestation",
+        "verificationKind": verification_kind,
         "completedAtUtc": utc_now(),
     }
+    if details:
+        overlap = set(record) & set(details)
+        if overlap:
+            raise VerificationError(
+                "verification details cannot replace core fields: " + ", ".join(sorted(overlap))
+            )
+        record.update(details)
     previous_records = list(log["records"])
     log["records"].append(record)
     atomic_json_write(verification_path(root), log)
     state = load_task_state(root)
     if state is not None:
         from .journal import SemanticJournalError, append_event
+        source = "verify.run" if verification_kind == "executed-command" else "verify.record"
         try:
             append_event(
                 root,
@@ -67,8 +90,9 @@ def record_verification(root: Path, *, label: str, status: str, evidence: Iterab
                 kind="verification",
                 text=f"{label}: {status}",
                 metadata={
-                    "source": "verify.record",
+                    "source": source,
                     "recordId": record["id"],
+                    "verificationKind": verification_kind,
                     "evidence": record["evidence"],
                     "summary": record["summary"],
                 },
@@ -79,6 +103,81 @@ def record_verification(root: Path, *, label: str, status: str, evidence: Iterab
             atomic_json_write(verification_path(root), log)
             raise VerificationError(f"cannot persist semantic journal; verification record rolled back: {exc}") from exc
     return record
+
+
+def _output_preview(data: bytes, limit: int) -> str:
+    text = data.decode("utf-8", errors="replace").strip()
+    if len(text) <= limit:
+        return text
+    omitted = len(text) - limit
+    return text[:limit].rstrip() + f"\n… <truncated {omitted} chars>"
+
+
+def run_verification_command(
+    root: Path,
+    *,
+    command: Iterable[str],
+    label: str = "command",
+    summary: str = "",
+    timeout: float | None = None,
+    output_limit: int = 1600,
+) -> dict[str, Any]:
+    argv = [str(item) for item in command]
+    if argv and argv[0] == "--":
+        argv = argv[1:]
+    if not argv:
+        raise VerificationError("verify run requires a command after `--`")
+    if timeout is not None and timeout <= 0:
+        raise VerificationError("verify run timeout must be greater than zero")
+    if output_limit < 0:
+        raise VerificationError("verify run output limit cannot be negative")
+
+    started = time.monotonic()
+    timed_out = False
+    try:
+        completed = subprocess.run(
+            argv,
+            cwd=str(root),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+            check=False,
+        )
+        exit_code: int | None = int(completed.returncode)
+        stdout = bytes(completed.stdout or b"")
+        stderr = bytes(completed.stderr or b"")
+    except subprocess.TimeoutExpired as exc:
+        timed_out = True
+        exit_code = None
+        stdout = exc.stdout if isinstance(exc.stdout, bytes) else str(exc.stdout or "").encode("utf-8")
+        stderr = exc.stderr if isinstance(exc.stderr, bytes) else str(exc.stderr or "").encode("utf-8")
+    except OSError as exc:
+        raise VerificationError(f"cannot execute verification command: {exc}") from exc
+
+    duration_ms = round((time.monotonic() - started) * 1000.0, 3)
+    status = "pass" if exit_code == 0 and not timed_out else "fail"
+    details = {
+        "command": argv,
+        "cwd": ".",
+        "exitCode": exit_code,
+        "timedOut": timed_out,
+        "timeoutSeconds": timeout,
+        "durationMs": duration_ms,
+        "stdoutBytes": len(stdout),
+        "stderrBytes": len(stderr),
+        "stdoutSha256": hashlib.sha256(stdout).hexdigest(),
+        "stderrSha256": hashlib.sha256(stderr).hexdigest(),
+        "stdoutPreview": _output_preview(stdout, output_limit),
+        "stderrPreview": _output_preview(stderr, output_limit),
+    }
+    return record_verification(
+        root,
+        label=label,
+        status=status,
+        summary=summary or "Command executed by Agent DevTools; full output represented by SHA-256 digests.",
+        verification_kind="executed-command",
+        details=details,
+    )
 
 
 def latest_verification(root: Path) -> dict[str, Any] | None:
@@ -139,14 +238,15 @@ def record_check_report(root: Path, report: dict[str, Any]) -> dict[str, Any] | 
         evidence = report_path.relative_to(root.resolve()).as_posix()
     except ValueError:
         evidence = str(report_path)
-    record = record_verification(
-        root, label="check", status=report["status"], evidence=[evidence],
+    return record_verification(
+        root,
+        label="check",
+        status=report["status"],
+        evidence=[evidence],
         summary="Project-native check report; suite results, cache results and log paths are retained in the report.",
+        verification_kind="machine-check",
+        details={
+            "reportSha256": sha256_file(report_path),
+            "checkCompletedAtUtc": report.get("completedAtUtc"),
+        },
     )
-    record["verificationKind"] = "machine-check"
-    record["reportSha256"] = sha256_file(report_path)
-    record["checkCompletedAtUtc"] = report.get("completedAtUtc")
-    log = _load(root)
-    log["records"][-1] = record
-    atomic_json_write(verification_path(root), log)
-    return record
