@@ -290,6 +290,8 @@ def _run_fresh_process(
         command += ["--auto"]
     else:
         raise UpdateError(f"Unsupported fresh updater mode: {mode}")
+    if getattr(args, "ignore_baseline_blobs", False):
+        command += ["--ignore-baseline-blobs"]
 
     try:
         completed = subprocess.run(command, cwd=root)
@@ -326,9 +328,25 @@ def auto_update(args: argparse.Namespace) -> dict:
         scenario_path = chain[0]
         scenario = load_scenario(scenario_path)
         try:
-            preflight_scenarios(root, [scenario])
+            preflight = preflight_scenarios(
+                root,
+                [scenario],
+                ignore_base_blobs=bool(getattr(args, "ignore_baseline_blobs", False)),
+            )
         except UpdateScenarioError as exc:
             raise UpdateError(f"Scenario preflight failed before release preparation: {exc}") from exc
+        blob_checks = ((preflight.get("results") or [{}])[0].get("baselineBlobChecks") or {})
+        if blob_checks.get("ignoredMismatchCount"):
+            names = ", ".join(
+                str(item.get("path"))
+                for item in blob_checks.get("mismatches", [])
+                if isinstance(item, dict)
+            )
+            print(
+                f"WARNING: baseline blob mismatch ignored by explicit operator override: {names}",
+                file=sys.stderr,
+                flush=True,
+            )
         print(
             f"Scenario preflight PASS: {scenario.from_version} -> {scenario.to_version} · {scenario.path.name}",
             flush=True,
@@ -366,7 +384,11 @@ def check_update(args: argparse.Namespace) -> dict:
     if getattr(args, "auto", False):
         paths = discover_auto_chain(root)
         scenarios = [load_scenario(path) for path in paths]
-        result = preflight_scenarios(root, scenarios)
+        result = preflight_scenarios(
+            root,
+            scenarios,
+            ignore_base_blobs=bool(getattr(args, "ignore_baseline_blobs", False)),
+        )
         diagnostics = _incoming_diagnostics(root)
         return {
             "status": "pass",
@@ -389,7 +411,11 @@ def check_update(args: argparse.Namespace) -> dict:
     scenario_path = getattr(args, "scenario", None)
     if scenario_path:
         scenario = load_scenario(Path(scenario_path))
-        result = preflight_scenarios(root, [scenario])
+        result = preflight_scenarios(
+            root,
+            [scenario],
+            ignore_base_blobs=bool(getattr(args, "ignore_baseline_blobs", False)),
+        )
         return {
             "status": "pass",
             "mode": "scenario",
@@ -414,6 +440,8 @@ def periodic_update(args: argparse.Namespace, *, sleep_fn=time.sleep, max_cycles
         raise UpdateError("--periodic requires --publish")
     if getattr(args, "version", None):
         raise UpdateError("--version cannot be combined with --periodic")
+    if getattr(args, "ignore_baseline_blobs", False):
+        raise UpdateError("--ignore-baseline-blobs cannot be combined with --periodic; the override must be explicit per release run")
 
     entry = Path(args.repo).expanduser().resolve()
     root = branch_worktree(entry, args.branch)
@@ -506,6 +534,8 @@ def update(args: argparse.Namespace) -> dict:
     scenario_path = Path(scenario_path_raw).expanduser().resolve() if scenario_path_raw else None
     if patch is not None and scenario is not None:
         raise UpdateError("--patch and --scenario are mutually exclusive")
+    if getattr(args, "ignore_baseline_blobs", False) and scenario is None:
+        raise UpdateError("--ignore-baseline-blobs requires --scenario or --auto")
     if patch is not None and not patch.is_file():
         raise UpdateError(f"Patch not found: {patch}")
     if scenario_path is not None and not scenario_path.is_file():
@@ -540,6 +570,7 @@ def update(args: argparse.Namespace) -> dict:
     published = refs.get(tag + "^{}", refs.get(tag))
     patch_status = "not-requested"
     scenario_status = "not-requested"
+    scenario_result = None
     if published:
         git(clone, "fetch", "--quiet", args.remote, tag)
         if not ancestor(clone, published, remote_head):
@@ -579,12 +610,16 @@ def update(args: argparse.Namespace) -> dict:
                         f"Scenario expects source VERSION {scenario.from_version}, found {source_version}"
                     )
                 try:
-                    result = apply_scenario(clone, scenario)
+                    scenario_result = apply_scenario(
+                        clone,
+                        scenario,
+                        ignore_base_blobs=bool(getattr(args, "ignore_baseline_blobs", False)),
+                    )
                 except UpdateScenarioError as exc:
                     raise UpdateError(str(exc)) from exc
                 git(clone, "add", "-A")
                 git(clone, "commit", "--allow-empty", "-m", scenario.commit_message, "-m", marker)
-                scenario_status = "applied" if result["applied"] else "already-applied"
+                scenario_status = "applied" if scenario_result["applied"] else "already-applied"
         builder = clone / "scripts" / "build_release.py"
         if not builder.is_file():
             raise UpdateError("Canonical scripts/build_release.py is missing")
@@ -616,6 +651,15 @@ def update(args: argparse.Namespace) -> dict:
         "originalWorktree": str(root), "head": value(root, "rev-parse", "HEAD"),
         "patch": patch_status, "scenario": scenario_status,
         "scenarioSha256": scenario.digest if scenario is not None else None,
+        "baselineBlobChecks": (
+            scenario_result.get("baselineBlobChecks")
+            if isinstance(scenario_result, dict)
+            else {
+                "enforced": not bool(getattr(args, "ignore_baseline_blobs", False)),
+                "ignoredMismatchCount": 0,
+                "mismatches": [],
+            } if scenario is not None else None
+        ),
         "localBackupStash": backup, "onboardingRefresh": onboarding_refresh, "artifacts": str(run),
     }
     (run / "update-result.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
@@ -635,6 +679,11 @@ def main(argv: list[str] | None = None) -> int:
     source.add_argument("--auto", action="store_true", help="apply the maximal unambiguous scenario chain from .agent-updates/incoming")
     source.add_argument("--periodic", type=float, metavar="SECONDS", help="stay in foreground and run --auto at this interval")
     parser.add_argument("--retry-failed", action="store_true", help="in periodic mode retry an unchanged failed scenario/catalog")
+    parser.add_argument(
+        "--ignore-baseline-blobs",
+        action="store_true",
+        help="explicitly ignore baseBlobs SHA-1 mismatches only; all content/contract/postcondition guards remain enforced",
+    )
     parser.add_argument("--check", action="store_true", help="read-only declarative scenario preflight; requires --auto or --scenario")
     parser.add_argument("--publish", action="store_true", help="publish and update the original branch")
     parser.add_argument("--result-file", help=argparse.SUPPRESS)

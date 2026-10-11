@@ -78,6 +78,42 @@ class UpdateScenarioTests(unittest.TestCase):
         finally:
             tmp.cleanup()
 
+    def test_base_blob_mismatch_can_be_explicitly_ignored_without_disabling_content_guards(self):
+        tmp, root = self.make_root()
+        try:
+            payload = self.base()
+            payload["baseBlobs"] = {"a.txt": "0" * 40}
+            payload["changes"] = [
+                {"op": "replace", "path": "a.txt", "before": "before", "after": "after"},
+            ]
+            scenario = load_scenario(self.write_scenario(root, payload))
+            result = apply_scenario(root, scenario, ignore_base_blobs=True)
+            checks = result["baselineBlobChecks"]
+            self.assertFalse(checks["enforced"])
+            self.assertEqual(1, checks["ignoredMismatchCount"])
+            self.assertEqual("a.txt", checks["mismatches"][0]["path"])
+            self.assertEqual("after\n", (root / "a.txt").read_text())
+
+            (root / "a.txt").write_text("unexpected\n", encoding="utf-8")
+            with self.assertRaisesRegex(UpdateScenarioError, "replace state is ambiguous"):
+                apply_scenario(root, scenario, ignore_base_blobs=True)
+        finally:
+            tmp.cleanup()
+
+    def test_ignore_base_blobs_does_not_ignore_missing_baseline_file(self):
+        tmp, root = self.make_root()
+        try:
+            payload = self.base()
+            payload["baseBlobs"] = {"missing.txt": "0" * 40}
+            payload["changes"] = [
+                {"op": "assert_contains", "path": "a.txt", "text": "before"},
+            ]
+            scenario = load_scenario(self.write_scenario(root, payload))
+            with self.assertRaisesRegex(UpdateScenarioError, "baseline file missing"):
+                apply_scenario(root, scenario, ignore_base_blobs=True)
+        finally:
+            tmp.cleanup()
+
     def test_write_overwrite_requires_exact_preimage(self):
         tmp, root = self.make_root()
         try:

@@ -80,7 +80,7 @@ class UpdateReleaseTests(unittest.TestCase):
     def args(self, **kwargs) -> argparse.Namespace:
         return argparse.Namespace(**dict(
             repo=str(self.root), branch="main", remote="origin", version="1.0.1",
-            patch=None, scenario=None, publish=True, **kwargs,
+            patch=None, scenario=None, publish=True, ignore_baseline_blobs=False, **kwargs,
         ))
 
     def update(self, **kwargs) -> dict:
@@ -289,6 +289,14 @@ class UpdateReleaseTests(unittest.TestCase):
             with self.assertRaisesRegex(updater.UpdateError, "preflight failed"):
                 updater.auto_update(args)
             fresh.assert_not_called()
+
+    def test_periodic_rejects_persistent_baseline_blob_override(self) -> None:
+        args = self.args()
+        args.version = None
+        args.periodic = 5
+        args.ignore_baseline_blobs = True
+        with self.assertRaisesRegex(updater.UpdateError, "must be explicit per release run"):
+            updater.periodic_update(args, max_cycles=1)
 
     def test_check_auto_preflights_without_publishing_or_mutating(self) -> None:
         self.write_incoming_scenario({

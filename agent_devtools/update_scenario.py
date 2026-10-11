@@ -341,22 +341,30 @@ def _stale_exact_contract_assertions(root: Path, contracts: tuple[dict[str, Any]
     return sorted(stale)
 
 
-def _assert_base(root: Path, scenario: UpdateScenario) -> None:
+def _assert_base(root: Path, scenario: UpdateScenario, *, ignore_base_blobs: bool = False) -> list[dict[str, str]]:
     version = _project_version(root)
     if version != scenario.from_version:
         raise UpdateScenarioError(f"scenario expects VERSION {scenario.from_version}, found {version}")
+    mismatches: list[dict[str, str]] = []
     for rel, expected in scenario.base_blobs.items():
         path = _path(root, rel)
         if not path.is_file():
             raise UpdateScenarioError(f"baseline file missing: {rel}")
         actual = _git_blob_sha1(path.read_bytes())
         if actual != expected:
-            raise UpdateScenarioError(f"baseline blob mismatch {rel}: expected {expected}, found {actual}")
+            if not ignore_base_blobs:
+                raise UpdateScenarioError(f"baseline blob mismatch {rel}: expected {expected}, found {actual}")
+            mismatches.append({"path": rel, "expected": expected, "found": actual})
+    return mismatches
 
 
-def apply_scenario(root: Path, scenario: UpdateScenario) -> dict[str, Any]:
+def apply_scenario(root: Path, scenario: UpdateScenario, *, ignore_base_blobs: bool = False) -> dict[str, Any]:
     root = root.resolve()
-    _assert_base(root, scenario)
+    baseline_blob_mismatches = _assert_base(
+        root,
+        scenario,
+        ignore_base_blobs=ignore_base_blobs,
+    )
     _validate_contract_preimages(root, scenario.contracts)
     contract_applied, contract_unchanged, contract_rows = _apply_contracts(root, scenario.contracts)
     applied = 0
@@ -460,12 +468,17 @@ def apply_scenario(root: Path, scenario: UpdateScenario) -> dict[str, Any]:
         "contractApplied": contract_applied,
         "contractUnchanged": contract_unchanged,
         "contracts": contract_rows,
+        "baselineBlobChecks": {
+            "enforced": not ignore_base_blobs,
+            "ignoredMismatchCount": len(baseline_blob_mismatches),
+            "mismatches": baseline_blob_mismatches,
+        },
         "applied": applied,
         "unchanged": unchanged,
         "changes": rows,
     }
 
-def preflight_scenarios(root: Path, scenarios: tuple[UpdateScenario, ...] | list[UpdateScenario]) -> dict[str, Any]:
+def preflight_scenarios(root: Path, scenarios: tuple[UpdateScenario, ...] | list[UpdateScenario], *, ignore_base_blobs: bool = False) -> dict[str, Any]:
     """Validate one or more scenarios against a sparse temporary projection without mutating the project."""
     root = root.resolve()
     sequence = tuple(scenarios)
@@ -501,7 +514,11 @@ def preflight_scenarios(root: Path, scenarios: tuple[UpdateScenario, ...] | list
 
         results = []
         for scenario in sequence:
-            result = apply_scenario(sandbox, scenario)
+            result = apply_scenario(
+                sandbox,
+                scenario,
+                ignore_base_blobs=ignore_base_blobs,
+            )
             results.append(result)
             (sandbox / "VERSION").write_text(scenario.to_version + "\n", encoding="utf-8")
 
