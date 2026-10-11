@@ -8,6 +8,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Iterable
 
+from agent_devtools.core.hashing import stable_fingerprint
 from agent_devtools.core.io import atomic_json_write
 from agent_devtools.core.workspace import default_work_root
 from .state import load_task_state, utc_now
@@ -113,6 +114,126 @@ def _output_preview(data: bytes, limit: int) -> str:
     return text[:limit].rstrip() + f"\n… <truncated {omitted} chars>"
 
 
+def _verification_source_state(root: Path) -> dict[str, Any]:
+    """Content-bearing source state for verification evidence.
+
+    This deliberately does not reuse the briefing metadata fingerprint: verification
+    freshness needs file-content evidence, not only changed-path metadata.
+    """
+    try:
+        from agent_devtools.changes import ChangeSetError, discover_changes
+        report = discover_changes(root)
+    except (OSError, ValueError) as exc:
+        return {"available": False, "reason": f"{type(exc).__name__}: {exc}"}
+    except ChangeSetError as exc:
+        return {"available": False, "reason": str(exc)}
+    if not report.get("available"):
+        return {"available": False, "reason": str(report.get("reason") or "change discovery unavailable")}
+
+    rows: list[dict[str, Any]] = []
+    for item in report.get("entries", []):
+        if not isinstance(item, dict) or not item.get("canonical"):
+            continue
+        rel = str(item.get("path") or "").replace("\\", "/")
+        status = str(item.get("status") or "")
+        path = root / rel
+        if status == "deleted" or not path.is_file():
+            digest = None
+        else:
+            try:
+                digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            except OSError as exc:
+                return {"available": False, "reason": f"cannot hash {rel}: {exc}"}
+        rows.append({"path": rel, "status": status, "sha256": digest})
+
+    rows.sort(key=lambda item: item["path"])
+    payload = {
+        "gitHead": str(report.get("head") or ""),
+        "files": rows,
+    }
+    return {
+        "available": True,
+        "gitHead": payload["gitHead"],
+        "changedFiles": [item["path"] for item in rows],
+        "files": rows,
+        "fingerprint": stable_fingerprint(payload),
+    }
+
+
+def _configured_command_relevance(root: Path, argv: list[str], source_state: dict[str, Any]) -> dict[str, Any]:
+    """Conservatively bind an exact configured static suite command to affected policy."""
+    if not source_state.get("available"):
+        return {"status": "unknown", "reason": "source state unavailable"}
+    try:
+        from agent_devtools.check.config import CheckConfigError, load_check_config
+        from agent_devtools.check.policy import PolicyError, load_policy
+        config = load_check_config(root)
+        policy = load_policy(config.policy_path)
+    except (OSError, ValueError, CheckConfigError, PolicyError) as exc:
+        return {"status": "unknown", "reason": f"check policy unavailable: {exc}"}
+
+    matches: list[str] = []
+    for suite, spec in config.commands.items():
+        configured = list(spec.argv)
+        # Placeholder commands need the check runner's expansion context. Refuse to
+        # guess rather than treating a superficially similar argv as proof.
+        if any("{" in token or "}" in token for token in configured):
+            continue
+        if str(spec.cwd or ".").replace("\\", "/") not in {"", "."}:
+            continue
+        if configured == argv:
+            matches.append(str(suite))
+
+    if len(matches) != 1:
+        return {
+            "status": "unknown",
+            "reason": (
+                "command does not exactly match one static configured suite"
+                if not matches else
+                "command matches multiple configured suites"
+            ),
+            "matchedSuites": matches,
+        }
+
+    suite = matches[0]
+    changed = source_state.get("changedFiles") or []
+    try:
+        plan = policy.plan("affected", changed)
+    except PolicyError as exc:
+        return {"status": "unknown", "reason": f"affected policy unavailable: {exc}", "suite": suite}
+    selected = {str(item.get("id")) for item in plan.selected}
+    relevant = suite in selected
+    return {
+        "status": "relevant" if relevant else "unrelated",
+        "reason": "suite selected by affected policy" if relevant else "suite not selected by affected policy",
+        "suite": suite,
+        "changedFiles": list(plan.changed_files),
+        "effectiveImpact": list(plan.effective_impact),
+        "selectedSuites": [str(item.get("id")) for item in plan.selected],
+        "fallbackFull": bool(plan.fallback_full),
+        "fallbackReasons": list(plan.fallback_reasons),
+    }
+
+
+def assess_verification_record(root: Path, record: dict[str, Any]) -> dict[str, Any]:
+    item = dict(record)
+    binding = item.get("sourceBinding")
+    if not isinstance(binding, dict) or not binding.get("afterFingerprint"):
+        item["sourceFreshness"] = "unknown"
+        return item
+    current = _verification_source_state(root)
+    item["currentSourceState"] = current
+    if not current.get("available"):
+        item["sourceFreshness"] = "unknown"
+        return item
+    item["sourceFreshness"] = (
+        "current"
+        if str(current.get("fingerprint") or "") == str(binding.get("afterFingerprint") or "")
+        else "stale"
+    )
+    return item
+
+
 def run_verification_command(
     root: Path,
     *,
@@ -132,6 +253,7 @@ def run_verification_command(
     if output_limit < 0:
         raise VerificationError("verify run output limit cannot be negative")
 
+    source_before = _verification_source_state(root)
     started = time.monotonic()
     timed_out = False
     try:
@@ -155,6 +277,11 @@ def run_verification_command(
         raise VerificationError(f"cannot execute verification command: {exc}") from exc
 
     duration_ms = round((time.monotonic() - started) * 1000.0, 3)
+    source_after = _verification_source_state(root)
+    before_fp = str(source_before.get("fingerprint") or "") if source_before.get("available") else ""
+    after_fp = str(source_after.get("fingerprint") or "") if source_after.get("available") else ""
+    source_changed_during_execution = bool(before_fp and after_fp and before_fp != after_fp)
+    relevance = _configured_command_relevance(root, argv, source_after)
     status = "pass" if exit_code == 0 and not timed_out else "fail"
     stdout_sha256 = hashlib.sha256(stdout).hexdigest()
     stderr_sha256 = hashlib.sha256(stderr).hexdigest()
@@ -171,6 +298,13 @@ def run_verification_command(
         "stderrSha256": stderr_sha256,
         "stdoutPreview": _output_preview(stdout, output_limit),
         "stderrPreview": _output_preview(stderr, output_limit),
+        "sourceBinding": {
+            "beforeFingerprint": before_fp or None,
+            "afterFingerprint": after_fp or None,
+            "changedDuringExecution": source_changed_during_execution,
+            "state": source_after,
+        },
+        "relevance": relevance,
     }
     exit_evidence = "timeout" if timed_out else str(exit_code)
     return record_verification(
@@ -190,19 +324,22 @@ def run_verification_command(
 
 def latest_verification(root: Path) -> dict[str, Any] | None:
     records = _load(root).get("records", [])
-    return dict(records[-1]) if records else None
+    return assess_verification_record(root, records[-1]) if records else None
 
 
 def verification_status(root: Path) -> dict[str, Any]:
     log = _load(root)
-    return {"count": len(log["records"]), "latest": dict(log["records"][-1]) if log["records"] else None}
+    return {
+        "count": len(log["records"]),
+        "latest": assess_verification_record(root, log["records"][-1]) if log["records"] else None,
+    }
 
 
 def verification_history(root: Path, *, limit: int = 5) -> dict[str, Any]:
     if limit < 1:
         raise VerificationError("verification history limit must be at least 1")
     records = _load(root)["records"]
-    selected = [dict(item) for item in reversed(records[-limit:])]
+    selected = [assess_verification_record(root, item) for item in reversed(records[-limit:])]
     return {
         "count": len(records),
         "shown": len(selected),

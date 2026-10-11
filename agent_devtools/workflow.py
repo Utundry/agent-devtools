@@ -315,6 +315,12 @@ _CAPABILITY_RELEASE_CHANGES: dict[str, list[str]] = {
     "0.16.22": [
         "self-update.windows-inherited-pipe-handle-hardening",
     ],
+    "0.16.23": [
+        "verification.source-content-binding",
+        "verification.dynamic-stale-detection",
+        "verification.declarative-affected-relevance",
+        "verification.conservative-unknown-relevance",
+    ],
 }
 
 
@@ -437,6 +443,10 @@ def capabilities(root: Path) -> dict[str, Any]:
                 "summaryFromFile": True,
                 "executedEvidence": True,
                 "executedEvidenceReferences": True,
+                "sourceContentBinding": True,
+                "dynamicStaleDetection": True,
+                "affectedRelevance": True,
+                "unknownRelevanceIsExplicit": True,
                 "attestationExplicitKind": True,
                 "outputPreviewAndDigest": True,
                 "directArgvWithoutShell": True,

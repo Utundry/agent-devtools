@@ -288,6 +288,10 @@ def main_verify(root: Path, args: argparse.Namespace) -> int:
                     f"  {index}. {str(history_item.get('status') or '').upper()} · "
                     f"{kind} · {history_item.get('label')} · {history_item.get('completedAtUtc')}{extra}"
                 )
+                freshness = str(history_item.get("sourceFreshness") or "")
+                relevance = history_item.get("relevance") if isinstance(history_item.get("relevance"), dict) else {}
+                if freshness and freshness != "unknown":
+                    print(f"     source: {freshness} · relevance={relevance.get('status', 'unknown')}")
                 if args.preview or str(history_item.get("status") or "").lower() == "fail":
                     preview = _compact_verification_preview(history_item)
                     if preview:
@@ -319,6 +323,14 @@ def main_verify(root: Path, args: argparse.Namespace) -> int:
                 print("evidence: attested · command not executed by Agent DevTools")
             elif kind == "machine-check":
                 print("evidence: machine-check")
+            freshness = str(item.get("sourceFreshness") or "")
+            relevance = item.get("relevance") if isinstance(item.get("relevance"), dict) else {}
+            if freshness and freshness != "unknown":
+                print(f"source: {freshness} · relevance={relevance.get('status', 'unknown')}")
+                if freshness == "stale":
+                    print("warning: source state changed after this verification")
+                elif relevance.get("status") == "unrelated":
+                    print("warning: configured suite is not selected for the current affected change set")
             if getattr(args, "preview", False) or str(item.get("status") or "").lower() == "fail":
                 preview = _compact_verification_preview(item)
                 if preview:
