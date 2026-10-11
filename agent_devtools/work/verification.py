@@ -156,6 +156,8 @@ def run_verification_command(
 
     duration_ms = round((time.monotonic() - started) * 1000.0, 3)
     status = "pass" if exit_code == 0 and not timed_out else "fail"
+    stdout_sha256 = hashlib.sha256(stdout).hexdigest()
+    stderr_sha256 = hashlib.sha256(stderr).hexdigest()
     details = {
         "command": argv,
         "cwd": ".",
@@ -165,15 +167,21 @@ def run_verification_command(
         "durationMs": duration_ms,
         "stdoutBytes": len(stdout),
         "stderrBytes": len(stderr),
-        "stdoutSha256": hashlib.sha256(stdout).hexdigest(),
-        "stderrSha256": hashlib.sha256(stderr).hexdigest(),
+        "stdoutSha256": stdout_sha256,
+        "stderrSha256": stderr_sha256,
         "stdoutPreview": _output_preview(stdout, output_limit),
         "stderrPreview": _output_preview(stderr, output_limit),
     }
+    exit_evidence = "timeout" if timed_out else str(exit_code)
     return record_verification(
         root,
         label=label,
         status=status,
+        evidence=[
+            f"command-exit:{exit_evidence}",
+            f"stdout-sha256:{stdout_sha256}",
+            f"stderr-sha256:{stderr_sha256}",
+        ],
         summary=summary or "Command executed by Agent DevTools; full output represented by SHA-256 digests.",
         verification_kind="executed-command",
         details=details,
@@ -188,6 +196,18 @@ def latest_verification(root: Path) -> dict[str, Any] | None:
 def verification_status(root: Path) -> dict[str, Any]:
     log = _load(root)
     return {"count": len(log["records"]), "latest": dict(log["records"][-1]) if log["records"] else None}
+
+
+def verification_history(root: Path, *, limit: int = 5) -> dict[str, Any]:
+    if limit < 1:
+        raise VerificationError("verification history limit must be at least 1")
+    records = _load(root)["records"]
+    selected = [dict(item) for item in reversed(records[-limit:])]
+    return {
+        "count": len(records),
+        "shown": len(selected),
+        "records": selected,
+    }
 
 
 RESEARCH_CHECKS = ("arithmetic", "sourcing", "assumptions", "knowledge", "unresolved_questions")

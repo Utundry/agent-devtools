@@ -41,6 +41,19 @@ class CanonicalSurfaceTests(unittest.TestCase):
         finally:
             tmp.cleanup()
 
+    def test_general_begin_prefers_executed_verification(self):
+        tmp, root = self.make_root(profile="general")
+        try:
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                rc = main_begin(root, self.begin_args(profile="general"))
+            self.assertEqual(0, rc)
+            payload = json.loads(out.getvalue())
+            self.assertIn("agent verify run", payload["normalSurface"]["commands"])
+            self.assertNotIn("agent verify record", payload["normalSurface"]["commands"])
+        finally:
+            tmp.cleanup()
+
     def test_begin_rejects_mismatched_profile_hint(self):
         tmp, root = self.make_root()
         try:

@@ -14,7 +14,7 @@ from .state import TaskStateError, align_task, clear_task, complete_task, load_t
 from .knowledge import KnowledgeError, conflicts as knowledge_conflicts, effective_lifecycle_statuses, effective_statuses, explain as explain_knowledge, knowledge_status, load_records as load_knowledge_records, promote as promote_knowledge, remember as remember_knowledge, set_lifecycle as set_knowledge_lifecycle, supersede as supersede_knowledge, validate_knowledge, soft_contradictions
 from .journal import SemanticJournalError, append_event, events_for_task, journal_status, possible_stale_cognition
 from .semantic_closeout import semantic_checkpoint
-from .verification import RESEARCH_CHECKS, VerificationError, latest_verification, record_verification, verification_status, record_research_bundle, run_verification_command
+from .verification import RESEARCH_CHECKS, VerificationError, latest_verification, record_verification, verification_history, verification_status, record_research_bundle, run_verification_command
 from .sources import SourceError, add_source, list_sources
 from agent_devtools.profiles import ProfileError, load_profile
 from agent_devtools.work.context_projection import ContextProjectionError, context_efficiency_status, prepare_context
@@ -72,13 +72,20 @@ def configure_verify_parser(parser: argparse.ArgumentParser) -> None:
     record.add_argument("--json", action="store_true", dest="json_output")
     run = sub.add_parser("run", help="execute a command and record machine-captured verification evidence")
     run.add_argument("--label", default="command")
-    run.add_argument("--summary", default="")
+    run_summary = run.add_mutually_exclusive_group()
+    run_summary.add_argument("--summary", default="")
+    run_summary.add_argument("--summary-from-file", type=Path, help="read UTF-8 verification summary from a file")
     run.add_argument("--timeout", type=float, default=None, help="optional command timeout in seconds")
     run.add_argument("--output-limit", type=int, default=1600, help="maximum UTF-8 preview characters retained per stream")
     run.add_argument("--json", action="store_true", dest="json_output")
     run.add_argument("argv", nargs=argparse.REMAINDER, help="command argv after `--`; executed directly without a shell")
     status = sub.add_parser("status", help="show latest profile-neutral verification evidence")
+    status.add_argument("--preview", action="store_true", help="show a compact captured stdout/stderr preview when available")
     status.add_argument("--json", action="store_true", dest="json_output")
+    history = sub.add_parser("history", help="show recent verification records, newest first")
+    history.add_argument("--limit", type=int, default=5)
+    history.add_argument("--preview", action="store_true", help="show compact captured previews")
+    history.add_argument("--json", action="store_true", dest="json_output")
     research = sub.add_parser("research", help="review or record the structured research verification bundle")
     for name in ("arithmetic", "sourcing", "assumptions", "knowledge", "unresolved-questions"):
         research.add_argument(f"--{name}", choices=("pass", "warn", "fail"))
@@ -181,6 +188,29 @@ def _research_review_payload(root: Path) -> dict:
     return {"format":"agent-devtools-research-verification-review","formatVersion":1,"status":"review-required","checks":[{"id":name,"prompt":_RESEARCH_REVIEW[name]} for name in RESEARCH_CHECKS],"contextWarnings":warnings,"guidance":{"rule":"Review all five dimensions before recording PASS; strong contextual warnings disable compact attestation and require granular statuses.","compactAttestationAllowed":not blocking,"blockingWarningIds":blocking,"nextCommands":commands}}
 
 
+def _verify_summary(root: Path, args: argparse.Namespace) -> str:
+    source = getattr(args, "summary_from_file", None)
+    if source is None:
+        return str(getattr(args, "summary", "") or "")
+    path = Path(source).expanduser()
+    if not path.is_absolute():
+        path = root / path
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeError) as exc:
+        raise VerificationError(f"cannot read verification summary file: {exc}") from exc
+
+
+def _compact_verification_preview(item: dict, *, limit: int = 240) -> str:
+    raw = str(item.get("stderrPreview") or item.get("stdoutPreview") or "").strip()
+    if not raw:
+        return ""
+    compact = " ⏎ ".join(part.strip() for part in raw.splitlines() if part.strip())
+    if len(compact) <= limit:
+        return compact
+    return compact[:limit].rstrip() + " …"
+
+
 def main_verify(root: Path, args: argparse.Namespace) -> int:
     review_only = False
     try:
@@ -192,7 +222,7 @@ def main_verify(root: Path, args: argparse.Namespace) -> int:
                 root,
                 command=args.argv,
                 label=args.label,
-                summary=args.summary,
+                summary=_verify_summary(root, args),
                 timeout=args.timeout,
                 output_limit=args.output_limit,
             )
@@ -237,13 +267,31 @@ def main_verify(root: Path, args: argparse.Namespace) -> int:
                     "record": item,
                     "contextWarnings": context_warnings,
                 }
-        else:
+        elif args.verify_command == "status":
             payload = {"format": "agent-devtools-verification", "formatVersion": 1, **verification_status(root)}
+        else:
+            payload = {"format": "agent-devtools-verification-history", "formatVersion": 1, **verification_history(root, limit=args.limit)}
     except VerificationError as exc:
         print(f"agent verify: {exc}", file=sys.stderr)
         return 2
     if getattr(args, "json_output", False):
         print(json.dumps(payload, ensure_ascii=False, indent=2))
+    elif args.verify_command == "history":
+        if not payload["records"]:
+            print("verification history: none")
+        else:
+            print(f"verification history: {payload['shown']}/{payload['count']} newest first")
+            for index, history_item in enumerate(payload["records"], 1):
+                kind = str(history_item.get("verificationKind") or "attestation")
+                extra = f" · exit={history_item.get('exitCode')}" if kind == "executed-command" else ""
+                print(
+                    f"  {index}. {str(history_item.get('status') or '').upper()} · "
+                    f"{kind} · {history_item.get('label')} · {history_item.get('completedAtUtc')}{extra}"
+                )
+                if args.preview or str(history_item.get("status") or "").lower() == "fail":
+                    preview = _compact_verification_preview(history_item)
+                    if preview:
+                        print(f"     preview: {preview}")
     elif review_only:
         print("Research verification review:")
         for item in payload["checks"]:
@@ -271,6 +319,10 @@ def main_verify(root: Path, args: argparse.Namespace) -> int:
                 print("evidence: attested · command not executed by Agent DevTools")
             elif kind == "machine-check":
                 print("evidence: machine-check")
+            if getattr(args, "preview", False) or str(item.get("status") or "").lower() == "fail":
+                preview = _compact_verification_preview(item)
+                if preview:
+                    print(f"preview: {preview}")
         else:
             print("verification: none")
         if args.verify_command == "research":
@@ -836,7 +888,7 @@ def main_begin(root: Path, args: argparse.Namespace) -> int:
         elif current_profile.verification_mode == "check":
             normal_commands.append("agent work complete")
         else:
-            normal_commands.append("agent verify record")
+            normal_commands.append("agent verify run")
         normal_commands.extend(["agent cognition checkpoint", "agent work complete"])
         normal_commands = list(dict.fromkeys(normal_commands))
         normal_surface = {

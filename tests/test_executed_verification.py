@@ -9,6 +9,7 @@ from agent_devtools.cli import parser
 from agent_devtools.work.verification import (
     record_verification,
     run_verification_command,
+    verification_history,
     verification_status,
 )
 
@@ -34,6 +35,9 @@ class ExecutedVerificationTests(unittest.TestCase):
             self.assertIn("привет", record["stdoutPreview"])
             self.assertIn("value with spaces", record["stdoutPreview"])
             self.assertEqual(64, len(record["stdoutSha256"]))
+            self.assertEqual(3, len(record["evidence"]))
+            self.assertIn("command-exit:0", record["evidence"])
+            self.assertTrue(any(item.startswith("stdout-sha256:") for item in record["evidence"]))
             self.assertEqual(record["id"], verification_status(root)["latest"]["id"])
 
     def test_run_records_failure_instead_of_claiming_pass(self) -> None:
@@ -68,6 +72,30 @@ class ExecutedVerificationTests(unittest.TestCase):
         self.assertEqual("unit", args.label)
         self.assertTrue(args.argv)
         self.assertIn("argument with spaces", args.argv)
+
+    def test_history_is_bounded_and_newest_first(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            first = record_verification(root, label="first", status="pass")
+            second = run_verification_command(root, command=[sys.executable, "-c", "print('second')"], label="second")
+            history = verification_history(root, limit=2)
+            self.assertEqual(2, history["count"])
+            self.assertEqual([second["id"], first["id"]], [item["id"] for item in history["records"]])
+
+    def test_verify_run_supports_utf8_summary_from_file(self) -> None:
+        args = parser().parse_args([
+            "verify", "run", "--summary-from-file", "summary.txt", "--",
+            sys.executable, "-c", "print('ok')",
+        ])
+        self.assertEqual(Path("summary.txt"), args.summary_from_file)
+        self.assertEqual("", args.summary)
+
+    def test_status_and_history_accept_preview_controls(self) -> None:
+        status = parser().parse_args(["verify", "status", "--preview"])
+        history = parser().parse_args(["verify", "history", "--limit", "3", "--preview"])
+        self.assertTrue(status.preview)
+        self.assertEqual(3, history.limit)
+        self.assertTrue(history.preview)
 
 
 if __name__ == "__main__":

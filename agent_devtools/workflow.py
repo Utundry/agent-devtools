@@ -8,7 +8,7 @@ from typing import Any
 from . import __version__
 from .profiles import load_profile
 
-CLI_CONTRACT_VERSION = 37
+CLI_CONTRACT_VERSION = 38
 WORKFLOW_CONTRACT_VERSION = 23
 
 
@@ -233,6 +233,12 @@ _CAPABILITY_SUMMARY_HISTORY: dict[str, dict[str, Any]] = {
         "routineCommands": ["agent begin", "agent cognition", "agent verify", "agent cognition checkpoint", "agent work complete"],
         "diagnostics": ["agent workflow show", "agent capabilities --json", "agent --help"],
     },
+    "0.16.20": {
+        "cliContractVersion": 37,
+        "workflowContractVersion": 23,
+        "routineCommands": ["agent begin", "agent cognition", "agent verify", "agent cognition checkpoint", "agent work complete"],
+        "diagnostics": ["agent workflow show", "agent capabilities --json", "agent --help"],
+    },
 }
 
 _CAPABILITY_RELEASE_CHANGES: dict[str, list[str]] = {
@@ -298,6 +304,13 @@ _CAPABILITY_RELEASE_CHANGES: dict[str, list[str]] = {
         "verification.executed-command-evidence",
         "verification.attestation-explicit-kind",
         "verification.output-preview-and-digest",
+    ],
+    "0.16.21": [
+        "verification.begin-prefers-executed-evidence",
+        "verification.history",
+        "verification.compact-failure-preview",
+        "verification.summary-from-file",
+        "verification.executed-evidence-references",
     ],
 }
 
@@ -416,7 +429,11 @@ def capabilities(root: Path) -> dict[str, Any]:
                 "granularAttestationEscapeHatch": profile.profile_id == "research",
                 "record": profile.verification_mode == "record",
                 "run": True,
+                "history": True,
+                "statusPreview": True,
+                "summaryFromFile": True,
                 "executedEvidence": True,
+                "executedEvidenceReferences": True,
                 "attestationExplicitKind": True,
                 "outputPreviewAndDigest": True,
                 "directArgvWithoutShell": True,
