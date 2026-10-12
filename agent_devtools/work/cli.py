@@ -14,7 +14,7 @@ from .state import TaskStateError, align_task, clear_task, complete_task, load_t
 from .knowledge import KnowledgeError, conflicts as knowledge_conflicts, effective_lifecycle_statuses, effective_statuses, explain as explain_knowledge, knowledge_status, load_records as load_knowledge_records, promote as promote_knowledge, remember as remember_knowledge, set_lifecycle as set_knowledge_lifecycle, supersede as supersede_knowledge, validate_knowledge, soft_contradictions
 from .journal import SemanticJournalError, append_event, events_for_task, journal_status, possible_stale_cognition
 from .semantic_closeout import semantic_checkpoint
-from .verification import RESEARCH_CHECKS, VerificationError, latest_verification, record_verification, verification_history, verification_status, record_research_bundle, run_verification_command
+from .verification import RESEARCH_CHECKS, VerificationError, latest_verification, record_verification, verification_history, verification_record, verification_status, record_research_bundle, run_verification_command
 from .sources import SourceError, add_source, list_sources
 from agent_devtools.profiles import ProfileError, load_profile
 from agent_devtools.ui import is_verbose
@@ -78,6 +78,7 @@ def configure_verify_parser(parser: argparse.ArgumentParser) -> None:
     run_summary.add_argument("--summary-from-file", type=Path, help="read UTF-8 verification summary from a file")
     run.add_argument("--timeout", type=float, default=None, help="optional command timeout in seconds")
     run.add_argument("--output-limit", type=int, default=1600, help="maximum UTF-8 preview characters retained per stream")
+    run.add_argument("--fallback-for", default="", metavar="FINGERPRINT", help="bind this command as a fallback for a recorded tool-failure fingerprint; a successful run resolves that failure's blocker")
     run.add_argument("--json", action="store_true", dest="json_output")
     run.add_argument("argv", nargs=argparse.REMAINDER, help="command argv after `--`; executed directly without a shell")
     status = sub.add_parser("status", help="show latest verification evidence; compact machine views are available for large dirty worktrees")
@@ -304,6 +305,7 @@ def main_verify(root: Path, args: argparse.Namespace) -> int:
                 summary=_verify_summary(root, args),
                 timeout=args.timeout,
                 output_limit=args.output_limit,
+                fallback_for=str(getattr(args, "fallback_for", "") or ""),
             )
             payload = {"format": "agent-devtools-verification", "formatVersion": 1, "record": item}
         elif args.verify_command == "research":
@@ -402,7 +404,14 @@ def main_verify(root: Path, args: argparse.Namespace) -> int:
             if kind == "executed-command":
                 command_text = " ".join(str(part) for part in item.get("command", []))
                 timeout_text = " · timed out" if item.get("timedOut") else ""
-                print(f"evidence: executed · exit={item.get('exitCode')} · {command_text}{timeout_text}")
+                print(f"evidence: executed · record={item.get('id')} · exit={item.get('exitCode')} · {command_text}{timeout_text}")
+                fallback_for = item.get("fallbackFor") if isinstance(item.get("fallbackFor"), dict) else {}
+                if fallback_for:
+                    print(
+                        f"fallback: failure={fallback_for.get('fingerprint')} · "
+                        f"kind={fallback_for.get('failureKind', 'unknown')} · "
+                        f"event={fallback_for.get('failureEventId')}"
+                    )
             elif kind == "attestation":
                 print("evidence: attested · command not executed by Agent DevTools")
             elif kind == "machine-check":
@@ -474,12 +483,14 @@ def configure_cognition_parser(parser: argparse.ArgumentParser) -> None:
     checkpoint.add_argument("--promote-required", action="store_true", help="promote every required durable candidate through knowledge remember, then re-run the checkpoint")
     checkpoint.add_argument("--json", action="store_true", dest="json_output")
 
-    tool_failure = sub.add_parser("tool-failure", help="record repeated external-tool failure and get bounded recovery guidance")
+    tool_failure = sub.add_parser("tool-failure", help="record one observed external-tool failure; equivalent retry count is derived from the semantic journal")
     tool_failure.add_argument("--tool", required=True, help="tool/capability name, for example write or browser")
     tool_failure.add_argument("--operation", default="", help="short attempted operation label")
-    tool_failure.add_argument("--error", required=True, help="stable error class/message from the failed attempt")
+    tool_failure.add_argument("--error", required=True, help="stable error class/message from this failed attempt")
     tool_failure.add_argument("--importance", choices=("optional", "mandatory"), required=True)
-    tool_failure.add_argument("--attempts", type=int, default=2, help="number of equivalent failed attempts observed")
+    tool_failure.add_argument("--kind", choices=("infrastructure", "precondition", "environment", "tool", "unknown"), default="unknown", help="failure classification retained in provenance")
+    tool_failure.add_argument("--verification-id", default="", metavar="RECORD|latest", help="optional failed verification record to bind to this failure")
+    tool_failure.add_argument("--attempts", type=int, default=None, help="deprecated compatibility input; ignored because equivalent attempts are derived from recorded failure events")
     tool_failure.add_argument("--fallback", default="", help="available alternative path, if any")
     tool_failure.add_argument("--json", action="store_true", dest="json_output")
 
@@ -677,6 +688,27 @@ def _record_cognition_batch(root: Path, args: argparse.Namespace) -> dict:
     }
 
 
+def _equivalent_failure_attempts(events: list[dict], fingerprint: str) -> int:
+    """Count unresolved equivalent failure observations since the last successful fallback."""
+    count = 0
+    for event in events:
+        metadata = event.get("metadata") if isinstance(event.get("metadata"), dict) else {}
+        source = str(metadata.get("source") or "")
+        if (
+            source == "verify.run"
+            and str(metadata.get("fallbackForFailureFingerprint") or "") == fingerprint
+            and str(metadata.get("status") or "") == "pass"
+        ):
+            count = 0
+            continue
+        if (
+            source == "cognition.tool-failure"
+            and str(metadata.get("fingerprint") or "") == fingerprint
+        ):
+            count += 1
+    return count
+
+
 def _tool_failure_recovery(root: Path, args: argparse.Namespace) -> tuple[dict, dict]:
     state = load_task_state(root)
     if state is None:
@@ -685,14 +717,35 @@ def _tool_failure_recovery(root: Path, args: argparse.Namespace) -> tuple[dict, 
     operation = str(args.operation or "").strip()
     error = str(args.error or "").strip()
     importance = str(args.importance or "").strip()
+    failure_kind = str(getattr(args, "kind", "unknown") or "unknown").strip()
     fallback = str(args.fallback or "").strip()
-    attempts = int(args.attempts)
+    legacy_attempts = getattr(args, "attempts", None)
+    verification_id = str(getattr(args, "verification_id", "") or "").strip()
     if not tool or not error:
         raise TaskStateError("tool-failure requires non-empty --tool and --error")
-    if attempts < 1:
-        raise TaskStateError("tool-failure --attempts must be >= 1")
+
+    task_id = str(state.get("taskId") or "")
+    events = events_for_task(root, task_id)
+    linked_verification = None
+    if verification_id:
+        if verification_id == "latest":
+            linked_verification = latest_verification(root)
+            if linked_verification is None:
+                raise TaskStateError("--verification-id latest requested, but no verification record exists")
+        else:
+            linked_verification = verification_record(root, verification_id)
+        if str(linked_verification.get("status") or "").lower() != "fail":
+            raise TaskStateError("tool-failure --verification-id must reference a failed verification record")
+        actual_id = str(linked_verification.get("id") or "")
+        if not any(
+            str((event.get("metadata") or {}).get("recordId") or "") == actual_id
+            for event in events
+        ):
+            raise TaskStateError("tool-failure --verification-id must belong to the current task")
+        verification_id = actual_id
 
     fingerprint = hashlib.sha256("\0".join((tool, operation, error)).encode("utf-8")).hexdigest()[:16]
+    attempts = _equivalent_failure_attempts(events, fingerprint) + 1
     retry_ceiling = 2
     ceiling_reached = attempts >= retry_ceiling
     retry_allowed = not ceiling_reached
@@ -707,9 +760,9 @@ def _tool_failure_recovery(root: Path, args: argparse.Namespace) -> tuple[dict, 
         blocker = f"mandatory tool failure [{fingerprint}] {tool}" + (f"/{operation}" if operation else "") + f": {error}"
         state = update_task(root, add_blockers=[blocker])
 
-    append_event(
+    event = append_event(
         root,
-        task_id=str(state.get("taskId") or ""),
+        task_id=task_id,
         kind="observation",
         text=f"tool failure {tool}" + (f"/{operation}" if operation else "") + f" attempt {attempts}: {error}",
         metadata={
@@ -717,12 +770,16 @@ def _tool_failure_recovery(root: Path, args: argparse.Namespace) -> tuple[dict, 
             "tool": tool,
             "operation": operation,
             "error": error,
+            "failureKind": failure_kind,
             "fingerprint": fingerprint,
             "importance": importance,
             "attempts": attempts,
+            "attemptsSource": "semantic-journal",
+            "legacyAttemptsIgnored": legacy_attempts,
             "retryCeiling": retry_ceiling,
             "retryCeilingReached": ceiling_reached,
             "fallback": fallback,
+            "verificationId": verification_id or None,
             "blocking": bool(blocker),
         },
         created_at_utc=utc_now(),
@@ -734,8 +791,10 @@ def _tool_failure_recovery(root: Path, args: argparse.Namespace) -> tuple[dict, 
         profile_id = ""
 
     next_commands: list[str] = []
-    if blocker:
-        next_commands.append(f'agent cognition resolve-blocker "{blocker}"')
+    if blocker and fallback:
+        next_commands.append(f"agent verify run --fallback-for {fingerprint} -- <fallback-command>")
+    elif blocker:
+        next_commands.append("agent cognition resolve-blocker --stdin")
     elif ceiling_reached and profile_id == "research":
         next_commands.extend(["agent verify research", "agent cognition checkpoint", "agent work complete"])
     elif ceiling_reached:
@@ -743,13 +802,18 @@ def _tool_failure_recovery(root: Path, args: argparse.Namespace) -> tuple[dict, 
 
     return {
         "format": "agent-devtools-tool-failure-recovery",
-        "formatVersion": 1,
+        "formatVersion": 2,
+        "eventId": event["id"],
         "tool": tool,
         "operation": operation,
         "error": error,
+        "failureKind": failure_kind,
         "fingerprint": fingerprint,
+        "verificationId": verification_id or None,
         "importance": importance,
         "attempts": attempts,
+        "attemptsSource": "semantic-journal",
+        "legacyAttemptsIgnored": legacy_attempts,
         "retryCeiling": retry_ceiling,
         "retryAllowed": retry_allowed,
         "blocking": bool(blocker),
@@ -758,7 +822,7 @@ def _tool_failure_recovery(root: Path, args: argparse.Namespace) -> tuple[dict, 
         "recommendedAction": recommended,
         "progressPreserved": True,
         "nextCommands": next_commands,
-        "policy": "Do not repeat the same tool/action after two equivalent failures. Optional work must fallback or skip; mandatory work blocks completion until recovered.",
+        "policy": "Record each observed failure once. Retry accounting is derived from equivalent unresolved failure fingerprints; a successful bound fallback resets that fingerprint's retry count.",
     }, state
 
 
@@ -779,7 +843,11 @@ def main_cognition(root: Path, args: argparse.Namespace) -> int:
             if args.json_output:
                 print(json.dumps(payload, ensure_ascii=False, indent=2))
             else:
-                print(f"Tool failure: {payload['tool']} · attempts={payload['attempts']}/{payload['retryCeiling']} · importance={payload['importance']} · action={payload['recommendedAction']}")
+                print(f"Tool failure: {payload['tool']} · attempts={payload['attempts']}/{payload['retryCeiling']} · kind={payload['failureKind']} · importance={payload['importance']} · action={payload['recommendedAction']} · fingerprint={payload['fingerprint']}")
+                if payload.get("legacyAttemptsIgnored") is not None:
+                    print("Note: --attempts is deprecated and ignored; equivalent attempts are derived from the semantic journal.")
+                if payload.get("verificationId"):
+                    print(f"Linked verification: {payload['verificationId']}")
                 if payload["retryAllowed"]:
                     print("Next: retry this exact tool/action at most once.")
                 elif payload["importance"] == "optional":
@@ -898,7 +966,7 @@ def main_cognition(root: Path, args: argparse.Namespace) -> int:
             if subject and subject_key:
                 kwargs["semantic_subjects"] = {subject_key: subject}
             state = update_task(root, **kwargs)
-    except (TaskStateError, SemanticJournalError, KnowledgeError) as exc:
+    except (TaskStateError, SemanticJournalError, KnowledgeError, VerificationError) as exc:
         print(f"agent cognition: {exc}")
         return 2
     kind_map = {"open-question": "open_question"}

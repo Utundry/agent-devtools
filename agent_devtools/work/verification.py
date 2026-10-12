@@ -11,7 +11,7 @@ from typing import Any, Iterable
 from agent_devtools.core.hashing import stable_fingerprint
 from agent_devtools.core.io import atomic_json_write
 from agent_devtools.core.workspace import default_work_root
-from .state import load_task_state, utc_now
+from .state import load_task_state, update_task, utc_now
 
 VERIFY_FORMAT = "agent-devtools-verification-log"
 VERIFY_VERSION = 1
@@ -39,6 +39,16 @@ def _load(root: Path) -> dict[str, Any]:
     if not isinstance(records, list):
         raise VerificationError("verification records must be an array")
     return raw
+
+
+def verification_record(root: Path, record_id: str) -> dict[str, Any]:
+    record_id = str(record_id or "").strip()
+    if not record_id:
+        raise VerificationError("verification record id is required")
+    for record in _load(root)["records"]:
+        if str(record.get("id") or "") == record_id:
+            return dict(record)
+    raise VerificationError(f"verification record not found: {record_id}")
 
 
 def record_verification(
@@ -94,8 +104,14 @@ def record_verification(
                     "source": source,
                     "recordId": record["id"],
                     "verificationKind": verification_kind,
+                    "status": record["status"],
                     "evidence": record["evidence"],
                     "summary": record["summary"],
+                    "fallbackForFailureFingerprint": (
+                        str((record.get("fallbackFor") or {}).get("fingerprint") or "")
+                        if isinstance(record.get("fallbackFor"), dict)
+                        else ""
+                    ),
                 },
                 created_at_utc=record["completedAtUtc"],
             )
@@ -241,6 +257,58 @@ def assess_verification_record(root: Path, record: dict[str, Any]) -> dict[str, 
     return item
 
 
+def _fallback_failure_context(root: Path, fingerprint: str) -> dict[str, Any] | None:
+    fingerprint = str(fingerprint or "").strip()
+    if not fingerprint:
+        return None
+    state = load_task_state(root)
+    if state is None:
+        raise VerificationError("--fallback-for requires an active task with recorded failure provenance")
+    from .journal import events_for_task
+    matches = []
+    for event in events_for_task(root, str(state.get("taskId") or "")):
+        metadata = event.get("metadata") if isinstance(event.get("metadata"), dict) else {}
+        if (
+            str(metadata.get("source") or "") == "cognition.tool-failure"
+            and str(metadata.get("fingerprint") or "") == fingerprint
+        ):
+            matches.append((event, metadata))
+    if not matches:
+        raise VerificationError(
+            f"--fallback-for does not match a recorded tool failure in the current task: {fingerprint}"
+        )
+    event, metadata = matches[-1]
+    return {
+        "fingerprint": fingerprint,
+        "failureEventId": event.get("id"),
+        "failureKind": metadata.get("failureKind") or "unknown",
+        "tool": metadata.get("tool"),
+        "operation": metadata.get("operation"),
+        "error": metadata.get("error"),
+        "verificationId": metadata.get("verificationId"),
+    }
+
+
+def _resolve_fallback_blocker(root: Path, fingerprint: str) -> str | None:
+    state = load_task_state(root)
+    if state is None:
+        return None
+    marker = f"[{fingerprint}]"
+    blockers = [str(item) for item in state.get("blockers", []) if marker in str(item)]
+    if len(blockers) > 1:
+        raise VerificationError(
+            f"successful fallback matched multiple blockers for failure fingerprint {fingerprint}"
+        )
+    if not blockers:
+        return None
+    update_task(
+        root,
+        resolve_blockers=blockers,
+        semantic_source="verify.fallback",
+    )
+    return blockers[0]
+
+
 def run_verification_command(
     root: Path,
     *,
@@ -249,6 +317,7 @@ def run_verification_command(
     summary: str = "",
     timeout: float | None = None,
     output_limit: int = 1600,
+    fallback_for: str = "",
 ) -> dict[str, Any]:
     argv = [str(item) for item in command]
     if argv and argv[0] == "--":
@@ -259,6 +328,7 @@ def run_verification_command(
         raise VerificationError("verify run timeout must be greater than zero")
     if output_limit < 0:
         raise VerificationError("verify run output limit cannot be negative")
+    fallback_context = _fallback_failure_context(root, fallback_for)
 
     source_before = _verification_source_state(root)
     started = time.monotonic()
@@ -313,8 +383,10 @@ def run_verification_command(
         },
         "relevance": relevance,
     }
+    if fallback_context is not None:
+        details["fallbackFor"] = fallback_context
     exit_evidence = "timeout" if timed_out else str(exit_code)
-    return record_verification(
+    record = record_verification(
         root,
         label=label,
         status=status,
@@ -327,6 +399,13 @@ def run_verification_command(
         verification_kind="executed-command",
         details=details,
     )
+    if status == "pass" and fallback_context is not None:
+        resolved = _resolve_fallback_blocker(root, str(fallback_context["fingerprint"]))
+        record["fallbackResolution"] = {
+            "status": "resolved" if resolved else "not-blocking",
+            "blocker": resolved,
+        }
+    return record
 
 
 def latest_verification(root: Path) -> dict[str, Any] | None:

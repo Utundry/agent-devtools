@@ -36,7 +36,9 @@ class FailureRecoveryTests(unittest.TestCase):
             "operation": "write report",
             "error": 'SchemaError(Missing key at ["content"])',
             "importance": "optional",
-            "attempts": 2,
+            "kind": "unknown",
+            "verification_id": "",
+            "attempts": None,
             "fallback": "Return the report directly to the user.",
             "json_output": True,
         }
@@ -50,17 +52,23 @@ class FailureRecoveryTests(unittest.TestCase):
             "--operation", "write report",
             "--error", "schema error",
             "--importance", "optional",
-            "--attempts", "2",
             "--fallback", "return result in chat",
             "--json",
         ])
         self.assertEqual("tool-failure", args.cognition_command)
-        self.assertEqual(2, args.attempts)
+        self.assertIsNone(args.attempts)
+        self.assertEqual("unknown", args.kind)
         self.assertEqual("optional", args.importance)
 
     def test_repeated_optional_failure_stops_retry_without_blocking(self):
         tmp, root = self.make_root()
         try:
+            first_out = io.StringIO()
+            with contextlib.redirect_stdout(first_out):
+                first_rc = main_cognition(root, self.args())
+            self.assertEqual(0, first_rc)
+            self.assertTrue(json.loads(first_out.getvalue())["retryAllowed"])
+
             out = io.StringIO()
             with contextlib.redirect_stdout(out):
                 rc = main_cognition(root, self.args())
@@ -68,12 +76,13 @@ class FailureRecoveryTests(unittest.TestCase):
             payload = json.loads(out.getvalue())
             self.assertFalse(payload["retryAllowed"])
             self.assertFalse(payload["blocking"])
+            self.assertEqual("semantic-journal", payload["attemptsSource"])
             self.assertEqual("use-fallback", payload["recommendedAction"])
             self.assertEqual([], load_task_state(root)["blockers"])
             events = events_for_task(root, load_task_state(root)["taskId"])
             failure = [e for e in events if e.get("metadata", {}).get("source") == "cognition.tool-failure"]
-            self.assertEqual(1, len(failure))
-            self.assertTrue(failure[0]["metadata"]["retryCeilingReached"])
+            self.assertEqual(2, len(failure))
+            self.assertTrue(failure[-1]["metadata"]["retryCeilingReached"])
         finally:
             tmp.cleanup()
 
@@ -82,9 +91,10 @@ class FailureRecoveryTests(unittest.TestCase):
         try:
             out = io.StringIO()
             with contextlib.redirect_stdout(out):
-                rc = main_cognition(root, self.args(attempts=1, fallback=""))
+                rc = main_cognition(root, self.args(fallback=""))
             self.assertEqual(0, rc)
             payload = json.loads(out.getvalue())
+            self.assertEqual(1, payload["attempts"])
             self.assertTrue(payload["retryAllowed"])
             self.assertEqual("retry-once", payload["recommendedAction"])
         finally:
@@ -93,6 +103,11 @@ class FailureRecoveryTests(unittest.TestCase):
     def test_repeated_mandatory_failure_creates_blocker(self):
         tmp, root = self.make_root()
         try:
+            first_out = io.StringIO()
+            with contextlib.redirect_stdout(first_out):
+                first_rc = main_cognition(root, self.args(importance="mandatory"))
+            self.assertEqual(0, first_rc)
+
             out = io.StringIO()
             with contextlib.redirect_stdout(out):
                 rc = main_cognition(root, self.args(importance="mandatory"))
@@ -103,7 +118,7 @@ class FailureRecoveryTests(unittest.TestCase):
             self.assertIn(payload["blocker"], load_task_state(root)["blockers"])
             with self.assertRaises(TaskStateError):
                 complete_work(root)
-            self.assertTrue(any("resolve-blocker" in cmd for cmd in payload["nextCommands"]))
+            self.assertTrue(any("--fallback-for" in cmd for cmd in payload["nextCommands"]))
         finally:
             tmp.cleanup()
 
@@ -111,10 +126,10 @@ class FailureRecoveryTests(unittest.TestCase):
         tmp, root = self.make_root()
         try:
             fingerprints = []
-            for attempts in (1, 2):
+            for _ in (1, 2):
                 out = io.StringIO()
                 with contextlib.redirect_stdout(out):
-                    main_cognition(root, self.args(attempts=attempts))
+                    main_cognition(root, self.args())
                 fingerprints.append(json.loads(out.getvalue())["fingerprint"])
             self.assertEqual(fingerprints[0], fingerprints[1])
         finally:
@@ -122,10 +137,12 @@ class FailureRecoveryTests(unittest.TestCase):
 
     def test_onboarding_contract_bounds_retries_and_preserves_progress(self):
         block = managed_block()
-        self.assertIn("same tool/action failure repeats twice", block)
+        self.assertIn("record each observed external-tool failure once", block)
+        self.assertIn("do not manually count equivalent attempts", block)
+        self.assertIn("A materially different error or failed precondition is a distinct failure", block)
         self.assertIn("Do not loop", block)
-        self.assertIn("optional", block)
-        self.assertIn("mandatory", block)
+        self.assertIn("Optional work", block)
+        self.assertIn("mandatory work", block)
         self.assertIn("preserve already completed findings", block)
 
     def test_workflow_and_capabilities_advertise_progress_guarantee(self):

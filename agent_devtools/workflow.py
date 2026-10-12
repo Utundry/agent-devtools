@@ -8,8 +8,8 @@ from typing import Any
 from . import __version__
 from .profiles import load_profile
 
-CLI_CONTRACT_VERSION = 40
-WORKFLOW_CONTRACT_VERSION = 23
+CLI_CONTRACT_VERSION = 41
+WORKFLOW_CONTRACT_VERSION = 24
 
 
 def workflow_contract(root: Path) -> dict[str, Any]:
@@ -79,7 +79,7 @@ def workflow_contract(root: Path) -> dict[str, Any]:
             "finalReport": "work report",
             "directKnowledgePromotion": "expert primitive only; routine agents do not call knowledge promote before checkpoint classification.",
             "researchVerification": "Research routine uses verify research guided review, then explicit compact or granular attestation.",
-            "toolFailureRecovery": "After two equivalent failures of the same tool/action, stop retrying: optional work falls back or skips without blocking; mandatory work becomes an ordinary blocker. Preserve completed cognition and continue from the nearest safe lifecycle step.",
+            "toolFailureRecovery": "Record each observed failure once. Equivalent retry count is derived from unresolved journal fingerprints; two equivalent observations reach the retry ceiling. optional failures may use a fallback or be skipped without blocking; mandatory failures remain blockers until recovered. Failed verification evidence may be linked to the failure, and a successful verify run --fallback-for <fingerprint> preserves the original failure while resolving its matching blocker. Distinct causes remain distinct failures.",
             "interruptionResume": "After transport/chat/SSE interruption, run begin without --goal. Resume the existing active task from project state and its next action; do not reconstruct progress from conversation memory.",
             "surface": {
                 "mode": "canonical-surface",
@@ -359,6 +359,14 @@ _CAPABILITY_RELEASE_CHANGES: dict[str, list[str]] = {
         "workflow.semantic-text-transport-guidance",
         "workflow.failure-equivalence-guidance",
     ],
+    "0.16.40": [
+        "cognition.tool-failure-journal-retry-count",
+        "cognition.tool-failure-classification",
+        "cognition.tool-failure-verification-binding",
+        "verification.fallback-for-failure",
+        "verification.fallback-blocker-resolution",
+        "verification.failure-provenance-preserved",
+    ],
 }
 
 
@@ -454,7 +462,7 @@ def capabilities(root: Path) -> dict[str, Any]:
             "selfUpdate": {"available": True, "latestDiscovery": True, "explicitVersion": True, "checkOnly": True, "freshDownload": True, "identityVerified": True, "periodicFreshness": True, "modes": ["off", "notify", "auto"], "ttlCache": True, "routineHooks": ["begin", "doctor"], "freshRuntimeCommandHandoff": True, "nonBlockingReentryFallback": True, "daemon": False},
             "begin": {"available": True, "canonicalRoutineEntry": True, "usesWorkEnter": True, "durableContextProjection": True, "knowledgeHealth": True, "interruptionResume": True, "resumeWithoutGoal": True, "ordinaryFollowupReentryRequired": False, "interruptionRecoveryOnly": True, "profileHintCompatibility": True, "conversationMemoryAuthoritative": False, "projectStateAuthoritative": True, "newStateModel": False},
             "work": {"enter": True, "start": True, "align": True, "status": True, "complete": True, "finish": True, "report": True, "reportReadOnly": True, "oneActionEntry": True, "handoffEntry": True, "routineEntryFastPath": True, "alignmentPendingOptOut": True, "userApprovalRequiresRecordedGap": True, "oneActionCompletion": True, "adaptiveExecutedCompletion": True, "requiredSemanticAutoPromotionExplicitPath": True, "explicitEntryFreshnessMarker": True, "obviousStaleTaskCompletionGuard": True, "automaticVerificationReuse": True, "baselineWhenUnverified": True, "taskGapGate": True, "noGapFastPath": True, "semanticCloseout": True},
-            "cognition": {"observation": True, "decision": True, "finding": True, "assumption": True, "requirement": not profile.development, "openQuestion": not profile.development, "evidence": not profile.development, "blocker": True, "resolveBlocker": True, "resolveBlockerFailClosed": True, "resolveBlockerStdin": True, "resolveBlockerFromFile": True, "batch": True, "batchDistinctEvents": True, "batchPerEventSource": True, "batchPreferredForMultiple": True, "toolFailure": True, "toolFailureRetryCeiling": 2, "toolFailureOptionalNonBlocking": True, "toolFailureMandatoryBlocks": True, "status": True, "checkpoint": True, "checkpointPromoteRequired": True, "textOptionAlias": True, "stdin": True, "fromFile": True, "utf8BulkCapture": True, "naturalGuessHints": True, "checkpointSessionOnlyClassification": True, "appendOnlyJournal": True, "possibleStaleCognition": True, "compactHumanOutput": True, "oneLineSuccess": True},
+            "cognition": {"observation": True, "decision": True, "finding": True, "assumption": True, "requirement": not profile.development, "openQuestion": not profile.development, "evidence": not profile.development, "blocker": True, "resolveBlocker": True, "resolveBlockerFailClosed": True, "resolveBlockerStdin": True, "resolveBlockerFromFile": True, "batch": True, "batchDistinctEvents": True, "batchPerEventSource": True, "batchPreferredForMultiple": True, "toolFailure": True, "toolFailureRetryCeiling": 2, "toolFailureRetryCountSource": "semantic-journal", "toolFailureKinds": ["infrastructure", "precondition", "environment", "tool", "unknown"], "toolFailureVerificationBinding": True, "toolFailureOptionalNonBlocking": True, "toolFailureMandatoryBlocks": True, "status": True, "checkpoint": True, "checkpointPromoteRequired": True, "textOptionAlias": True, "stdin": True, "fromFile": True, "utf8BulkCapture": True, "naturalGuessHints": True, "checkpointSessionOnlyClassification": True, "appendOnlyJournal": True, "possibleStaleCognition": True, "compactHumanOutput": True, "oneLineSuccess": True},
             "overheadMetrics": {"passive": True, "storage": ".agent-work/cli-overhead.jsonl + .agent-work/context-usage.sqlite3", "cliCalls": True, "durationMs": True, "stdoutBytes": True, "exitCode": True, "contextTokens": True, "retrievalReferenceRate": True, "repeatProjectionDetection": True, "noRoutineCommand": True},
             "projectOverview": {"available": True, "readOnly": True, "humanReadable": True, "json": True, "aggregatesExistingStateOnly": True, "noDashboardService": True},
             "knowledge": {"promote": True, "remember": True, "why": True, "lifecycle": True, "supersede": True, "validate": True, "status": True, "researchKinds": not profile.development, "softContradictionWarnings": True, "promotionRequired": False, "routineDirectPromote": False, "checkpointAuthority": True, "canonicalStore": ".agent-knowledge", "durableSqlite": False},
@@ -481,6 +489,9 @@ def capabilities(root: Path) -> dict[str, Any]:
                 "statusSummary": True,
                 "statusNoFiles": True,
                 "runSuccessPreview": True,
+                "fallbackForFailure": True,
+                "fallbackResolvesMatchingBlocker": True,
+                "failureProvenancePreserved": True,
                 "summaryFromFile": True,
                 "executedEvidence": True,
                 "executedEvidenceReferences": True,
