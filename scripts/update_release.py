@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from agent_devtools.bootstrap import BootstrapError, refresh_existing_runtime
 from agent_devtools.update_scenario import (
     UpdateScenarioError,
     apply_scenario,
@@ -474,6 +475,18 @@ def periodic_update(args: argparse.Namespace, *, sleep_fn=time.sleep, max_cycles
 
 
 
+def _refresh_existing_local_runtime(root: Path) -> dict:
+    """Refresh an existing project-local dogfood runtime from synchronized source.
+
+    Publication has already succeeded, so this is diagnostic/non-fatal. The payload
+    refresh is deliberately offline and config-neutral; a missing runtime is skipped.
+    """
+    try:
+        return refresh_existing_runtime(root, source_root=root)
+    except (BootstrapError, OSError) as exc:
+        return {"status": "warn", "error": str(exc)}
+
+
 def _refresh_managed_onboarding(root: Path) -> dict:
     """Refresh the local managed AGENTS.md block with the freshly synchronized runtime.
 
@@ -640,9 +653,17 @@ def update(args: argparse.Namespace) -> dict:
         status = "published" if args.publish else "prepared"
 
     backup = synchronize(root, clone, args.branch, head, version) if args.publish else None
+    local_runtime_refresh = None
     onboarding_refresh = None
     if args.publish:
         git(root, "fetch", "--quiet", "--prune", args.remote, args.branch)
+        local_runtime_refresh = _refresh_existing_local_runtime(root)
+        if local_runtime_refresh.get("status") == "warn":
+            print(
+                f"WARNING: local Agent DevTools runtime refresh failed: {local_runtime_refresh.get('error')}",
+                file=sys.stderr,
+                flush=True,
+            )
         onboarding_refresh = _refresh_managed_onboarding(root)
         if onboarding_refresh.get("status") == "warn":
             print(f"WARNING: managed onboarding refresh failed: {onboarding_refresh.get('error')}", file=sys.stderr, flush=True)
@@ -660,7 +681,8 @@ def update(args: argparse.Namespace) -> dict:
                 "mismatches": [],
             } if scenario is not None else None
         ),
-        "localBackupStash": backup, "onboardingRefresh": onboarding_refresh, "artifacts": str(run),
+        "localBackupStash": backup, "localRuntimeRefresh": local_runtime_refresh,
+        "onboardingRefresh": onboarding_refresh, "artifacts": str(run),
     }
     (run / "update-result.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     shutil.rmtree(clone)

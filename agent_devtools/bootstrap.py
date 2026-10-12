@@ -645,6 +645,80 @@ def inspect_existing_installation(target: Path) -> dict[str, Any]:
     }
 
 
+def refresh_existing_runtime(target: Path, *, source_root: Path | None = None) -> dict[str, Any]:
+    """Refresh an already installed disposable runtime from local source only.
+
+    This helper intentionally touches only ``devtools/agent``. It does not create a
+    missing runtime, reconcile project configuration, refresh onboarding, or require
+    network access. That makes it safe for post-publish source-repository dogfood.
+    """
+    target = target.resolve()
+    source_root = (source_root or Path(__file__).resolve().parents[1]).resolve()
+    if not target.is_dir():
+        raise BootstrapError(f"Target is not an existing project directory: {target}")
+
+    vendor = target / VENDOR_REL
+    if not vendor.is_dir():
+        return {
+            "format": "agent-devtools-runtime-refresh",
+            "formatVersion": 1,
+            "status": "skipped",
+            "reason": "runtime-not-installed",
+            "target": str(target),
+            "path": VENDOR_REL.as_posix(),
+        }
+    if vendor.is_symlink():
+        raise BootstrapError("Refusing payload-only runtime refresh through a symlink")
+    legacy_config = [
+        name
+        for name in ("agent-tools.json", "agent-check.policy.json", "agent-context.map.json")
+        if (vendor / name).is_file()
+    ]
+    if legacy_config:
+        raise BootstrapError(
+            "Refusing payload-only runtime refresh while legacy project config exists inside devtools/agent: "
+            + ", ".join(legacy_config)
+        )
+
+    source_version = _runtime_version(source_root)
+    if not source_version:
+        raise BootstrapError("Local source runtime version is unavailable")
+    source_fp, source_count = _tree_fingerprint(source_root)
+    before_fp, before_count = _tree_fingerprint(vendor)
+    action = "unchanged" if before_fp == source_fp and before_count == source_count else "replace"
+    if action == "replace":
+        _copy_vendor(source_root, vendor)
+
+    after_fp, after_count = _tree_fingerprint(vendor)
+    if after_fp != source_fp or after_count != source_count:
+        raise BootstrapError(
+            "Local runtime refresh verification failed: installed payload fingerprint does not match source tree"
+        )
+    installed_version = _runtime_version(vendor)
+    if installed_version != source_version:
+        raise BootstrapError(
+            "Local runtime refresh verification failed: installed runtime version does not match source tree"
+        )
+    return {
+        "format": "agent-devtools-runtime-refresh",
+        "formatVersion": 1,
+        "status": "pass",
+        "target": str(target),
+        "path": VENDOR_REL.as_posix(),
+        "action": action,
+        "sourceVersion": source_version,
+        "installedVersion": installed_version,
+        "beforeFingerprint": before_fp or None,
+        "beforeRuntimeFiles": before_count,
+        "afterFingerprint": after_fp,
+        "afterRuntimeFiles": after_count,
+        "verification": {
+            "runtimeFingerprintMatched": True,
+            "runtimeVersionMatched": True,
+        },
+    }
+
+
 def upgrade_runtime(target: Path, *, source_root: Path | None = None) -> dict[str, Any]:
     """Replace the disposable runtime and safely reconcile generated Python layout.
 

@@ -1,0 +1,26 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "768668a0398647d38436560b31a4ad13",
+  "kind": "decision",
+  "subject": "Post-publish local runtime refresh",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "After a successful published release, the updater refreshes an already-installed local devtools/agent runtime directly from the synchronized source tree. The refresh is payload-only, offline, idempotent, skips when no runtime exists, and post-publish refresh failures are warnings rather than rollback signals.",
+  "scope": [],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "65340ef1-ec6b-4a6a-acf5-9744f08ec471",
+    "taskGoal": "Ensure release updater refreshes an existing local dogfood runtime from the freshly published source tree without network access",
+    "eventId": "ea52e40dee23464993d11935b6ba836e"
+  },
+  "taskId": "65340ef1-ec6b-4a6a-acf5-9744f08ec471",
+  "taskGoal": "Ensure release updater refreshes an existing local dogfood runtime from the freshly published source tree without network access",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-12T07:43:55Z",
+  "updatedAtUtc": "2026-10-12T07:43:55Z"
+}
