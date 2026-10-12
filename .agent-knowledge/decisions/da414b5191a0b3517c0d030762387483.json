@@ -1,0 +1,29 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "da414b5191a0b3517c0d030762387483",
+  "kind": "decision",
+  "subject": "Agent DevTools and MCP boundary",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "confidence": "high",
+  "statement": "Agent DevTools remains a local, zero-infrastructure project runtime whose CLI/core is canonical. MCP or other tool adapters may provide an optional transport/interface over the same project-local state, but must not become required infrastructure or create a separate memory/state model.",
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "scope": [
+    "architecture",
+    "MCP",
+    "transport"
+  ],
+  "evidenceRefs": [],
+  "changedFiles": [],
+  "sourceSession": {
+    "taskGoal": "Capture agreed durable conclusions about multi-agent runtime ownership and dogfood"
+  },
+  "createdBy": {
+    "author": "GPT-5.6 Sol",
+    "agentEnvironment": "ChatGPT project conversation"
+  },
+  "createdAtUtc": "2026-10-12T06:45:00Z"
+}

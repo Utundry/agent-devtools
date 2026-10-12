@@ -1,0 +1,29 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "40ebf0a8d511b9d7d5dafb39718ca77b",
+  "kind": "requirement",
+  "subject": "Agent DevTools as the default agent-local project runtime",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "confidence": "high",
+  "statement": "When an agent has executable access to a project checkout with Agent DevTools installed, it should use the Agent DevTools lifecycle as its normal working runtime (`begin` → project-native work/cognition as needed → verification → `work complete`) in its own local session, rather than merely following the methodology informally. This is the preferred dogfood model for developing Agent DevTools itself.",
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "scope": [
+    "dogfood",
+    "workflow",
+    "agent-runtime"
+  ],
+  "evidenceRefs": [],
+  "changedFiles": [],
+  "sourceSession": {
+    "taskGoal": "Capture agreed durable conclusions about multi-agent runtime ownership and dogfood"
+  },
+  "createdBy": {
+    "author": "GPT-5.6 Sol",
+    "agentEnvironment": "ChatGPT project conversation"
+  },
+  "createdAtUtc": "2026-10-12T06:45:00Z"
+}

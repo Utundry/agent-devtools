@@ -1,0 +1,29 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "839ed1d50c4c5d3865bbb77d3bc3d594",
+  "kind": "decision",
+  "subject": "Agent runtime state ownership and Git synchronization",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "confidence": "high",
+  "statement": "Agent DevTools treats `.agent-work` and other session/runtime state as disposable and local to each agent instance or checkout; `.agent-knowledge` and other tracked durable artifacts belong to the project and synchronize through Git. Agents do not need to share one `.agent-work`; handoff/preserve is used only when unfinished recoverable state must be transferred.",
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "scope": [
+    "architecture/runtime",
+    "multi-agent",
+    "durable-knowledge"
+  ],
+  "evidenceRefs": [],
+  "changedFiles": [],
+  "sourceSession": {
+    "taskGoal": "Capture agreed durable conclusions about multi-agent runtime ownership and dogfood"
+  },
+  "createdBy": {
+    "author": "GPT-5.6 Sol",
+    "agentEnvironment": "ChatGPT project conversation"
+  },
+  "createdAtUtc": "2026-10-12T06:45:00Z"
+}
