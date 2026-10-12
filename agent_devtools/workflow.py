@@ -337,6 +337,10 @@ _CAPABILITY_RELEASE_CHANGES: dict[str, list[str]] = {
         "work.required-semantic-auto-promotion-explicit-path",
         "verification.affected-plan-safe-fallback",
     ],
+    "0.16.28": [
+        "work.explicit-entry-freshness-marker",
+        "work.obvious-stale-task-completion-guard",
+    ],
 }
 
 
@@ -431,7 +435,7 @@ def capabilities(root: Path) -> dict[str, Any]:
             "capabilities": {"json": True, "summary": True, "diff": True, "pullOnly": True, "routineRequired": False},
             "selfUpdate": {"available": True, "latestDiscovery": True, "explicitVersion": True, "checkOnly": True, "freshDownload": True, "identityVerified": True},
             "begin": {"available": True, "canonicalRoutineEntry": True, "usesWorkEnter": True, "durableContextProjection": True, "knowledgeHealth": True, "interruptionResume": True, "resumeWithoutGoal": True, "ordinaryFollowupReentryRequired": False, "interruptionRecoveryOnly": True, "profileHintCompatibility": True, "conversationMemoryAuthoritative": False, "projectStateAuthoritative": True, "newStateModel": False},
-            "work": {"enter": True, "start": True, "align": True, "status": True, "complete": True, "finish": True, "report": True, "reportReadOnly": True, "oneActionEntry": True, "handoffEntry": True, "routineEntryFastPath": True, "alignmentPendingOptOut": True, "userApprovalRequiresRecordedGap": True, "oneActionCompletion": True, "adaptiveExecutedCompletion": True, "requiredSemanticAutoPromotionExplicitPath": True, "automaticVerificationReuse": True, "baselineWhenUnverified": True, "taskGapGate": True, "noGapFastPath": True, "semanticCloseout": True},
+            "work": {"enter": True, "start": True, "align": True, "status": True, "complete": True, "finish": True, "report": True, "reportReadOnly": True, "oneActionEntry": True, "handoffEntry": True, "routineEntryFastPath": True, "alignmentPendingOptOut": True, "userApprovalRequiresRecordedGap": True, "oneActionCompletion": True, "adaptiveExecutedCompletion": True, "requiredSemanticAutoPromotionExplicitPath": True, "explicitEntryFreshnessMarker": True, "obviousStaleTaskCompletionGuard": True, "automaticVerificationReuse": True, "baselineWhenUnverified": True, "taskGapGate": True, "noGapFastPath": True, "semanticCloseout": True},
             "cognition": {"observation": True, "decision": True, "finding": True, "assumption": True, "requirement": not profile.development, "openQuestion": not profile.development, "evidence": not profile.development, "blocker": True, "resolveBlocker": True, "batch": True, "batchDistinctEvents": True, "batchPerEventSource": True, "batchPreferredForMultiple": True, "toolFailure": True, "toolFailureRetryCeiling": 2, "toolFailureOptionalNonBlocking": True, "toolFailureMandatoryBlocks": True, "status": True, "checkpoint": True, "checkpointPromoteRequired": True, "textOptionAlias": True, "stdin": True, "fromFile": True, "utf8BulkCapture": True, "naturalGuessHints": True, "checkpointSessionOnlyClassification": True, "appendOnlyJournal": True, "possibleStaleCognition": True, "compactHumanOutput": True, "oneLineSuccess": True},
             "overheadMetrics": {"passive": True, "storage": ".agent-work/cli-overhead.jsonl + .agent-work/context-usage.sqlite3", "cliCalls": True, "durationMs": True, "stdoutBytes": True, "exitCode": True, "contextTokens": True, "retrievalReferenceRate": True, "repeatProjectionDetection": True, "noRoutineCommand": True},
             "projectOverview": {"available": True, "readOnly": True, "humanReadable": True, "json": True, "aggregatesExistingStateOnly": True, "noDashboardService": True},

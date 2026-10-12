@@ -139,7 +139,58 @@ class WorkCompletionTests(unittest.TestCase):
         finally:
             tmp.cleanup()
 
+    def test_clean_tree_with_newer_head_blocks_obviously_stale_task(self) -> None:
+        tmp, root = self.make_root("development")
+        try:
+            self.ready(root)
+            with patch(
+                "agent_devtools.work.completion.git_changed_files",
+                return_value=set(),
+            ), patch(
+                "agent_devtools.work.completion._git_head_commit_epoch",
+                return_value=200,
+            ), patch(
+                "agent_devtools.work.completion._task_activity_epoch",
+                return_value=100,
+            ), patch(
+                "agent_devtools.work.completion._run_development_verification",
+            ) as run_check:
+                with self.assertRaisesRegex(TaskStateError, "active task may be stale"):
+                    complete_work(root)
+            run_check.assert_not_called()
+            self.assertEqual("active", load_task_state(root)["status"])
+        finally:
+            tmp.cleanup()
+
+    def test_canonical_changes_prevent_stale_task_guessing(self) -> None:
+        tmp, root = self.make_root("development")
+        try:
+            self.ready(root)
+            latest = {
+                "status": "pass",
+                "completedAtUtc": "9999-12-31T23:59:59+00:00",
+                "runDirectory": ".agent-work/runs/test",
+            }
+            with patch(
+                "agent_devtools.work.completion.git_changed_files",
+                return_value={"agent_devtools/work/completion.py"},
+            ), patch(
+                "agent_devtools.work.completion._git_head_commit_epoch",
+            ) as head_time, patch(
+                "agent_devtools.work.completion._run_development_verification",
+                return_value=(0, "PASS"),
+            ), patch(
+                "agent_devtools.work.completion.validated_check_report",
+                return_value=latest,
+            ):
+                payload = complete_work(root, no_cache=True)
+            head_time.assert_not_called()
+            self.assertEqual("completed", payload["task"]["status"])
+        finally:
+            tmp.cleanup()
+
     def test_failed_dev_verification_does_not_finish(self) -> None:
+        # Existing verification-failure behavior remains unchanged.
         tmp, root = self.make_root("development")
         try:
             self.ready(root)

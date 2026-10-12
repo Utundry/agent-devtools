@@ -72,6 +72,7 @@ def _base_state(goal: str) -> dict[str, Any]:
         "nextStep": "",
         "status": "active",
         "startedAtUtc": now,
+        "lastEnteredAtUtc": now,
         "updatedAtUtc": now,
         "completedAtUtc": None,
     }
@@ -126,8 +127,23 @@ def validate_task_state(payload: Any) -> dict[str, Any]:
         raise TaskStateError("task state status must be active or completed")
     clean["status"] = status
     clean["completedAtUtc"] = clean.get("completedAtUtc") or None
+    clean["lastEnteredAtUtc"] = str(
+        clean.get("lastEnteredAtUtc")
+        or clean.get("updatedAtUtc")
+        or clean.get("startedAtUtc")
+        or ""
+    )
     clean["nextStep"] = str(clean.get("nextStep") or "").strip()
     return clean
+
+
+def mark_task_entered(root: Path) -> dict[str, Any]:
+    state = load_task_state(root)
+    if state is None:
+        raise TaskStateError("no task state exists; use work start first")
+    state["lastEnteredAtUtc"] = utc_now()
+    atomic_json_write(task_state_path(root), state)
+    return validate_task_state(state)
 
 
 def task_alignment_ready(state: dict[str, Any]) -> bool:

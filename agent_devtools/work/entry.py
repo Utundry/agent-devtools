@@ -10,6 +10,7 @@ from .state import (
     TaskStateError,
     align_task,
     load_task_state,
+    mark_task_entered,
     start_task,
     task_alignment_ready,
 )
@@ -89,6 +90,7 @@ def enter_work(
         state = load_task_state(root)
         if state is not None:
             state = _fast_align_if_requested(root, state, no_material_gaps)
+            state = mark_task_entered(root)
             if no_material_gaps:
                 brief = build_brief(
                     root,
@@ -131,6 +133,7 @@ def enter_work(
                 "use task update or --replace explicitly"
             )
         state = _fast_align_if_requested(root, state, no_material_gaps)
+        state = mark_task_entered(root)
         brief = build_brief(
             root,
             mode="resume",

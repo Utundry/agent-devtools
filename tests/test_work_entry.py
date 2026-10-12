@@ -61,7 +61,27 @@ class WorkEntryTests(unittest.TestCase):
         finally:
             tmp.cleanup()
 
+    def test_resume_refreshes_entry_marker_without_rewriting_task_update_time(self) -> None:
+        tmp, root = self.make_root()
+        try:
+            start_task(root, goal="Resume stale task")
+            path = root / ".agent-work" / "task.json"
+            raw = json.loads(path.read_text(encoding="utf-8"))
+            raw["lastEnteredAtUtc"] = "2020-01-01T00:00:00Z"
+            raw["updatedAtUtc"] = "2020-01-02T00:00:00Z"
+            path.write_text(json.dumps(raw), encoding="utf-8")
+
+            payload = enter_work(root, include_context=False)
+
+            self.assertEqual("resumed", payload["action"])
+            refreshed = load_task_state(root)
+            self.assertNotEqual("2020-01-01T00:00:00Z", refreshed["lastEnteredAtUtc"])
+            self.assertEqual("2020-01-02T00:00:00Z", refreshed["updatedAtUtc"])
+        finally:
+            tmp.cleanup()
+
     def test_active_different_goal_fails_closed_without_replace(self) -> None:
+        # Different-goal protection remains unchanged after entry freshness tracking.
         tmp, root = self.make_root()
         try:
             start_task(root, goal="Existing")

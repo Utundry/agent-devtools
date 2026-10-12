@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import argparse
 import io
+import subprocess
 from contextlib import redirect_stdout
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +18,65 @@ from .state import TaskStateError, complete_task, load_task_state, task_alignmen
 from .verification import latest_verification, run_verification_command
 
 _PASS_STATUSES = {"pass", "passed", "success", "ok"}
+
+
+def _git_head_commit_epoch(root: Path) -> int | None:
+    try:
+        completed = subprocess.run(
+            ["git", "show", "-s", "--format=%ct", "HEAD"],
+            cwd=str(root),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if completed.returncode != 0:
+        return None
+    try:
+        return int(completed.stdout.strip())
+    except ValueError:
+        return None
+
+
+def _task_activity_epoch(state: dict[str, Any]) -> float | None:
+    values = [
+        str(state.get("lastEnteredAtUtc") or "").strip(),
+        str(state.get("updatedAtUtc") or "").strip(),
+    ]
+    epochs: list[float] = []
+    for value in values:
+        if not value:
+            continue
+        try:
+            epochs.append(datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp())
+        except ValueError:
+            continue
+    return max(epochs) if epochs else None
+
+
+def _require_current_task(root: Path, state: dict[str, Any], *, development: bool) -> None:
+    if not development:
+        return
+    changed = git_changed_files(root)
+    if changed is None or changed:
+        return
+    head_epoch = _git_head_commit_epoch(root)
+    task_epoch = _task_activity_epoch(state)
+    if head_epoch is None or task_epoch is None or task_epoch >= head_epoch:
+        return
+    goal = str(state.get("goal") or "").strip()
+    raise TaskStateError(
+        f"active task may be stale: {goal!r}; the canonical working tree is clean "
+        "and current HEAD is newer than this task's last explicit entry/update. "
+        "Next: run `agent begin` to explicitly resume and confirm this task, then retry "
+        "`agent work complete`; if the goal is no longer current, start or replace the correct task instead."
+    )
+
 
 def _require_ready_task(root: Path) -> dict[str, Any]:
     state = load_task_state(root)
@@ -108,6 +169,13 @@ def complete_work(
     semantic_promotions: list[str] = []
     executed: dict[str, Any] | None = None
 
+    try:
+        profile = load_profile(root)
+    except ProfileError as exc:
+        raise TaskStateError(str(exc)) from exc
+
+    _require_current_task(root, state, development=bool(profile.development))
+
     if not adaptive:
         try:
             semantic = require_semantic_closeout(root)
@@ -118,11 +186,6 @@ def complete_work(
                   "if the REQUIRED candidates are correct, run `agent cognition checkpoint --promote-required`, "
                   "then retry `agent work complete`."
             ) from exc
-
-    try:
-        profile = load_profile(root)
-    except ProfileError as exc:
-        raise TaskStateError(str(exc)) from exc
 
     if adaptive and profile.profile_id == "research":
         raise TaskStateError(
