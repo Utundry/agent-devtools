@@ -63,7 +63,42 @@ class UpdateScenarioTests(unittest.TestCase):
         finally:
             tmp.cleanup()
 
+    def test_replace_rejects_after_contained_in_before(self):
+        tmp, root = self.make_root()
+        try:
+            payload = self.base()
+            payload["changes"] = [
+                {
+                    "op": "replace",
+                    "path": "a.txt",
+                    "before": "from x import A\nfrom y import B\n",
+                    "after": "from y import B\n",
+                },
+            ]
+            with self.assertRaisesRegex(UpdateScenarioError, "structurally ambiguous"):
+                load_scenario(self.write_scenario(root, payload))
+        finally:
+            tmp.cleanup()
+
+    def test_replace_rejects_before_contained_in_after(self):
+        tmp, root = self.make_root()
+        try:
+            payload = self.base()
+            payload["changes"] = [
+                {
+                    "op": "replace",
+                    "path": "a.txt",
+                    "before": "value = 1",
+                    "after": "value = 1\nextra = 2",
+                },
+            ]
+            with self.assertRaisesRegex(UpdateScenarioError, "structurally ambiguous"):
+                load_scenario(self.write_scenario(root, payload))
+        finally:
+            tmp.cleanup()
+
     def test_base_blob_mismatch_fails_before_mutation(self):
+        # Keep this preimage boundary distinct from the inserted authoring tests.
         tmp, root = self.make_root()
         try:
             payload = self.base()
@@ -168,7 +203,10 @@ class UpdateScenarioTests(unittest.TestCase):
                 {"op": "assert_contains", "path": "a.txt", "text": "missing-marker"},
             ]
             scenario = load_scenario(self.write_scenario(root, payload))
-            with self.assertRaisesRegex(UpdateScenarioError, "assert_contains failed"):
+            with self.assertRaisesRegex(
+                UpdateScenarioError,
+                r"scenario\.json \(1\.0\.0 -> 1\.1\.0\): assert_contains failed",
+            ):
                 preflight_scenarios(root, [scenario])
             self.assertEqual("before\n", (root / "a.txt").read_text())
         finally:

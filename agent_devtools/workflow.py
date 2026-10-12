@@ -328,6 +328,10 @@ _CAPABILITY_RELEASE_CHANGES: dict[str, list[str]] = {
         "verification.head-tail-output-preview",
         "changes.check-runner-config-decoupling",
     ],
+    "0.16.26": [
+        "declarative-update.replace-structural-ambiguity-guard",
+        "declarative-update.scenario-aware-preflight-errors",
+    ],
 }
 
 

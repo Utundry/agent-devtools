@@ -139,6 +139,11 @@ def load_scenario(path: Path) -> UpdateScenario:
                 raise UpdateScenarioError(f"replace change {index} requires non-empty string before/after")
             if before == after:
                 raise UpdateScenarioError(f"replace change {index} before/after must differ")
+            if before in after or after in before:
+                raise UpdateScenarioError(
+                    f"replace change {index} has structurally ambiguous before/after containment; "
+                    "idempotent preflight cannot distinguish original from already-applied state"
+                )
         elif op == "write":
             if not isinstance(change.get("content"), str):
                 raise UpdateScenarioError(f"write change {index} requires string content")
@@ -514,11 +519,16 @@ def preflight_scenarios(root: Path, scenarios: tuple[UpdateScenario, ...] | list
 
         results = []
         for scenario in sequence:
-            result = apply_scenario(
-                sandbox,
-                scenario,
-                ignore_base_blobs=ignore_base_blobs,
-            )
+            try:
+                result = apply_scenario(
+                    sandbox,
+                    scenario,
+                    ignore_base_blobs=ignore_base_blobs,
+                )
+            except UpdateScenarioError as exc:
+                raise UpdateScenarioError(
+                    f"{scenario.path.name} ({scenario.from_version} -> {scenario.to_version}): {exc}"
+                ) from exc
             results.append(result)
             (sandbox / "VERSION").write_text(scenario.to_version + "\n", encoding="utf-8")
 
