@@ -10,8 +10,10 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -36,10 +38,142 @@ class UpdateError(RuntimeError):
     pass
 
 
+_GIT_HARD_TIMEOUT_SECONDS = 300.0
+_FRESH_UPDATE_HARD_TIMEOUT_SECONDS = 1800.0
+_RELEASE_BUILDER_HARD_TIMEOUT_SECONDS = 1800.0
+_ONBOARDING_HARD_TIMEOUT_SECONDS = 120.0
+_PROCESS_KILL_GRACE_SECONDS = 5.0
+
+
+def _process_group_kwargs() -> dict:
+    if os.name == "nt":
+        return {"creationflags": getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)}
+    return {"start_new_session": True}
+
+
+def _terminate_process_tree(proc: subprocess.Popen) -> None:
+    if proc.poll() is not None:
+        return
+    if os.name == "nt":
+        try:
+            subprocess.run(
+                ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                timeout=10,
+            )
+        except (OSError, subprocess.SubprocessError):
+            try:
+                proc.kill()
+            except OSError:
+                pass
+    else:
+        try:
+            os.killpg(proc.pid, signal.SIGTERM)
+        except OSError:
+            try:
+                proc.terminate()
+            except OSError:
+                pass
+    try:
+        proc.wait(timeout=_PROCESS_KILL_GRACE_SECONDS)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    if os.name == "nt":
+        try:
+            proc.kill()
+        except OSError:
+            pass
+    else:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except OSError:
+            try:
+                proc.kill()
+            except OSError:
+                pass
+    try:
+        proc.wait(timeout=_PROCESS_KILL_GRACE_SECONDS)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+
+def _wait_with_watchdog(
+    proc: subprocess.Popen,
+    *,
+    label: str,
+    hard_timeout: float,
+) -> int:
+    try:
+        return proc.wait(timeout=hard_timeout)
+    except subprocess.TimeoutExpired as exc:
+        _terminate_process_tree(proc)
+        raise UpdateError(f"{label} exceeded hard timeout of {hard_timeout:g}s") from exc
+
+
+def _run_process(
+    argv,
+    *,
+    cwd: Path | None = None,
+    hard_timeout: float,
+    label: str,
+    stdout=None,
+    stderr=None,
+) -> subprocess.CompletedProcess:
+    args = list(argv)
+    proc = subprocess.Popen(
+        args,
+        cwd=cwd,
+        stdin=subprocess.DEVNULL,
+        stdout=stdout,
+        stderr=stderr,
+        close_fds=True,
+        **_process_group_kwargs(),
+    )
+    returncode = _wait_with_watchdog(proc, label=label, hard_timeout=hard_timeout)
+    return subprocess.CompletedProcess(args=args, returncode=returncode)
+
+
+def _run_captured(
+    argv,
+    *,
+    cwd: Path | None = None,
+    hard_timeout: float,
+    label: str,
+) -> subprocess.CompletedProcess[str]:
+    args = list(argv)
+    with (
+        tempfile.TemporaryFile(mode="w+b") as stdout_file,
+        tempfile.TemporaryFile(mode="w+b") as stderr_file,
+    ):
+        result = _run_process(
+            args,
+            cwd=cwd,
+            hard_timeout=hard_timeout,
+            label=label,
+            stdout=stdout_file,
+            stderr=stderr_file,
+        )
+        stdout_file.seek(0)
+        stderr_file.seek(0)
+        stdout = stdout_file.read().decode("utf-8", errors="replace")
+        stderr = stderr_file.read().decode("utf-8", errors="replace")
+    return subprocess.CompletedProcess(
+        args=args,
+        returncode=result.returncode,
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+
 def git(root: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    result = subprocess.run(
-        ["git", "-C", str(root), *args], capture_output=True,
-        text=True, encoding="utf-8", errors="replace",
+    result = _run_captured(
+        ["git", "-C", str(root), *args],
+        hard_timeout=_GIT_HARD_TIMEOUT_SECONDS,
+        label="git " + " ".join(str(arg) for arg in args[:2]),
     )
     if check and result.returncode:
         raise UpdateError(result.stderr.strip() or result.stdout.strip() or "Git failed")
@@ -497,14 +631,11 @@ def _refresh_managed_onboarding(root: Path) -> dict:
     agent = root / "agent.py"
     if not agent.is_file():
         return {"status": "skipped", "reason": "agent.py missing"}
-    result = subprocess.run(
+    result = _run_captured(
         [sys.executable, str(agent), "onboarding", "ensure", "--json"],
         cwd=root,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
+        hard_timeout=_ONBOARDING_HARD_TIMEOUT_SECONDS,
+        label="managed onboarding refresh",
     )
     if result.returncode:
         return {
@@ -644,7 +775,14 @@ def update(args: argparse.Namespace) -> dict:
         print("Running canonical release builder (bootstrap, tests, commit/tag/push)", flush=True)
         log = run / "build-release.log"
         with log.open("w", encoding="utf-8") as handle:
-            result = subprocess.run(command, cwd=clone, stdout=handle, stderr=subprocess.STDOUT)
+            result = _run_process(
+                command,
+                cwd=clone,
+                hard_timeout=_RELEASE_BUILDER_HARD_TIMEOUT_SECONDS,
+                label="canonical release builder",
+                stdout=handle,
+                stderr=subprocess.STDOUT,
+            )
         if result.returncode:
             print(log.read_text(encoding="utf-8", errors="replace")[-6000:], file=sys.stderr)
             raise UpdateError(f"Release builder failed; original worktree unchanged. Log: {log}")
