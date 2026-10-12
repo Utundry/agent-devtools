@@ -17,7 +17,7 @@ from .config import ContextConfig
 from .relations import build_definition_index, extract_relations
 from .semantic_map import SemanticMapError, load_semantic_map, resolve_mapping
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 class ContextIndexError(RuntimeError):
@@ -160,6 +160,19 @@ def _create_schema(
         CREATE INDEX chunks_path_idx ON chunks(path);
         CREATE INDEX chunks_label_idx ON chunks(label);
         CREATE INDEX chunks_anchor_idx ON chunks(anchor);
+        CREATE TABLE knowledge_semantics (
+            path TEXT PRIMARY KEY REFERENCES files(path) ON DELETE CASCADE,
+            record_id TEXT NOT NULL,
+            knowledge_kind TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            statement TEXT NOT NULL,
+            scope_text TEXT NOT NULL,
+            anchors_text TEXT NOT NULL,
+            status TEXT NOT NULL,
+            lifecycle_status TEXT NOT NULL
+        );
+        CREATE INDEX knowledge_semantics_kind_idx ON knowledge_semantics(knowledge_kind);
+        CREATE INDEX knowledge_semantics_lifecycle_idx ON knowledge_semantics(lifecycle_status);
         CREATE TABLE file_relations (
             source_path TEXT NOT NULL REFERENCES files(path) ON DELETE CASCADE,
             target_path TEXT NOT NULL REFERENCES files(path) ON DELETE CASCADE,
@@ -200,6 +213,39 @@ def _delete_file(conn: sqlite3.Connection, rel: str, use_fts: bool) -> None:
         conn.executemany("DELETE FROM chunks_fts WHERE chunk_id=?", ((chunk_id,) for chunk_id in ids))
     conn.execute("DELETE FROM files WHERE path=?", (rel,))
 
+
+def _knowledge_metadata(rel: str, text: str | None) -> dict[str, str] | None:
+    if text is None or not rel.startswith(".agent-knowledge/") or not rel.endswith(".json"):
+        return None
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict) or payload.get("format") != "agent-devtools-project-knowledge":
+        return None
+    def joined(key: str) -> str:
+        value = payload.get(key, [])
+        if not isinstance(value, list):
+            return ""
+        return " ".join(str(item).strip() for item in value if str(item).strip())
+    return {
+        "record_id": str(payload.get("id") or "").strip(),
+        "knowledge_kind": str(payload.get("kind") or "").strip(),
+        "subject": str(payload.get("subject") or "").strip(),
+        "statement": str(payload.get("statement") or "").strip(),
+        "scope_text": joined("scope"),
+        "anchors_text": joined("anchors"),
+        "status": str(payload.get("status") or "").strip(),
+        "lifecycle_status": str(payload.get("lifecycleStatus") or "active").strip() or "active",
+    }
+
+
+def _insert_knowledge_semantics(conn: sqlite3.Connection, rel: str, metadata: dict[str, str]) -> None:
+    conn.execute(
+        "INSERT INTO knowledge_semantics(path,record_id,knowledge_kind,subject,statement,scope_text,anchors_text,status,lifecycle_status) VALUES (?,?,?,?,?,?,?,?,?)",
+        (rel, metadata["record_id"], metadata["knowledge_kind"], metadata["subject"], metadata["statement"],
+         metadata["scope_text"], metadata["anchors_text"], metadata["status"], metadata["lifecycle_status"]),
+    )
 
 def _insert_chunk(conn: sqlite3.Connection, chunk, info: FileInfo, use_fts: bool) -> None:
     try:
@@ -250,10 +296,19 @@ def _index_file(conn: sqlite3.Connection, config: ContextConfig, info: FileInfo,
         "INSERT INTO files(path, sha256, size, source_kind, weight, priority, synopsis) VALUES (?, ?, ?, ?, ?, ?, '')",
         (info.path, info.sha256, info.size, info.source_kind, info.weight, info.priority),
     )
+    knowledge_metadata = _knowledge_metadata(info.path, text)
+    if knowledge_metadata is not None:
+        _insert_knowledge_semantics(conn, info.path, knowledge_metadata)
     all_chunks = [*regular, *mapped]
     for chunk in all_chunks:
         _insert_chunk(conn, chunk, info, use_fts)
     synopsis_parts = [info.path, info.source_kind]
+    if knowledge_metadata is not None:
+        synopsis_parts.extend((
+            knowledge_metadata["knowledge_kind"], knowledge_metadata["subject"], knowledge_metadata["statement"],
+            knowledge_metadata["scope_text"], knowledge_metadata["anchors_text"], knowledge_metadata["status"],
+            knowledge_metadata["lifecycle_status"],
+        ))
     for chunk in all_chunks:
         synopsis_parts.extend((chunk.kind, chunk.label))
         if chunk.anchor:
@@ -504,8 +559,9 @@ def index_stats(config: ContextConfig) -> dict:
     conn = _connect(config.database)
     try:
         meta = _db_meta(conn)
-        files, chunks, relations = conn.execute(
-            "SELECT (SELECT COUNT(*) FROM files), (SELECT COUNT(*) FROM chunks), (SELECT COUNT(*) FROM file_relations)"
+        files, chunks, relations, knowledge_records = conn.execute(
+            "SELECT (SELECT COUNT(*) FROM files), (SELECT COUNT(*) FROM chunks), "
+            "(SELECT COUNT(*) FROM file_relations), (SELECT COUNT(*) FROM knowledge_semantics)"
         ).fetchone()
         priorities = {str(row[0]): int(row[1]) for row in conn.execute("SELECT priority, COUNT(*) FROM files GROUP BY priority")}
         return {
@@ -516,6 +572,7 @@ def index_stats(config: ContextConfig) -> dict:
             "files": int(files),
             "chunks": int(chunks),
             "relations": int(relations),
+            "knowledgeRecords": int(knowledge_records),
             "priorities": priorities,
             "bytes": config.database.stat().st_size,
         }

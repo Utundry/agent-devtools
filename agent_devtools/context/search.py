@@ -57,6 +57,57 @@ def _estimate_tokens(text: str) -> int:
     return max(1, math.ceil(len(text) / 4))
 
 
+def _row_text(row: sqlite3.Row, key: str) -> str:
+    return str(row[key] or "").casefold() if key in row.keys() else ""
+
+
+def _knowledge_score_parts(row: sqlite3.Row, query: str, tokens: list[str]) -> tuple[float, tuple[str, ...]]:
+    subject = _row_text(row, "knowledge_subject")
+    statement = _row_text(row, "knowledge_statement")
+    scope = _row_text(row, "knowledge_scope")
+    anchors = _row_text(row, "knowledge_anchors")
+    knowledge_kind = _row_text(row, "knowledge_kind")
+    lifecycle = _row_text(row, "knowledge_lifecycle")
+    if not any((subject, statement, scope, anchors, knowledge_kind)):
+        return 0.0, ()
+    q = query.casefold().strip()
+    score = 0.0
+    why: list[str] = []
+    if q and q == subject:
+        score += 90
+        why.append("exact knowledge subject")
+    elif q and q in subject:
+        score += 55
+        why.append("knowledge subject phrase")
+    subject_hits = sum(1 for token in tokens if token in subject)
+    scope_hits = sum(1 for token in tokens if token in scope)
+    anchor_hits = sum(1 for token in tokens if token in anchors)
+    statement_hits = sum(1 for token in tokens if token in statement)
+    kind_hits = sum(1 for token in tokens if token == knowledge_kind)
+    if subject_hits:
+        score += subject_hits * 14
+        why.append(f"{subject_hits} knowledge subject token(s)")
+    if scope_hits:
+        score += scope_hits * 16
+        why.append(f"{scope_hits} knowledge scope token(s)")
+    if anchor_hits:
+        score += anchor_hits * 12
+        why.append(f"{anchor_hits} knowledge anchor token(s)")
+    if statement_hits:
+        score += min(statement_hits, 8) * 4
+        why.append(f"{statement_hits} knowledge statement token(s)")
+    if kind_hits:
+        score += 12
+        why.append("knowledge kind match")
+    if score > 0 and lifecycle == "active":
+        score += 6
+        why.append("active durable knowledge")
+    elif score > 0 and lifecycle in {"superseded", "historical", "rejected"}:
+        score *= 0.35
+        why.append(f"{lifecycle} durable knowledge penalty")
+    return score, tuple(why)
+
+
 def _file_score(row: sqlite3.Row, query: str, tokens: list[str], preferred: set[str], config: ContextConfig) -> float:
     q = query.casefold()
     path = str(row["path"]).casefold()
@@ -69,6 +120,8 @@ def _file_score(row: sqlite3.Row, query: str, tokens: list[str], preferred: set[
         score += 30
     score += sum(10 for token in tokens if token in path)
     score += sum(3 for token in tokens if token in synopsis)
+    knowledge_score, _knowledge_why = _knowledge_score_parts(row, query, tokens)
+    score += knowledge_score
     if str(row["path"]) in preferred:
         score += 35
     score *= weight
@@ -95,6 +148,12 @@ def _score(
     weight = float(row["weight"])
     score = order_bonus * weight
     why: list[str] = []
+    try:
+        fts_rank = float(row["fts_rank"])
+    except (IndexError, KeyError, TypeError, ValueError):
+        fts_rank = 0.0
+    if fts_rank != 0.0:
+        why.append("FTS5 lexical rank")
     if q and anchor == q:
         score += 140 * weight
         why.append("exact semantic anchor")
@@ -122,6 +181,10 @@ def _score(
     if content_hits:
         score += content_hits * 1.5 * weight
         why.append(f"{content_hits} content hit(s)")
+    knowledge_score, knowledge_why = _knowledge_score_parts(row, query, tokens)
+    if knowledge_score:
+        score += knowledge_score * weight
+        why.extend(knowledge_why)
     kind = str(row["kind"])
     if kind in {"semantic", "semantic-selector"}:
         score += 22 * weight
@@ -179,7 +242,20 @@ def _candidate_file_rows(
     preferred_paths: set[str],
     excluded_paths: set[str],
 ) -> list[sqlite3.Row]:
-    rows = [row for row in conn.execute("SELECT * FROM files") if str(row["path"]) not in excluded_paths]
+    rows = [
+        row for row in conn.execute("""
+            SELECT f.*,
+                   k.knowledge_kind AS knowledge_kind,
+                   k.subject AS knowledge_subject,
+                   k.statement AS knowledge_statement,
+                   k.scope_text AS knowledge_scope,
+                   k.anchors_text AS knowledge_anchors,
+                   k.lifecycle_status AS knowledge_lifecycle
+            FROM files f
+            LEFT JOIN knowledge_semantics k ON k.path=f.path
+        """)
+        if str(row["path"]) not in excluded_paths
+    ]
     ranked = sorted(
         ((_file_score(row, query, tokens, preferred_paths, config), row) for row in rows),
         key=lambda pair: (-pair[0], str(pair[1]["path"])),
@@ -201,13 +277,25 @@ def _candidate_chunk_rows(
     if not paths:
         return []
     placeholders = ",".join("?" for _ in paths)
+    knowledge_join = """
+        LEFT JOIN knowledge_semantics k ON k.path=c.path
+    """
+    knowledge_columns = """
+        k.knowledge_kind AS knowledge_kind,
+        k.subject AS knowledge_subject,
+        k.statement AS knowledge_statement,
+        k.scope_text AS knowledge_scope,
+        k.anchors_text AS knowledge_anchors,
+        k.lifecycle_status AS knowledge_lifecycle
+    """
     rows: list[sqlite3.Row] = []
     if use_fts and tokens:
         fts_query = " OR ".join('"' + token.replace('"', '""') + '"' for token in tokens)
         rows = list(conn.execute(
             f"""
-            SELECT c.*, bm25(chunks_fts, 0.0, 2.0, 3.0, 1.0) AS fts_rank
+            SELECT c.*, {knowledge_columns}, bm25(chunks_fts, 0.0, 2.0, 3.0, 1.0) AS fts_rank
             FROM chunks_fts JOIN chunks c ON c.chunk_id = chunks_fts.chunk_id
+            {knowledge_join}
             WHERE chunks_fts MATCH ? AND c.path IN ({placeholders})
             ORDER BY fts_rank ASC, c.path, c.start_line
             LIMIT ?
@@ -216,12 +304,14 @@ def _candidate_chunk_rows(
         ))
     if not rows:
         rows = list(conn.execute(
-            f"SELECT *, 0.0 AS fts_rank FROM chunks WHERE path IN ({placeholders}) ORDER BY path,start_line,chunk_id",
+            f"SELECT c.*, {knowledge_columns}, 0.0 AS fts_rank FROM chunks c {knowledge_join} WHERE c.path IN ({placeholders}) ORDER BY c.path,c.start_line,c.chunk_id",
             tuple(paths),
         ))
         if tokens:
             rows = [row for row in rows if any(
-                token in (str(row["path"]) + " " + str(row["label"]) + " " + str(row["selector"] or "") + " " + str(row["content"])).casefold()
+                token in (str(row["path"]) + " " + str(row["label"]) + " " + str(row["selector"] or "") + " " + str(row["content"])
+                          + " " + _row_text(row, "knowledge_subject") + " " + _row_text(row, "knowledge_statement")
+                          + " " + _row_text(row, "knowledge_scope") + " " + _row_text(row, "knowledge_anchors")).casefold()
                 for token in tokens
             )]
     # Keep a few strong chunks from every selected file instead of letting one
@@ -299,7 +389,7 @@ def query_context(
         if required_identity_set:
             placeholders = ",".join("?" for _ in required_identity_set)
             exact_rows = list(conn.execute(
-                f"SELECT *, 0.0 AS fts_rank FROM chunks WHERE chunk_id IN ({placeholders}) OR anchor IN ({placeholders}) ORDER BY path,start_line,chunk_id",
+                f"SELECT c.*, k.knowledge_kind AS knowledge_kind, k.subject AS knowledge_subject, k.statement AS knowledge_statement, k.scope_text AS knowledge_scope, k.anchors_text AS knowledge_anchors, k.lifecycle_status AS knowledge_lifecycle, 0.0 AS fts_rank FROM chunks c LEFT JOIN knowledge_semantics k ON k.path=c.path WHERE c.chunk_id IN ({placeholders}) OR c.anchor IN ({placeholders}) ORDER BY c.path,c.start_line,c.chunk_id",
                 (*sorted(required_identity_set), *sorted(value.removeprefix("semantic:") for value in required_identity_set)),
             ))
             for row in exact_rows:
@@ -313,7 +403,7 @@ def query_context(
             if any(str(row["path"]) == path for row in candidates):
                 continue
             direct = list(conn.execute(
-                "SELECT *, 0.0 AS fts_rank FROM chunks WHERE path=? ORDER BY CASE WHEN kind='window' THEN 1 ELSE 0 END,start_line,chunk_id LIMIT 8",
+                "SELECT c.*, k.knowledge_kind AS knowledge_kind, k.subject AS knowledge_subject, k.statement AS knowledge_statement, k.scope_text AS knowledge_scope, k.anchors_text AS knowledge_anchors, k.lifecycle_status AS knowledge_lifecycle, 0.0 AS fts_rank FROM chunks c LEFT JOIN knowledge_semantics k ON k.path=c.path WHERE c.path=? ORDER BY CASE WHEN c.kind='window' THEN 1 ELSE 0 END,c.start_line,c.chunk_id LIMIT 8",
                 (path,),
             ))
             for row in direct:
