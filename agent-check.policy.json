@@ -97,6 +97,7 @@
         "agent_devtools/preserve.py",
         "agent_devtools/profiles.py",
         "agent_devtools/project_overview.py",
+        "agent_devtools/ui.py",
         "agent_devtools/self_update.py",
         "agent_devtools/update_scenario.py",
         "agent_devtools/shell.py",

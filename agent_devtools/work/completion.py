@@ -39,8 +39,38 @@ def _git_head_commit_epoch(root: Path) -> int | None:
         return None
     try:
         return int(completed.stdout.strip())
-    except ValueError:
+    except (TypeError, ValueError):
         return None
+
+
+def _git_head_reflog_subject(root: Path) -> str | None:
+    try:
+        completed = subprocess.run(
+            ["git", "reflog", "-1", "--format=%gs", "HEAD"],
+            cwd=str(root),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if completed.returncode != 0:
+        return None
+    subject = completed.stdout.strip()
+    return subject or None
+
+
+def _head_transition_is_local_commit(root: Path) -> bool:
+    subject = _git_head_reflog_subject(root)
+    return bool(subject) and subject.startswith((
+        "commit:",
+        "commit (amend):",
+        "commit (initial):",
+    ))
 
 
 def _task_activity_epoch(state: dict[str, Any]) -> float | None:
@@ -68,6 +98,8 @@ def _require_current_task(root: Path, state: dict[str, Any], *, development: boo
     head_epoch = _git_head_commit_epoch(root)
     task_epoch = _task_activity_epoch(state)
     if head_epoch is None or task_epoch is None or task_epoch >= head_epoch:
+        return
+    if _head_transition_is_local_commit(root):
         return
     goal = str(state.get("goal") or "").strip()
     raise TaskStateError(

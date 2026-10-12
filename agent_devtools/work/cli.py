@@ -17,6 +17,7 @@ from .semantic_closeout import semantic_checkpoint
 from .verification import RESEARCH_CHECKS, VerificationError, latest_verification, record_verification, verification_history, verification_status, record_research_bundle, run_verification_command
 from .sources import SourceError, add_source, list_sources
 from agent_devtools.profiles import ProfileError, load_profile
+from agent_devtools.ui import is_verbose
 from agent_devtools.work.context_projection import ContextProjectionError, context_efficiency_status, prepare_context
 
 
@@ -935,6 +936,17 @@ def main_begin(root: Path, args: argparse.Namespace) -> int:
         return 2
     if args.json_output:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
+    elif not is_verbose(root):
+        context_summary = "off" if projection is None else str(projection.get("selectedRecords", 0))
+        print(
+            f"BEGIN: {entry['action']} · "
+            f"alignment={'ready' if entry['alignmentReady'] else 'pending'} · "
+            f"knowledge={payload['knowledge']['records']} · context={context_summary}"
+        )
+        if payload["recovery"]["mode"] == "active-task-resume":
+            print("  interruption recovery: active task resumed from project state")
+            print("  project task state is authoritative; do not reconstruct progress from chat memory")
+        print(f"  next: {payload['nextAction']}")
     else:
         print(
             f"BEGIN: {entry['action']} · "

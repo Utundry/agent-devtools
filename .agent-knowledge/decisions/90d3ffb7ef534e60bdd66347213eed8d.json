@@ -1,0 +1,31 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "90d3ffb7ef534e60bdd66347213eed8d",
+  "kind": "decision",
+  "subject": "ui/verbosity",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Human CLI verbosity is a presentation policy, not a workflow/data contract: project config ui.verbosity supports compact|verbose, defaults fail-soft to compact, and machine-readable --json output remains full regardless of verbosity.",
+  "scope": [
+    "agent_devtools/ui.py",
+    "agent_devtools/work/cli.py",
+    "agent_devtools/bootstrap.py",
+    "tests"
+  ],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "629dd537-27eb-4f42-a7c6-dbf5fe1abef6",
+    "taskGoal": "Add configurable compact/verbose human output without changing machine-readable JSON contracts",
+    "eventId": "d3ea144336b94a51b08358a831665b01"
+  },
+  "taskId": "629dd537-27eb-4f42-a7c6-dbf5fe1abef6",
+  "taskGoal": "Add configurable compact/verbose human output without changing machine-readable JSON contracts",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-12T08:54:39Z",
+  "updatedAtUtc": "2026-10-12T08:54:39Z"
+}

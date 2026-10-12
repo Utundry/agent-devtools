@@ -536,6 +536,7 @@ def _neutral_workspace_config(profile_id: str) -> dict[str, Any]:
     return {
         "version": 1,
         "work": {"profile": profile_id},
+        "ui": {"verbosity": "compact"},
         "ignore": [
             ".git/**", ".agent-cache/**", ".agent-work/**", "**/__pycache__/**",
             "node_modules/**", "vendor/**", "dist/**", "build/**", "coverage/**"
