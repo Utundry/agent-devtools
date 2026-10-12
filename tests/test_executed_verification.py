@@ -86,6 +86,17 @@ class ExecutedVerificationTests(unittest.TestCase):
         self.assertTrue(args.argv)
         self.assertIn("argument with spaces", args.argv)
 
+    def test_work_complete_parser_accepts_verify_separator_and_direct_argv(self) -> None:
+        args = parser().parse_args([
+            "work", "complete", "--verify-label", "unit", "--verify", "--",
+            sys.executable, "-c", "print('ok')",
+        ])
+        self.assertEqual("complete", args.work_command)
+        self.assertTrue(args.verify)
+        self.assertEqual("unit", args.verify_label)
+        self.assertEqual("--", args.verify_argv[0])
+        self.assertIn(sys.executable, args.verify_argv)
+
     def test_history_is_bounded_and_newest_first(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)

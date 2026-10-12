@@ -10,10 +10,10 @@ from agent_devtools.check import cli as check_cli
 from agent_devtools.check.changes import git_changed_files
 from agent_devtools.profiles import ProfileError, load_profile
 from agent_devtools.check.freshness import validated_check_report
-from .knowledge import validate_knowledge
-from .semantic_closeout import require_semantic_closeout
+from .knowledge import remember as remember_knowledge, validate_knowledge
+from .semantic_closeout import require_semantic_closeout, semantic_checkpoint
 from .state import TaskStateError, complete_task, load_task_state, task_alignment_ready
-from .verification import latest_verification
+from .verification import latest_verification, run_verification_command
 
 _PASS_STATUSES = {"pass", "passed", "success", "ok"}
 
@@ -50,6 +50,41 @@ def _run_development_verification(root: Path, *, no_cache: bool, resume: bool) -
         code = check_cli.command_run(root, args)
     return code, output.getvalue().strip()
 
+def _promote_required_semantics(root: Path) -> tuple[dict[str, Any], list[str]]:
+    report = semantic_checkpoint(root)
+    promoted: list[str] = []
+    for item in report["requiredPromotions"]:
+        record = remember_knowledge(root, event_id=str(item["eventId"]))
+        promoted.append(str(record["id"]))
+    if promoted:
+        report = semantic_checkpoint(root)
+    if report["requiredPromotions"]:
+        missing = ", ".join(
+            f"{item['kind']}:{item['subject']}" for item in report["requiredPromotions"][:5]
+        )
+        raise TaskStateError(
+            "cannot complete work because required durable semantics remain after automatic promotion: "
+            + missing
+        )
+    return report, promoted
+
+
+def _executed_verification_covers_affected(item: dict[str, Any] | None) -> bool:
+    if not item or str(item.get("status") or "").lower() not in _PASS_STATUSES:
+        return False
+    if str(item.get("sourceFreshness") or "") != "current":
+        return False
+    relevance = item.get("relevance") if isinstance(item.get("relevance"), dict) else {}
+    suite = str(relevance.get("suite") or "")
+    selected = [str(value) for value in relevance.get("selectedSuites", [])]
+    return (
+        relevance.get("status") == "relevant"
+        and bool(suite)
+        and selected == [suite]
+        and not bool(relevance.get("fallbackFull"))
+    )
+
+
 def complete_work(
     root: Path,
     *,
@@ -57,6 +92,10 @@ def complete_work(
     run_verification: bool = True,
     no_cache: bool = False,
     resume: bool = False,
+    verification_command: list[str] | tuple[str, ...] | None = None,
+    verification_label: str = "completion-command",
+    verification_timeout: float | None = None,
+    verification_output_limit: int = 1600,
 ) -> dict[str, Any]:
     state = _require_ready_task(root)
     knowledge = validate_knowledge(root)
@@ -64,50 +103,98 @@ def complete_work(
         raise TaskStateError(
             "cannot complete work while durable knowledge has conflicts or dangling supersedes"
         )
-    try:
-        semantic = require_semantic_closeout(root)
-    except TaskStateError as exc:
-        raise TaskStateError(
-            str(exc)
-            + "\nNext: run `agent cognition checkpoint` to review durable candidates; "
-              "if the REQUIRED candidates are correct, run `agent cognition checkpoint --promote-required`, "
-              "then retry `agent work complete`."
-        ) from exc
+
+    adaptive = bool(verification_command)
+    semantic_promotions: list[str] = []
+    executed: dict[str, Any] | None = None
+
+    if not adaptive:
+        try:
+            semantic = require_semantic_closeout(root)
+        except TaskStateError as exc:
+            raise TaskStateError(
+                str(exc)
+                + "\nNext: run `agent cognition checkpoint` to review durable candidates; "
+                  "if the REQUIRED candidates are correct, run `agent cognition checkpoint --promote-required`, "
+                  "then retry `agent work complete`."
+            ) from exc
+
     try:
         profile = load_profile(root)
     except ProfileError as exc:
         raise TaskStateError(str(exc)) from exc
 
+    if adaptive and profile.profile_id == "research":
+        raise TaskStateError(
+            "work complete --verify does not replace structured research verification; "
+            "run `agent verify research`, then `agent work complete`"
+        )
+
     verification_performed = False
     verification_output = ""
     verification_action = "recorded"
     verification_reason = "Explicit profile-appropriate verification record"
-    if profile.verification_mode == "check":
-        latest = None
-        verification_action = "reused"
-        verification_reason = "Current successful check covers this task and project state"
-        if not run_verification or not (no_cache or resume):
-            try:
-                latest = validated_check_report(root, state)
-            except TaskStateError as exc:
-                if not run_verification:
-                    raise
-                verification_reason = str(exc)
-        else:
-            verification_reason = "Explicit verification rerun requested"
-        if latest is None:
-            code, verification_output = _run_development_verification(
-                root, no_cache=no_cache, resume=resume
+
+    if adaptive:
+        executed_raw = run_verification_command(
+            root,
+            command=verification_command or (),
+            label=verification_label,
+            timeout=verification_timeout,
+            output_limit=verification_output_limit,
+        )
+        verification_performed = True
+        verification_action = "executed-command"
+        verification_reason = "Explicit completion command executed by Agent DevTools"
+        if str(executed_raw.get("status") or "").lower() not in _PASS_STATUSES:
+            raise TaskStateError(
+                f"completion verification command failed with exit code {executed_raw.get('exitCode')}"
             )
-            verification_performed = True
-            verification_action = "executed"
-            if code != 0:
-                detail = f": {verification_output}" if verification_output else ""
-                raise TaskStateError(f"development verification failed with exit code {code}{detail}")
-            latest = validated_check_report(root, state)
+        executed = latest_verification(root) or executed_raw
+        semantic, semantic_promotions = _promote_required_semantics(root)
+        knowledge = validate_knowledge(root)
+        if not knowledge.get("ok"):
+            raise TaskStateError(
+                "cannot complete work while durable knowledge has conflicts or dangling supersedes"
+            )
+
+    if profile.verification_mode == "check":
+        latest = executed if _executed_verification_covers_affected(executed) else None
+        if latest is not None:
+            verification_action = "executed-command"
+            verification_reason = "Executed command exactly covers the full affected verification plan"
+        else:
+            if adaptive:
+                verification_reason = (
+                    "Explicit command did not prove full affected-plan coverage; "
+                    "project verification is still required"
+                )
+            else:
+                verification_action = "reused"
+                verification_reason = "Current successful check covers this task and project state"
+            if not run_verification or not (no_cache or resume):
+                try:
+                    latest = validated_check_report(root, state)
+                except TaskStateError as exc:
+                    if not run_verification:
+                        raise
+                    verification_reason = str(exc)
+            else:
+                verification_reason = "Explicit verification rerun requested"
+            if latest is None:
+                code, verification_output = _run_development_verification(
+                    root, no_cache=no_cache, resume=resume
+                )
+                verification_performed = True
+                verification_action = "executed"
+                if code != 0:
+                    detail = f": {verification_output}" if verification_output else ""
+                    raise TaskStateError(f"development verification failed with exit code {code}{detail}")
+                latest = validated_check_report(root, state)
     else:
+        candidate = executed if adaptive else latest_verification(root)
         try:
-            latest = _require_fresh_success(state, latest_verification(root), "verification record")
+            latest = _require_fresh_success(state, candidate, "verification record")
         except TaskStateError as exc:
             if profile.profile_id == "research":
                 raise TaskStateError(
@@ -133,6 +220,7 @@ def complete_work(
         "verificationOutput": verification_output,
         "knowledgeValidation": knowledge,
         "semanticCloseout": semantic,
+        "semanticPromotions": semantic_promotions,
         "latestVerification": latest,
         "task": task,
     }

@@ -68,6 +68,77 @@ class WorkCompletionTests(unittest.TestCase):
         finally:
             tmp.cleanup()
 
+    def test_adaptive_completion_promotes_required_semantics_after_executed_pass(self) -> None:
+        tmp, root = self.make_root("general")
+        try:
+            self.ready(root)
+            required = {
+                "requiredPromotions": [
+                    {
+                        "eventId": "evt-1",
+                        "kind": "decision",
+                        "subject": "architecture",
+                        "text": "keep direct argv",
+                    }
+                ]
+            }
+            clean = {
+                "requiredPromotions": [],
+                "advisoryCandidates": [],
+                "sessionOnlyEvents": [],
+                "clean": True,
+            }
+            executed = {
+                "status": "pass",
+                "exitCode": 0,
+                "completedAtUtc": "9999-12-31T23:59:59+00:00",
+            }
+            with patch(
+                "agent_devtools.work.completion.run_verification_command",
+                return_value=executed,
+            ), patch(
+                "agent_devtools.work.completion.latest_verification",
+                return_value=None,
+            ), patch(
+                "agent_devtools.work.completion.semantic_checkpoint",
+                side_effect=[required, clean],
+            ), patch(
+                "agent_devtools.work.completion.remember_knowledge",
+                return_value={"id": "knowledge-1"},
+            ) as remember:
+                payload = complete_work(
+                    root,
+                    verification_command=["python", "-m", "unittest"],
+                    verification_label="unit",
+                )
+            remember.assert_called_once_with(root, event_id="evt-1")
+            self.assertEqual(["knowledge-1"], payload["semanticPromotions"])
+            self.assertEqual("executed-command", payload["verificationAction"])
+            self.assertEqual("completed", payload["task"]["status"])
+        finally:
+            tmp.cleanup()
+
+    def test_failed_adaptive_command_does_not_promote_or_finish(self) -> None:
+        tmp, root = self.make_root("general")
+        try:
+            self.ready(root)
+            with patch(
+                "agent_devtools.work.completion.run_verification_command",
+                return_value={
+                    "status": "fail",
+                    "exitCode": 7,
+                    "completedAtUtc": "9999-12-31T23:59:59+00:00",
+                },
+            ), patch(
+                "agent_devtools.work.completion.remember_knowledge",
+            ) as remember:
+                with self.assertRaisesRegex(TaskStateError, "completion verification command failed"):
+                    complete_work(root, verification_command=["python", "bad.py"])
+            remember.assert_not_called()
+            self.assertEqual("active", load_task_state(root)["status"])
+        finally:
+            tmp.cleanup()
+
     def test_failed_dev_verification_does_not_finish(self) -> None:
         tmp, root = self.make_root("development")
         try:

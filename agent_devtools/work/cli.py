@@ -1011,11 +1011,16 @@ def configure_work_parser(parser: argparse.ArgumentParser) -> None:
     status.add_argument("--no-context", action="store_true")
     status.add_argument("--json", action="store_true", dest="json_output")
 
-    complete = sub.add_parser("complete", help="reuse current PASS or run required checks, then finish")
+    complete = sub.add_parser("complete", help="adaptively verify, close semantic requirements, and finish")
     complete.add_argument("--summary")
     complete.add_argument("--no-cache", action="store_true", help="force selected checks to execute even when current PASS exists")
     complete.add_argument("--resume", action="store_true", help="resume compatible development verification chunks")
+    complete.add_argument("--verify", action="store_true", help="execute the command after `--` before adaptive completion")
+    complete.add_argument("--verify-label", default="completion-command", help="label for the explicit completion command")
+    complete.add_argument("--verify-timeout", type=float, default=None, help="optional timeout for the explicit completion command")
+    complete.add_argument("--verify-output-limit", type=int, default=1600, help="captured preview characters per stream for the explicit completion command")
     complete.add_argument("--json", action="store_true", dest="json_output")
+    complete.add_argument("verify_argv", nargs=argparse.REMAINDER, help="command argv after `--`; executed directly without a shell")
 
     finish = sub.add_parser("finish", help="advanced no-execution primitive; routine agents should use cognition checkpoint then work complete")
     finish.add_argument("--summary")
@@ -1099,12 +1104,23 @@ def main_work(root: Path, args: argparse.Namespace) -> int:
             payload = build_brief(root, mode="work", budget=args.budget,
                                   include_context=not args.no_context, before_root=args.before)
         elif args.work_command == "complete":
+            verify_argv = list(args.verify_argv or [])
+            if verify_argv and verify_argv[0] == "--":
+                verify_argv = verify_argv[1:]
+            if args.verify and not verify_argv:
+                raise TaskStateError("work complete --verify requires a command after `--`")
+            if not args.verify and verify_argv:
+                raise TaskStateError("command argv requires explicit `work complete --verify -- <command>`")
             payload = complete_work(
                 root,
                 summary=args.summary,
                 run_verification=True,
                 no_cache=bool(args.no_cache),
                 resume=bool(args.resume),
+                verification_command=verify_argv or None,
+                verification_label=args.verify_label,
+                verification_timeout=args.verify_timeout,
+                verification_output_limit=args.verify_output_limit,
             )
         elif args.work_command == "finish":
             payload = complete_work(root, summary=args.summary, run_verification=False)
@@ -1162,6 +1178,7 @@ def main_work(root: Path, args: argparse.Namespace) -> int:
         print(f"  verification: {action}")
         if payload.get("verificationPerformed") and payload.get("verificationOutput"):
             print("  " + payload["verificationOutput"].replace("\n", "\n  "))
+        print(f"  durable promotions: {len(payload.get('semanticPromotions', []))}")
         print(f"  knowledge: {'PASS' if payload['knowledgeValidation']['ok'] else 'RECONCILE'}")
     elif args.work_command == "enter":
         print(
