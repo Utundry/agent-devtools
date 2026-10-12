@@ -80,8 +80,10 @@ def configure_verify_parser(parser: argparse.ArgumentParser) -> None:
     run.add_argument("--output-limit", type=int, default=1600, help="maximum UTF-8 preview characters retained per stream")
     run.add_argument("--json", action="store_true", dest="json_output")
     run.add_argument("argv", nargs=argparse.REMAINDER, help="command argv after `--`; executed directly without a shell")
-    status = sub.add_parser("status", help="show latest profile-neutral verification evidence")
+    status = sub.add_parser("status", help="show latest verification evidence; compact machine views are available for large dirty worktrees")
     status.add_argument("--preview", action="store_true", help="show a compact captured stdout/stderr preview when available")
+    status.add_argument("--summary", action="store_true", help="emit a compact latest-record view without per-file or changed-file arrays")
+    status.add_argument("--no-files", action="store_true", help="omit per-file source hash arrays while preserving the rest of the record")
     status.add_argument("--json", action="store_true", dest="json_output")
     history = sub.add_parser("history", help="show recent verification records, newest first")
     history.add_argument("--limit", type=int, default=5)
@@ -202,14 +204,90 @@ def _verify_summary(root: Path, args: argparse.Namespace) -> str:
         raise VerificationError(f"cannot read verification summary file: {exc}") from exc
 
 
-def _compact_verification_preview(item: dict, *, limit: int = 240) -> str:
-    raw = str(item.get("stderrPreview") or item.get("stdoutPreview") or "").strip()
+def _compact_verification_preview(
+    item: dict,
+    *,
+    limit: int = 240,
+    prefer_stdout: bool = False,
+) -> str:
+    first = "stdoutPreview" if prefer_stdout else "stderrPreview"
+    second = "stderrPreview" if prefer_stdout else "stdoutPreview"
+    raw = str(item.get(first) or item.get(second) or "").strip()
     if not raw:
         return ""
     compact = " ⏎ ".join(part.strip() for part in raw.splitlines() if part.strip())
     if len(compact) <= limit:
         return compact
     return compact[:limit].rstrip() + " …"
+
+
+def _verification_without_file_rows(item: dict) -> dict:
+    compact = dict(item)
+    binding = item.get("sourceBinding")
+    if isinstance(binding, dict):
+        binding_copy = dict(binding)
+        state = binding.get("state")
+        if isinstance(state, dict):
+            state_copy = dict(state)
+            state_copy.pop("files", None)
+            binding_copy["state"] = state_copy
+        compact["sourceBinding"] = binding_copy
+    current = item.get("currentSourceState")
+    if isinstance(current, dict):
+        current_copy = dict(current)
+        current_copy.pop("files", None)
+        compact["currentSourceState"] = current_copy
+    return compact
+
+
+def _verification_summary_item(item: dict) -> dict:
+    keys = (
+        "id", "label", "status", "assessmentStatus", "verificationKind",
+        "completedAtUtc", "summary", "command", "cwd", "exitCode", "timedOut",
+        "timeoutSeconds", "durationMs", "stdoutBytes", "stderrBytes",
+        "stdoutSha256", "stderrSha256", "sourceFreshness",
+    )
+    compact = {key: item[key] for key in keys if key in item}
+    binding = item.get("sourceBinding")
+    if isinstance(binding, dict):
+        state = binding.get("state") if isinstance(binding.get("state"), dict) else {}
+        compact["sourceBinding"] = {
+            "beforeFingerprint": binding.get("beforeFingerprint"),
+            "afterFingerprint": binding.get("afterFingerprint"),
+            "changedDuringExecution": bool(binding.get("changedDuringExecution")),
+            "changedFileCount": len(state.get("changedFiles") or []),
+        }
+    current = item.get("currentSourceState")
+    if isinstance(current, dict):
+        compact["currentSourceState"] = {
+            "available": bool(current.get("available")),
+            "gitHead": current.get("gitHead"),
+            "fingerprint": current.get("fingerprint"),
+            "changedFileCount": len(current.get("changedFiles") or []),
+        }
+    relevance = item.get("relevance")
+    if isinstance(relevance, dict):
+        compact["relevance"] = {
+            "status": relevance.get("status"),
+            "reason": relevance.get("reason"),
+            "suite": relevance.get("suite"),
+            "selectedSuiteCount": len(relevance.get("selectedSuites") or []),
+            "fallbackFull": bool(relevance.get("fallbackFull")),
+            "fallbackReasons": list(relevance.get("fallbackReasons") or []),
+        }
+    return compact
+
+
+def _verification_status_view(payload: dict, *, summary: bool, no_files: bool) -> dict:
+    result = dict(payload)
+    latest = payload.get("latest")
+    if not isinstance(latest, dict):
+        return result
+    if summary:
+        result["latest"] = _verification_summary_item(latest)
+    elif no_files:
+        result["latest"] = _verification_without_file_rows(latest)
+    return result
 
 
 def main_verify(root: Path, args: argparse.Namespace) -> int:
@@ -269,7 +347,12 @@ def main_verify(root: Path, args: argparse.Namespace) -> int:
                     "contextWarnings": context_warnings,
                 }
         elif args.verify_command == "status":
-            payload = {"format": "agent-devtools-verification", "formatVersion": 1, **verification_status(root)}
+            raw_status = {"format": "agent-devtools-verification", "formatVersion": 1, **verification_status(root)}
+            payload = _verification_status_view(
+                raw_status,
+                summary=bool(getattr(args, "summary", False)),
+                no_files=bool(getattr(args, "no_files", False)),
+            )
         else:
             payload = {"format": "agent-devtools-verification-history", "formatVersion": 1, **verification_history(root, limit=args.limit)}
     except VerificationError as exc:
@@ -332,8 +415,17 @@ def main_verify(root: Path, args: argparse.Namespace) -> int:
                     print("warning: source state changed after this verification")
                 elif relevance.get("status") == "unrelated":
                     print("warning: configured suite is not selected for the current affected change set")
-            if getattr(args, "preview", False) or str(item.get("status") or "").lower() == "fail":
-                preview = _compact_verification_preview(item)
+            show_preview = (
+                bool(getattr(args, "preview", False))
+                or args.verify_command == "run"
+                or str(item.get("status") or "").lower() == "fail"
+            )
+            if show_preview:
+                prefer_stdout = (
+                    args.verify_command == "run"
+                    and str(item.get("status") or "").lower() == "pass"
+                )
+                preview = _compact_verification_preview(item, prefer_stdout=prefer_stdout)
                 if preview:
                     print(f"preview: {preview}")
         else:
@@ -370,8 +462,11 @@ def configure_cognition_parser(parser: argparse.ArgumentParser) -> None:
     batch_source.add_argument("--from-file", type=Path, help="read a UTF-8 JSON event array from a file")
     batch.add_argument("--json", action="store_true", dest="json_output")
 
-    resolve = sub.add_parser("resolve-blocker", help="resolve an exact recorded blocker")
-    resolve.add_argument("text")
+    resolve = sub.add_parser("resolve-blocker", help="resolve an exact recorded blocker; robust UTF-8 text transports are supported")
+    resolve.add_argument("text", nargs="?", help="exact blocker text for short shell-safe values")
+    resolve.add_argument("--text", dest="text_option", help="alias for short exact blocker text")
+    resolve.add_argument("--stdin", action="store_true", dest="stdin_input", help="read exact UTF-8 blocker text from stdin")
+    resolve.add_argument("--from-file", type=Path, help="read exact UTF-8 blocker text from a file")
     resolve.add_argument("--json", action="store_true", dest="json_output")
     status = sub.add_parser("status", help="show compact cognition state")
     status.add_argument("--json", action="store_true", dest="json_output")
@@ -762,7 +857,7 @@ def main_cognition(root: Path, args: argparse.Namespace) -> int:
             return 0 if payload["clean"] else 1
         subject = str(getattr(args, "subject", "") or "").strip()
         semantic_text = ""
-        if args.cognition_command not in {"status", "resolve-blocker"}:
+        if args.cognition_command != "status":
             semantic_text = _cognition_text(root, args)
         if args.cognition_command == "status":
             state = load_task_state(root)
@@ -799,7 +894,7 @@ def main_cognition(root: Path, args: argparse.Namespace) -> int:
             elif args.cognition_command == "blocker":
                 kwargs["add_blockers"] = [semantic_text]
             elif args.cognition_command == "resolve-blocker":
-                kwargs["resolve_blockers"] = [args.text]
+                kwargs["resolve_blockers"] = [semantic_text]
             if subject and subject_key:
                 kwargs["semantic_subjects"] = {subject_key: subject}
             state = update_task(root, **kwargs)

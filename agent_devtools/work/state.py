@@ -325,7 +325,16 @@ def update_task(
                     new_events.append((semantic_kind[key], item, str(subjects.get(key) or "").strip()))
     resolved = set(_strings(resolve_blockers))
     if resolved:
-        state["blockers"] = [item for item in state.get("blockers", []) if item not in resolved]
+        current_blockers = list(state.get("blockers", []))
+        missing = sorted(resolved - set(current_blockers))
+        if missing:
+            available = "; ".join(current_blockers) if current_blockers else "none"
+            raise TaskStateError(
+                "cannot resolve blocker because the exact recorded blocker was not found: "
+                + "; ".join(missing)
+                + f". Current unresolved blockers: {available}"
+            )
+        state["blockers"] = [item for item in current_blockers if item not in resolved]
     if summary is not None:
         state["summary"] = summary.strip()
     if next_step is not None:

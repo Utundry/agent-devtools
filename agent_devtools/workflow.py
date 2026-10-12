@@ -8,7 +8,7 @@ from typing import Any
 from . import __version__
 from .profiles import load_profile
 
-CLI_CONTRACT_VERSION = 39
+CLI_CONTRACT_VERSION = 40
 WORKFLOW_CONTRACT_VERSION = 23
 
 
@@ -350,6 +350,15 @@ _CAPABILITY_RELEASE_CHANGES: dict[str, list[str]] = {
         "self-update.fresh-runtime-command-handoff",
         "self-update.nonblocking-reentry-fallback",
     ],
+    "0.16.39": [
+        "verification.status-summary",
+        "verification.status-no-files",
+        "verification.run-success-preview",
+        "cognition.resolve-blocker-fail-closed",
+        "cognition.resolve-blocker-utf8-input",
+        "workflow.semantic-text-transport-guidance",
+        "workflow.failure-equivalence-guidance",
+    ],
 }
 
 
@@ -445,7 +454,7 @@ def capabilities(root: Path) -> dict[str, Any]:
             "selfUpdate": {"available": True, "latestDiscovery": True, "explicitVersion": True, "checkOnly": True, "freshDownload": True, "identityVerified": True, "periodicFreshness": True, "modes": ["off", "notify", "auto"], "ttlCache": True, "routineHooks": ["begin", "doctor"], "freshRuntimeCommandHandoff": True, "nonBlockingReentryFallback": True, "daemon": False},
             "begin": {"available": True, "canonicalRoutineEntry": True, "usesWorkEnter": True, "durableContextProjection": True, "knowledgeHealth": True, "interruptionResume": True, "resumeWithoutGoal": True, "ordinaryFollowupReentryRequired": False, "interruptionRecoveryOnly": True, "profileHintCompatibility": True, "conversationMemoryAuthoritative": False, "projectStateAuthoritative": True, "newStateModel": False},
             "work": {"enter": True, "start": True, "align": True, "status": True, "complete": True, "finish": True, "report": True, "reportReadOnly": True, "oneActionEntry": True, "handoffEntry": True, "routineEntryFastPath": True, "alignmentPendingOptOut": True, "userApprovalRequiresRecordedGap": True, "oneActionCompletion": True, "adaptiveExecutedCompletion": True, "requiredSemanticAutoPromotionExplicitPath": True, "explicitEntryFreshnessMarker": True, "obviousStaleTaskCompletionGuard": True, "automaticVerificationReuse": True, "baselineWhenUnverified": True, "taskGapGate": True, "noGapFastPath": True, "semanticCloseout": True},
-            "cognition": {"observation": True, "decision": True, "finding": True, "assumption": True, "requirement": not profile.development, "openQuestion": not profile.development, "evidence": not profile.development, "blocker": True, "resolveBlocker": True, "batch": True, "batchDistinctEvents": True, "batchPerEventSource": True, "batchPreferredForMultiple": True, "toolFailure": True, "toolFailureRetryCeiling": 2, "toolFailureOptionalNonBlocking": True, "toolFailureMandatoryBlocks": True, "status": True, "checkpoint": True, "checkpointPromoteRequired": True, "textOptionAlias": True, "stdin": True, "fromFile": True, "utf8BulkCapture": True, "naturalGuessHints": True, "checkpointSessionOnlyClassification": True, "appendOnlyJournal": True, "possibleStaleCognition": True, "compactHumanOutput": True, "oneLineSuccess": True},
+            "cognition": {"observation": True, "decision": True, "finding": True, "assumption": True, "requirement": not profile.development, "openQuestion": not profile.development, "evidence": not profile.development, "blocker": True, "resolveBlocker": True, "resolveBlockerFailClosed": True, "resolveBlockerStdin": True, "resolveBlockerFromFile": True, "batch": True, "batchDistinctEvents": True, "batchPerEventSource": True, "batchPreferredForMultiple": True, "toolFailure": True, "toolFailureRetryCeiling": 2, "toolFailureOptionalNonBlocking": True, "toolFailureMandatoryBlocks": True, "status": True, "checkpoint": True, "checkpointPromoteRequired": True, "textOptionAlias": True, "stdin": True, "fromFile": True, "utf8BulkCapture": True, "naturalGuessHints": True, "checkpointSessionOnlyClassification": True, "appendOnlyJournal": True, "possibleStaleCognition": True, "compactHumanOutput": True, "oneLineSuccess": True},
             "overheadMetrics": {"passive": True, "storage": ".agent-work/cli-overhead.jsonl + .agent-work/context-usage.sqlite3", "cliCalls": True, "durationMs": True, "stdoutBytes": True, "exitCode": True, "contextTokens": True, "retrievalReferenceRate": True, "repeatProjectionDetection": True, "noRoutineCommand": True},
             "projectOverview": {"available": True, "readOnly": True, "humanReadable": True, "json": True, "aggregatesExistingStateOnly": True, "noDashboardService": True},
             "knowledge": {"promote": True, "remember": True, "why": True, "lifecycle": True, "supersede": True, "validate": True, "status": True, "researchKinds": not profile.development, "softContradictionWarnings": True, "promotionRequired": False, "routineDirectPromote": False, "checkpointAuthority": True, "canonicalStore": ".agent-knowledge", "durableSqlite": False},
@@ -469,6 +478,9 @@ def capabilities(root: Path) -> dict[str, Any]:
                 "run": True,
                 "history": True,
                 "statusPreview": True,
+                "statusSummary": True,
+                "statusNoFiles": True,
+                "runSuccessPreview": True,
                 "summaryFromFile": True,
                 "executedEvidence": True,
                 "executedEvidenceReferences": True,

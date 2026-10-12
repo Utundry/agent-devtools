@@ -114,8 +114,15 @@ def _require_ready_task(root: Path) -> dict[str, Any]:
     state = load_task_state(root)
     if state is None:
         raise TaskStateError("no task state exists; use work start first")
-    if state.get("blockers"):
-        raise TaskStateError("cannot complete work with unresolved blockers")
+    blockers = [str(item) for item in state.get("blockers", []) if str(item).strip()]
+    if blockers:
+        listed = "\n".join(f"  - {item}" for item in blockers)
+        raise TaskStateError(
+            "cannot complete work with unresolved blockers:\n"
+            + listed
+            + "\nNext: resolve each exact blocker with `agent cognition resolve-blocker --stdin` "
+              "(or `--from-file` for file-backed text), then retry `agent work complete`."
+        )
     if not task_alignment_ready(state):
         raise TaskStateError("cannot complete work before the task-gap alignment gate is ready")
     return state
