@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import subprocess
+import tempfile
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -55,9 +56,25 @@ def _infer_target(kit_root: Path, explicit: str | None) -> tuple[Path | None, li
     return None, ["no unambiguous workspace root found near the kit"]
 
 
-def _run(cmd: list[str], cwd: Path) -> dict:
-    proc = subprocess.run(cmd, cwd=cwd, text=True, capture_output=True)
-    return {"argv": cmd, "exitCode": proc.returncode, "stdout": proc.stdout, "stderr": proc.stderr, "ok": proc.returncode == 0}
+def _run(cmd: list[str], cwd: Path, *, env: dict[str, str] | None = None) -> dict:
+    # Do not use PIPE/capture_output here. Post-check commands may themselves
+    # launch child processes; on Windows inherited pipe handles can keep the
+    # bootstrap waiting after the useful work has already completed.
+    with tempfile.TemporaryFile(mode="w+b") as stdout_file, tempfile.TemporaryFile(mode="w+b") as stderr_file:
+        proc = subprocess.run(
+            cmd,
+            cwd=cwd,
+            stdin=subprocess.DEVNULL,
+            stdout=stdout_file,
+            stderr=stderr_file,
+            env=env,
+            check=False,
+        )
+        stdout_file.seek(0)
+        stderr_file.seek(0)
+        stdout = stdout_file.read().decode("utf-8", errors="replace")
+        stderr = stderr_file.read().decode("utf-8", errors="replace")
+    return {"argv": cmd, "exitCode": proc.returncode, "stdout": stdout, "stderr": stderr, "ok": proc.returncode == 0}
 
 
 def _park_kit_if_inside_target(kit_root: Path, target: Path, report: dict) -> Path:
@@ -83,9 +100,13 @@ def _park_kit_if_inside_target(kit_root: Path, target: Path, report: dict) -> Pa
 def _post_checks(target: Path) -> list[dict]:
     py = sys.executable
     agent = target / "devtools" / "agent" / "agent.py"
+    env = dict(os.environ)
+    # Bootstrap validation must inspect the runtime it just installed, not
+    # recursively invoke periodic self-update from doctor.
+    env["AGENT_DEVTOOLS_DISABLE_RUNTIME_FRESHNESS"] = "1"
     return [
-        _run([py, str(agent), "doctor", "--json"], target),
-        _run([py, str(agent), "context", "validate", "--json"], target),
+        _run([py, str(agent), "doctor", "--json"], target, env=env),
+        _run([py, str(agent), "context", "validate", "--json"], target, env=env),
     ]
 
 

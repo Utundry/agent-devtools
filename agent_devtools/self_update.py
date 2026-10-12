@@ -341,6 +341,13 @@ def periodic_runtime_freshness(
         "currentVersion": __version__,
         "nonBlocking": True,
     }
+    if os.environ.get("AGENT_DEVTOOLS_DISABLE_RUNTIME_FRESHNESS") == "1":
+        return {
+            **base,
+            "status": "suppressed",
+            "checked": False,
+            "reason": "internal-bootstrap-post-check",
+        }
     if mode == "off":
         return {**base, "status": "disabled", "checked": False}
 

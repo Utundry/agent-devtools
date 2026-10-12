@@ -1,0 +1,29 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "96e2b736eef64820afc8ab1d404a9c3c",
+  "kind": "decision",
+  "subject": "runtime/bootstrap-post-check-safety",
+  "statement": "Bootstrap post-checks must be validation-only: they suppress periodic runtime freshness and capture child output through regular temporary files rather than subprocess pipes. This prevents nested self-update and Windows inherited-handle hangs after the runtime has already been installed.",
+  "scope": [
+    "runtime",
+    "bootstrap",
+    "windows"
+  ],
+  "anchors": [
+    "bootstrap/BOOTSTRAP_AGENT_DEVTOOLS.py",
+    "agent_devtools/self_update.py"
+  ],
+  "confidence": "high",
+  "lifecycleStatus": "active",
+  "supersedes": [],
+  "sourceRefs": [],
+  "evidenceRefs": [],
+  "status": "active",
+  "sourceSession": {},
+  "taskId": null,
+  "taskGoal": null,
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-12T09:45:00Z",
+  "updatedAtUtc": "2026-10-12T09:45:00Z"
+}
