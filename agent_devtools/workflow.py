@@ -8,7 +8,7 @@ from typing import Any
 from . import __version__
 from .profiles import load_profile
 
-CLI_CONTRACT_VERSION = 41
+CLI_CONTRACT_VERSION = 42
 WORKFLOW_CONTRACT_VERSION = 24
 
 
@@ -367,6 +367,13 @@ _CAPABILITY_RELEASE_CHANGES: dict[str, list[str]] = {
         "verification.fallback-blocker-resolution",
         "verification.failure-provenance-preserved",
     ],
+    "0.16.41": [
+        "self-update.post-update-canonical-recheck",
+        "self-update.legacy-updated-state-recheck",
+        "self-update.chained-distinct-version-handoff",
+        "self-update.same-version-reentry-guard",
+        "self-update.recheck-warning-ttl-close",
+    ],
 }
 
 
@@ -459,7 +466,7 @@ def capabilities(root: Path) -> dict[str, Any]:
         "commands": {
             "workflow": {"show": True, "validate": True, "pullOnly": True, "routineRequired": False},
             "capabilities": {"json": True, "summary": True, "diff": True, "pullOnly": True, "routineRequired": False},
-            "selfUpdate": {"available": True, "latestDiscovery": True, "explicitVersion": True, "checkOnly": True, "freshDownload": True, "identityVerified": True, "periodicFreshness": True, "modes": ["off", "notify", "auto"], "ttlCache": True, "routineHooks": ["begin", "doctor"], "freshRuntimeCommandHandoff": True, "nonBlockingReentryFallback": True, "daemon": False},
+            "selfUpdate": {"available": True, "latestDiscovery": True, "explicitVersion": True, "checkOnly": True, "freshDownload": True, "identityVerified": True, "periodicFreshness": True, "modes": ["off", "notify", "auto"], "ttlCache": True, "postUpdateCanonicalRecheck": True, "legacyUpdatedStateRecheck": True, "routineHooks": ["begin", "doctor"], "freshRuntimeCommandHandoff": True, "chainedDistinctVersionHandoff": True, "sameVersionReentryGuard": True, "nonBlockingReentryFallback": True, "daemon": False},
             "begin": {"available": True, "canonicalRoutineEntry": True, "usesWorkEnter": True, "durableContextProjection": True, "knowledgeHealth": True, "interruptionResume": True, "resumeWithoutGoal": True, "ordinaryFollowupReentryRequired": False, "interruptionRecoveryOnly": True, "profileHintCompatibility": True, "conversationMemoryAuthoritative": False, "projectStateAuthoritative": True, "newStateModel": False},
             "work": {"enter": True, "start": True, "align": True, "status": True, "complete": True, "finish": True, "report": True, "reportReadOnly": True, "oneActionEntry": True, "handoffEntry": True, "routineEntryFastPath": True, "alignmentPendingOptOut": True, "userApprovalRequiresRecordedGap": True, "oneActionCompletion": True, "adaptiveExecutedCompletion": True, "requiredSemanticAutoPromotionExplicitPath": True, "explicitEntryFreshnessMarker": True, "obviousStaleTaskCompletionGuard": True, "automaticVerificationReuse": True, "baselineWhenUnverified": True, "taskGapGate": True, "noGapFastPath": True, "semanticCloseout": True},
             "cognition": {"observation": True, "decision": True, "finding": True, "assumption": True, "requirement": not profile.development, "openQuestion": not profile.development, "evidence": not profile.development, "blocker": True, "resolveBlocker": True, "resolveBlockerFailClosed": True, "resolveBlockerStdin": True, "resolveBlockerFromFile": True, "batch": True, "batchDistinctEvents": True, "batchPerEventSource": True, "batchPreferredForMultiple": True, "toolFailure": True, "toolFailureRetryCeiling": 2, "toolFailureRetryCountSource": "semantic-journal", "toolFailureKinds": ["infrastructure", "precondition", "environment", "tool", "unknown"], "toolFailureVerificationBinding": True, "toolFailureOptionalNonBlocking": True, "toolFailureMandatoryBlocks": True, "status": True, "checkpoint": True, "checkpointPromoteRequired": True, "textOptionAlias": True, "stdin": True, "fromFile": True, "utf8BulkCapture": True, "naturalGuessHints": True, "checkpointSessionOnlyClassification": True, "appendOnlyJournal": True, "possibleStaleCognition": True, "compactHumanOutput": True, "oneLineSuccess": True},

@@ -133,9 +133,15 @@ def redispatch_to_installed_runtime(
     if not agent.is_file():
         raise SelfUpdateError(f"fresh installed runtime entry point is missing: {agent}")
     env = dict(os.environ)
-    if env.get(_RUNTIME_REENTRY_ENV) == "1":
-        raise SelfUpdateError("runtime re-entry is already active")
-    env[_RUNTIME_REENTRY_ENV] = "1"
+    installed_version = _installed_runtime_version(root)
+    if not installed_version:
+        raise SelfUpdateError("fresh installed runtime version is unavailable for re-entry")
+    active_reentry = str(env.get(_RUNTIME_REENTRY_ENV) or "").strip()
+    if active_reentry == installed_version:
+        raise SelfUpdateError(
+            f"runtime re-entry loop blocked for installed version {installed_version}"
+        )
+    env[_RUNTIME_REENTRY_ENV] = installed_version
     command = [sys.executable, str(agent), *(str(item) for item in argv)]
     try:
         completed = runner(command, cwd=root, env=env, check=False)
@@ -358,7 +364,14 @@ def periodic_runtime_freshness(
     except (TypeError, ValueError):
         last_checked = 0.0
     ttl_seconds = interval_hours * 3600.0
-    if last_checked > 0 and stamp >= last_checked and stamp - last_checked < ttl_seconds:
+    cached_status = str(state.get("status") or "")
+    recheck_required = bool(state.get("recheckRequired")) or cached_status == "updated"
+    if (
+        not recheck_required
+        and last_checked > 0
+        and stamp >= last_checked
+        and stamp - last_checked < ttl_seconds
+    ):
         return {
             **base,
             "status": "cached",
@@ -366,6 +379,7 @@ def periodic_runtime_freshness(
             "lastCheckedAtUnix": last_checked,
             "cachedStatus": state.get("status"),
             "targetVersion": state.get("targetVersion"),
+            "recheckRequired": False,
         }
 
     try:
@@ -384,9 +398,17 @@ def periodic_runtime_freshness(
             "status": "warn",
             "error": str(exc),
             "currentVersion": __version__,
+            "recheckRequired": False,
         }
         recorded = _save_runtime_update_state(root, record)
-        return {**base, "status": "warn", "checked": True, "error": str(exc), "stateRecorded": recorded}
+        return {
+            **base,
+            "status": "warn",
+            "checked": True,
+            "error": str(exc),
+            "recheckRequired": False,
+            "stateRecorded": recorded,
+        }
 
     status = str(result.get("status") or "unknown")
     record = {
@@ -397,6 +419,7 @@ def periodic_runtime_freshness(
         "currentVersion": result.get("currentVersion", __version__),
         "targetVersion": result.get("targetVersion"),
         "performed": bool(result.get("performed")),
+        "recheckRequired": status == "updated",
     }
     recorded = _save_runtime_update_state(root, record)
     return {
@@ -407,5 +430,6 @@ def periodic_runtime_freshness(
         "updateAvailable": bool(result.get("updateAvailable")),
         "performed": bool(result.get("performed")),
         "installedVersion": result.get("installedVersion"),
+        "recheckRequired": status == "updated",
         "stateRecorded": recorded,
     }

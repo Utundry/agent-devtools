@@ -95,6 +95,106 @@ class RuntimeFreshnessTests(unittest.TestCase):
             self.assertFalse(update.call_args.kwargs["check_only"])
             self.assertEqual("updated", payload["status"])
             self.assertEqual("0.16.36", payload["installedVersion"])
+            self.assertTrue(payload["recheckRequired"])
+        finally:
+            tmp.cleanup()
+
+    def test_updated_result_bypasses_ttl_until_fresh_runtime_recheck_closes_it(self):
+        tmp, root = self.make_root({"mode": "auto", "checkIntervalHours": 24})
+        try:
+            updated = {
+                "status": "updated",
+                "currentVersion": "0.16.40",
+                "targetVersion": "0.16.41",
+                "updateAvailable": False,
+                "performed": True,
+                "installedVersion": "0.16.41",
+            }
+            up_to_date = {
+                "status": "up-to-date",
+                "currentVersion": "0.16.41",
+                "targetVersion": "0.16.41",
+                "updateAvailable": False,
+                "performed": False,
+                "installedVersion": "0.16.41",
+            }
+            with patch(
+                "agent_devtools.self_update.self_update",
+                side_effect=[updated, up_to_date],
+            ) as update:
+                first = periodic_runtime_freshness(root, now=2100)
+                second = periodic_runtime_freshness(root, now=2101)
+                third = periodic_runtime_freshness(root, now=2102)
+            self.assertEqual(2, update.call_count)
+            self.assertEqual("updated", first["status"])
+            self.assertTrue(first["recheckRequired"])
+            self.assertEqual("up-to-date", second["status"])
+            self.assertFalse(second["recheckRequired"])
+            self.assertEqual("cached", third["status"])
+            self.assertEqual("up-to-date", third["cachedStatus"])
+        finally:
+            tmp.cleanup()
+
+    def test_legacy_updated_cache_without_recheck_flag_still_bypasses_ttl(self):
+        tmp, root = self.make_root({"mode": "auto", "checkIntervalHours": 24})
+        try:
+            cache = root / ".agent-cache"
+            cache.mkdir()
+            (cache / "runtime-update-state.json").write_text(
+                json.dumps({
+                    "format": "agent-devtools-runtime-freshness-state",
+                    "formatVersion": 1,
+                    "lastCheckedAtUnix": 2200,
+                    "status": "updated",
+                    "currentVersion": "0.16.40",
+                    "targetVersion": "0.16.41",
+                    "performed": True,
+                }),
+                encoding="utf-8",
+            )
+            up_to_date = {
+                "status": "up-to-date",
+                "currentVersion": "0.16.41",
+                "targetVersion": "0.16.41",
+                "updateAvailable": False,
+                "performed": False,
+                "installedVersion": "0.16.41",
+            }
+            with patch("agent_devtools.self_update.self_update", return_value=up_to_date) as update:
+                payload = periodic_runtime_freshness(root, now=2201)
+            update.assert_called_once()
+            self.assertEqual("up-to-date", payload["status"])
+            self.assertFalse(payload["recheckRequired"])
+        finally:
+            tmp.cleanup()
+
+    def test_warning_after_required_post_update_recheck_closes_ttl(self):
+        tmp, root = self.make_root({"mode": "auto", "checkIntervalHours": 24})
+        try:
+            cache = root / ".agent-cache"
+            cache.mkdir()
+            (cache / "runtime-update-state.json").write_text(
+                json.dumps({
+                    "format": "agent-devtools-runtime-freshness-state",
+                    "formatVersion": 1,
+                    "lastCheckedAtUnix": 2300,
+                    "status": "updated",
+                    "targetVersion": "0.16.41",
+                    "recheckRequired": True,
+                }),
+                encoding="utf-8",
+            )
+            with patch(
+                "agent_devtools.self_update.self_update",
+                side_effect=SelfUpdateError("offline"),
+            ) as update:
+                first = periodic_runtime_freshness(root, now=2301)
+                second = periodic_runtime_freshness(root, now=2302)
+            update.assert_called_once()
+            self.assertEqual("warn", first["status"])
+            self.assertFalse(first["recheckRequired"])
+            self.assertEqual("cached", second["status"])
+            self.assertEqual("warn", second["cachedStatus"])
         finally:
             tmp.cleanup()
 
@@ -155,12 +255,14 @@ class RuntimeFreshnessTests(unittest.TestCase):
         finally:
             tmp.cleanup()
 
-    def test_redispatch_uses_fresh_agent_and_inherited_standard_streams(self):
+    def test_redispatch_uses_fresh_agent_and_installed_version_marker(self):
         tmp, root = self.make_root({"mode": "auto", "checkIntervalHours": 24})
         try:
             agent = root / "devtools" / "agent" / "agent.py"
-            agent.parent.mkdir(parents=True)
+            package = agent.parent / "agent_devtools"
+            package.mkdir(parents=True)
             agent.write_text("# fresh runtime\n", encoding="utf-8")
+            (package / "__init__.py").write_text('__version__ = "9.9.9"\n', encoding="utf-8")
             seen = {}
 
             def runner(argv, **kwargs):
@@ -177,9 +279,78 @@ class RuntimeFreshnessTests(unittest.TestCase):
             self.assertEqual(str(agent), seen["argv"][1])
             self.assertEqual(["begin", "--goal", "continue", "--json"], seen["argv"][2:])
             self.assertEqual(root, seen["kwargs"]["cwd"])
-            self.assertEqual("1", seen["kwargs"]["env"]["AGENT_DEVTOOLS_RUNTIME_REENTRY"])
+            self.assertEqual("9.9.9", seen["kwargs"]["env"]["AGENT_DEVTOOLS_RUNTIME_REENTRY"])
             self.assertNotIn("stdout", seen["kwargs"])
             self.assertNotIn("stderr", seen["kwargs"])
+        finally:
+            tmp.cleanup()
+
+    def test_distinct_version_reentry_is_allowed_for_chained_update(self):
+        tmp, root = self.make_root({"mode": "auto", "checkIntervalHours": 24})
+        try:
+            agent = root / "devtools" / "agent" / "agent.py"
+            package = agent.parent / "agent_devtools"
+            package.mkdir(parents=True)
+            agent.write_text("# fresh runtime\n", encoding="utf-8")
+            (package / "__init__.py").write_text('__version__ = "0.16.42"\n', encoding="utf-8")
+            seen = {}
+
+            def runner(argv, **kwargs):
+                seen["env"] = dict(kwargs["env"])
+                return type("P", (), {"returncode": 0})()
+
+            with patch.dict(
+                "os.environ",
+                {"AGENT_DEVTOOLS_RUNTIME_REENTRY": "0.16.41"},
+                clear=False,
+            ):
+                rc = redispatch_to_installed_runtime(root, ["begin"], runner=runner)
+            self.assertEqual(0, rc)
+            self.assertEqual("0.16.42", seen["env"]["AGENT_DEVTOOLS_RUNTIME_REENTRY"])
+        finally:
+            tmp.cleanup()
+
+    def test_legacy_boolean_reentry_marker_allows_first_versioned_hop(self):
+        tmp, root = self.make_root({"mode": "auto", "checkIntervalHours": 24})
+        try:
+            agent = root / "devtools" / "agent" / "agent.py"
+            package = agent.parent / "agent_devtools"
+            package.mkdir(parents=True)
+            agent.write_text("# fresh runtime\n", encoding="utf-8")
+            (package / "__init__.py").write_text('__version__ = "0.16.41"\n', encoding="utf-8")
+            seen = {}
+
+            def runner(argv, **kwargs):
+                seen["env"] = dict(kwargs["env"])
+                return type("P", (), {"returncode": 0})()
+
+            with patch.dict(
+                "os.environ",
+                {"AGENT_DEVTOOLS_RUNTIME_REENTRY": "1"},
+                clear=False,
+            ):
+                rc = redispatch_to_installed_runtime(root, ["begin"], runner=runner)
+            self.assertEqual(0, rc)
+            self.assertEqual("0.16.41", seen["env"]["AGENT_DEVTOOLS_RUNTIME_REENTRY"])
+        finally:
+            tmp.cleanup()
+
+    def test_same_version_reentry_loop_is_blocked_before_spawn(self):
+        tmp, root = self.make_root({"mode": "auto", "checkIntervalHours": 24})
+        try:
+            agent = root / "devtools" / "agent" / "agent.py"
+            package = agent.parent / "agent_devtools"
+            package.mkdir(parents=True)
+            agent.write_text("# fresh runtime\n", encoding="utf-8")
+            (package / "__init__.py").write_text('__version__ = "0.16.42"\n', encoding="utf-8")
+            with patch.dict(
+                "os.environ",
+                {"AGENT_DEVTOOLS_RUNTIME_REENTRY": "0.16.42"},
+                clear=False,
+            ), patch("agent_devtools.self_update.subprocess.run") as runner:
+                with self.assertRaisesRegex(SelfUpdateError, "re-entry loop blocked"):
+                    redispatch_to_installed_runtime(root, ["begin"])
+                runner.assert_not_called()
         finally:
             tmp.cleanup()
 
@@ -263,7 +434,11 @@ class RuntimeFreshnessTests(unittest.TestCase):
             self.assertTrue(payload["periodicFreshness"])
             self.assertEqual(["off", "notify", "auto"], payload["modes"])
             self.assertTrue(payload["ttlCache"])
+            self.assertTrue(payload["postUpdateCanonicalRecheck"])
+            self.assertTrue(payload["legacyUpdatedStateRecheck"])
             self.assertTrue(payload["freshRuntimeCommandHandoff"])
+            self.assertTrue(payload["chainedDistinctVersionHandoff"])
+            self.assertTrue(payload["sameVersionReentryGuard"])
             self.assertTrue(payload["nonBlockingReentryFallback"])
             self.assertFalse(payload["daemon"])
         finally:
