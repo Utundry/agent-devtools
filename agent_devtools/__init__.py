@@ -1,3 +1,3 @@
 """Portable, zero-service work helpers for agents."""
 
-__version__ = "0.16.32"
+__version__ = "0.16.33"
