@@ -5,6 +5,10 @@
   "requirements": [],
   "files": {
     "agent-tools.json": {
+      "runtimeUpdate": {
+        "mode": "notify",
+        "checkIntervalHours": 24
+      },
       "context": {
         "database": ".agent-cache/context.sqlite",
         "semanticMap": "agent-context.map.json",

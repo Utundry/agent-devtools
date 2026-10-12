@@ -1,5 +1,9 @@
 {
   "version": 1,
+  "runtimeUpdate": {
+    "mode": "auto",
+    "checkIntervalHours": 24
+  },
   "ignore": [
     ".git/**",
     ".agent-cache/**",

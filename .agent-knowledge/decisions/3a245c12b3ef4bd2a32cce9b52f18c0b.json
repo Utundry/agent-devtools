@@ -1,0 +1,28 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "3a245c12b3ef4bd2a32cce9b52f18c0b",
+  "kind": "decision",
+  "subject": "runtime/periodic-freshness",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Periodic runtime freshness is opt-in for existing projects and configured as runtimeUpdate.mode off|notify|auto with a TTL. Missing or invalid config fails soft to off. Existing consumer projects remain off unless configured; newly generated bootstrap/preset configs default to notify, while the Agent DevTools source repository explicitly dogfoods auto. Checks run only on begin/doctor, use local .agent-cache state, never require a daemon, and network/update or cache-write failures never block routine work.",
+  "scope": [
+    "runtime/self-update"
+  ],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "3fa19dbd-e4ea-42c6-8292-a0ea06e0d835",
+    "taskGoal": "Add TTL-based periodic runtime freshness with off, notify, and auto modes without daemons or routine network calls",
+    "eventId": "5658d22bff244d2fb6929c557bd1203d"
+  },
+  "taskId": "3fa19dbd-e4ea-42c6-8292-a0ea06e0d835",
+  "taskGoal": "Add TTL-based periodic runtime freshness with off, notify, and auto modes without daemons or routine network calls",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-12T09:13:59Z",
+  "updatedAtUtc": "2026-10-12T09:14:05Z"
+}

@@ -23,7 +23,7 @@ from . import project_overview as project_overview_cli
 from . import handoff_cli
 from .release import cli as release_cli
 from . import shell as shell_cli
-from .self_update import SelfUpdateError, self_update as perform_self_update
+from .self_update import SelfUpdateError, periodic_runtime_freshness, self_update as perform_self_update
 from .work import cli as work_cli
 from .workflow import capability_diff, capability_summary, capabilities as workflow_capabilities, workflow_contract
 from . import workspace_snapshot_cli
@@ -103,6 +103,7 @@ def _fts5_available() -> bool:
 
 def _doctor(as_json: bool = False) -> int:
     root = discover_project_root()
+    freshness = periodic_runtime_freshness(root)
     payload = {
         "toolVersion": __version__,
         "projectRoot": str(root),
@@ -113,6 +114,7 @@ def _doctor(as_json: bool = False) -> int:
         "config": str(root / "agent-tools.json") if (root / "agent-tools.json").is_file() else None,
         "cacheDir": str(root / ".agent-cache"),
         "status": "ready",
+        "runtimeFreshness": freshness,
     }
     if as_json:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
@@ -123,6 +125,12 @@ def _doctor(as_json: bool = False) -> int:
         print(f"sqlite: {payload['sqlite']} (FTS5: {'yes' if payload['fts5'] else 'no'})")
         print(f"git: {'yes' if payload['git'] else 'no'}")
         print(f"config: {payload['config'] or 'auto-discovery'}")
+        if freshness.get("status") == "update-available":
+            print(f"runtime update available: {freshness.get('currentVersion')} -> {freshness.get('targetVersion')}")
+        elif freshness.get("status") == "updated":
+            print(f"runtime updated: {freshness.get('installedVersion')}")
+        elif freshness.get("status") == "warn":
+            print(f"runtime freshness warning: {freshness.get('error')}")
         try:
             profile = load_profile(root)
             print(f"profile: {profile.profile_id} · verify={profile.verification_mode}")
@@ -460,7 +468,18 @@ def _main_impl(argv: list[str] | None = None) -> int:
     if args.command == "context":
         return context_cli.main(discover_project_root(), args)
     if args.command == "begin":
-        return work_cli.main_begin(discover_project_root(), args)
+        root = discover_project_root()
+        freshness = periodic_runtime_freshness(root)
+        if freshness.get("status") == "update-available":
+            print(
+                f"runtime update available: {freshness.get('currentVersion')} -> {freshness.get('targetVersion')}",
+                file=sys.stderr,
+            )
+        elif freshness.get("status") == "updated":
+            print(f"runtime updated: {freshness.get('installedVersion')}", file=sys.stderr)
+        elif freshness.get("status") == "warn":
+            print(f"runtime freshness warning: {freshness.get('error')}", file=sys.stderr)
+        return work_cli.main_begin(root, args)
     if args.command == "shell":
         return shell_cli.main(discover_project_root(), args, dispatcher=main)
     if args.command == "source":
