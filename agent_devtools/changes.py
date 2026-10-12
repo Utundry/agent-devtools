@@ -180,12 +180,70 @@ def _workspace_local_match(root: Path, rel: str, marks: dict[str, dict[str, str]
     except OSError:
         return False
 
-def _canonical_path(config: CheckConfig, rel: str) -> bool:
-    if config.ignore and matches_any(rel, config.ignore):
+def _pattern_list(value: Any, field: str, *, default: tuple[str, ...] = ()) -> tuple[str, ...]:
+    if value is None:
+        return default
+    if not isinstance(value, list):
+        raise ChangeSetError(f"{field} must be an array")
+    result: list[str] = []
+    for item in value:
+        if not isinstance(item, str) or not item.strip():
+            raise ChangeSetError(f"{field} must contain non-empty strings")
+        result.append(item.strip())
+    if len(result) != len(set(result)):
+        raise ChangeSetError(f"{field} contains duplicates")
+    return tuple(result)
+
+
+def _load_change_config(root: Path, config_path: Path | None = None) -> dict[str, tuple[str, ...]]:
+    root = root.resolve()
+    path = (
+        (root / "agent-tools.json").resolve()
+        if config_path is None
+        else (config_path if config_path.is_absolute() else root / config_path).resolve()
+    )
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise ChangeSetError(f"Agent DevTools config not found: {path}") from exc
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ChangeSetError(f"Agent DevTools config is unreadable: {exc}") from exc
+    if not isinstance(raw, dict):
+        raise ChangeSetError("Agent DevTools config root must be an object")
+
+    ignore = _pattern_list(raw.get("ignore", []), "ignore")
+    check = raw.get("check")
+    replay: Any = check.get("replay", {}) if isinstance(check, dict) else {}
+    if not isinstance(replay, dict):
+        raise ChangeSetError("check.replay must be an object")
+    source_include = _pattern_list(
+        replay.get("sourceInclude"),
+        "check.replay.sourceInclude",
+        default=("**",),
+    )
+    if not source_include:
+        raise ChangeSetError("check.replay.sourceInclude must be a non-empty array")
+    source_exclude = _pattern_list(
+        replay.get("sourceExclude", []),
+        "check.replay.sourceExclude",
+    )
+    for value in (*source_include, *source_exclude):
+        candidate = Path(value)
+        if candidate.is_absolute() or ".." in candidate.parts:
+            raise ChangeSetError(f"change source pattern must stay inside the project root: {value!r}")
+    return {
+        "ignore": ignore,
+        "sourceInclude": source_include,
+        "sourceExclude": source_exclude,
+    }
+
+
+def _canonical_path(config: dict[str, tuple[str, ...]], rel: str) -> bool:
+    if config["ignore"] and matches_any(rel, config["ignore"]):
         return False
-    if config.replay.source_exclude and matches_any(rel, config.replay.source_exclude):
+    if config["sourceExclude"] and matches_any(rel, config["sourceExclude"]):
         return False
-    return matches_any(rel, config.replay.source_include)
+    return matches_any(rel, config["sourceInclude"])
 
 
 def discover_changes(root: Path, config_path: Path | None = None) -> dict[str, Any]:
@@ -203,11 +261,8 @@ def discover_changes(root: Path, config_path: Path | None = None) -> dict[str, A
             "canonicalUntrackedFiles": [],
             "knowledgeChangedFiles": [],
         }
-    try:
-        config = load_check_config(root, config_path)
-        local_marks = load_workspace_local_marks(root)
-    except CheckConfigError as exc:
-        raise ChangeSetError(str(exc)) from exc
+    config = _load_change_config(root, config_path)
+    local_marks = load_workspace_local_marks(root)
 
     head = _run_git(root, ["rev-parse", "--verify", "HEAD"])
     if head.returncode != 0:

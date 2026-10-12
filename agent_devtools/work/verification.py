@@ -110,8 +110,15 @@ def _output_preview(data: bytes, limit: int) -> str:
     text = data.decode("utf-8", errors="replace").strip()
     if len(text) <= limit:
         return text
-    omitted = len(text) - limit
-    return text[:limit].rstrip() + f"\n… <truncated {omitted} chars>"
+    if limit <= 0:
+        return f"… <truncated {len(text)} chars>"
+    head_chars = (limit + 1) // 2
+    tail_chars = limit // 2
+    omitted = len(text) - head_chars - tail_chars
+    head = text[:head_chars].rstrip()
+    tail = text[-tail_chars:].lstrip() if tail_chars else ""
+    marker = f"… <truncated {omitted} chars> …"
+    return f"{head}\n{marker}\n{tail}" if tail else f"{head}\n{marker}"
 
 
 def _verification_source_state(root: Path) -> dict[str, Any]:

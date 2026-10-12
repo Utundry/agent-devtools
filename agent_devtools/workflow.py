@@ -321,6 +321,13 @@ _CAPABILITY_RELEASE_CHANGES: dict[str, list[str]] = {
         "verification.declarative-affected-relevance",
         "verification.conservative-unknown-relevance",
     ],
+    "0.16.24": [
+        "declarative-update.explicit-baseline-blob-override",
+    ],
+    "0.16.25": [
+        "verification.head-tail-output-preview",
+        "changes.check-runner-config-decoupling",
+    ],
 }
 
 

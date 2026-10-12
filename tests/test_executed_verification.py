@@ -7,6 +7,7 @@ from pathlib import Path
 
 from agent_devtools.cli import parser
 from agent_devtools.work.verification import (
+    _output_preview,
     record_verification,
     run_verification_command,
     verification_history,
@@ -39,6 +40,18 @@ class ExecutedVerificationTests(unittest.TestCase):
             self.assertIn("command-exit:0", record["evidence"])
             self.assertTrue(any(item.startswith("stdout-sha256:") for item in record["evidence"]))
             self.assertEqual(record["id"], verification_status(root)["latest"]["id"])
+
+    def test_output_preview_preserves_head_and_tail(self) -> None:
+        preview = _output_preview(("HEAD-" + ("x" * 100) + "-TAIL").encode("utf-8"), 20)
+        self.assertTrue(preview.startswith("HEAD-"))
+        self.assertTrue(preview.endswith("-TAIL"))
+        self.assertIn("<truncated", preview)
+
+    def test_output_preview_head_tail_remains_unicode_safe(self) -> None:
+        preview = _output_preview(("начало-" + ("я" * 80) + "-конец").encode("utf-8"), 18)
+        self.assertTrue(preview.startswith("начало-"))
+        self.assertTrue(preview.endswith("-конец"))
+        self.assertNotIn("\ufffd", preview)
 
     def test_run_records_failure_instead_of_claiming_pass(self) -> None:
         with tempfile.TemporaryDirectory() as td:
