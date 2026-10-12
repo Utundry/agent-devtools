@@ -11,7 +11,12 @@ from unittest.mock import patch
 from agent_devtools import cli
 from agent_devtools.workflow import capabilities
 from agent_devtools.presets import list_presets
-from agent_devtools.self_update import SelfUpdateError, load_runtime_update_policy, periodic_runtime_freshness
+from agent_devtools.self_update import (
+    SelfUpdateError,
+    load_runtime_update_policy,
+    periodic_runtime_freshness,
+    redispatch_to_installed_runtime,
+)
 
 
 class RuntimeFreshnessTests(unittest.TestCase):
@@ -150,6 +155,99 @@ class RuntimeFreshnessTests(unittest.TestCase):
         finally:
             tmp.cleanup()
 
+    def test_redispatch_uses_fresh_agent_and_inherited_standard_streams(self):
+        tmp, root = self.make_root({"mode": "auto", "checkIntervalHours": 24})
+        try:
+            agent = root / "devtools" / "agent" / "agent.py"
+            agent.parent.mkdir(parents=True)
+            agent.write_text("# fresh runtime\n", encoding="utf-8")
+            seen = {}
+
+            def runner(argv, **kwargs):
+                seen["argv"] = list(argv)
+                seen["kwargs"] = dict(kwargs)
+                return type("P", (), {"returncode": 7})()
+
+            rc = redispatch_to_installed_runtime(
+                root,
+                ["begin", "--goal", "continue", "--json"],
+                runner=runner,
+            )
+            self.assertEqual(7, rc)
+            self.assertEqual(str(agent), seen["argv"][1])
+            self.assertEqual(["begin", "--goal", "continue", "--json"], seen["argv"][2:])
+            self.assertEqual(root, seen["kwargs"]["cwd"])
+            self.assertEqual("1", seen["kwargs"]["env"]["AGENT_DEVTOOLS_RUNTIME_REENTRY"])
+            self.assertNotIn("stdout", seen["kwargs"])
+            self.assertNotIn("stderr", seen["kwargs"])
+        finally:
+            tmp.cleanup()
+
+    def test_begin_auto_update_hands_original_command_to_fresh_runtime(self):
+        tmp, root = self.make_root({"mode": "auto", "checkIntervalHours": 24})
+        try:
+            freshness = {
+                "status": "updated",
+                "currentVersion": "0.16.35",
+                "targetVersion": "0.16.36",
+                "installedVersion": "0.16.36",
+            }
+            with patch("agent_devtools.cli.discover_project_root", return_value=root), \
+                 patch("agent_devtools.cli.periodic_runtime_freshness", return_value=freshness), \
+                 patch("agent_devtools.cli.redispatch_to_installed_runtime", return_value=0) as redispatch, \
+                 patch("agent_devtools.cli.work_cli.main_begin") as old_begin:
+                rc = cli._main_impl(["begin", "--goal", "continue", "--json"])
+            self.assertEqual(0, rc)
+            redispatch.assert_called_once_with(root, ["begin", "--goal", "continue", "--json"])
+            old_begin.assert_not_called()
+        finally:
+            tmp.cleanup()
+
+    def test_doctor_auto_update_hands_command_to_fresh_runtime(self):
+        tmp, root = self.make_root({"mode": "auto", "checkIntervalHours": 24})
+        try:
+            freshness = {
+                "status": "updated",
+                "currentVersion": "0.16.35",
+                "targetVersion": "0.16.36",
+                "installedVersion": "0.16.36",
+            }
+            with patch("agent_devtools.cli.discover_project_root", return_value=root), \
+                 patch("agent_devtools.cli.periodic_runtime_freshness", return_value=freshness), \
+                 patch("agent_devtools.cli.redispatch_to_installed_runtime", return_value=0) as redispatch, \
+                 patch("agent_devtools.cli._doctor") as old_doctor:
+                rc = cli._main_impl(["doctor", "--json"])
+            self.assertEqual(0, rc)
+            redispatch.assert_called_once_with(root, ["doctor", "--json"])
+            old_doctor.assert_not_called()
+        finally:
+            tmp.cleanup()
+
+    def test_reentry_failure_is_warning_and_old_begin_still_runs(self):
+        tmp, root = self.make_root({"mode": "auto", "checkIntervalHours": 24})
+        try:
+            freshness = {
+                "status": "updated",
+                "currentVersion": "0.16.35",
+                "targetVersion": "0.16.36",
+                "installedVersion": "0.16.36",
+            }
+            stderr = io.StringIO()
+            with patch("agent_devtools.cli.discover_project_root", return_value=root), \
+                 patch("agent_devtools.cli.periodic_runtime_freshness", return_value=freshness), \
+                 patch(
+                     "agent_devtools.cli.redispatch_to_installed_runtime",
+                     side_effect=SelfUpdateError("synthetic handoff failure"),
+                 ), \
+                 patch("agent_devtools.cli.work_cli.main_begin", return_value=0) as old_begin, \
+                 contextlib.redirect_stderr(stderr):
+                rc = cli._main_impl(["begin", "--goal", "continue"])
+            self.assertEqual(0, rc)
+            old_begin.assert_called_once()
+            self.assertIn("runtime re-entry warning", stderr.getvalue())
+        finally:
+            tmp.cleanup()
+
     def test_all_bundled_presets_default_new_workspaces_to_notify(self):
         for preset in list_presets():
             self.assertEqual(
@@ -165,6 +263,8 @@ class RuntimeFreshnessTests(unittest.TestCase):
             self.assertTrue(payload["periodicFreshness"])
             self.assertEqual(["off", "notify", "auto"], payload["modes"])
             self.assertTrue(payload["ttlCache"])
+            self.assertTrue(payload["freshRuntimeCommandHandoff"])
+            self.assertTrue(payload["nonBlockingReentryFallback"])
             self.assertFalse(payload["daemon"])
         finally:
             tmp.cleanup()

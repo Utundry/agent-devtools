@@ -23,7 +23,12 @@ from . import project_overview as project_overview_cli
 from . import handoff_cli
 from .release import cli as release_cli
 from . import shell as shell_cli
-from .self_update import SelfUpdateError, periodic_runtime_freshness, self_update as perform_self_update
+from .self_update import (
+    SelfUpdateError,
+    periodic_runtime_freshness,
+    redispatch_to_installed_runtime,
+    self_update as perform_self_update,
+)
 from .work import cli as work_cli
 from .workflow import capability_diff, capability_summary, capabilities as workflow_capabilities, workflow_contract
 from . import workspace_snapshot_cli
@@ -101,9 +106,13 @@ def _fts5_available() -> bool:
         conn.close()
 
 
-def _doctor(as_json: bool = False) -> int:
+def _doctor(
+    as_json: bool = False,
+    *,
+    freshness: dict[str, object] | None = None,
+) -> int:
     root = discover_project_root()
-    freshness = periodic_runtime_freshness(root)
+    freshness = periodic_runtime_freshness(root) if freshness is None else freshness
     payload = {
         "toolVersion": __version__,
         "projectRoot": str(root),
@@ -442,7 +451,15 @@ def _main_impl(argv: list[str] | None = None) -> int:
             print(f"onboarding: {payload['path']} · {payload.get('performed', payload['action'])}")
         return 0
     if args.command == "doctor":
-        return _doctor(args.json)
+        root = discover_project_root()
+        freshness = periodic_runtime_freshness(root)
+        if freshness.get("status") == "updated":
+            print(f"runtime updated: {freshness.get('installedVersion')} · re-entering fresh runtime", file=sys.stderr)
+            try:
+                return redispatch_to_installed_runtime(root, raw_argv)
+            except SelfUpdateError as exc:
+                print(f"runtime re-entry warning: {exc}", file=sys.stderr)
+        return _doctor(args.json, freshness=freshness)
     if args.command == "self-update":
         root = discover_project_root()
         try:
@@ -476,7 +493,11 @@ def _main_impl(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
         elif freshness.get("status") == "updated":
-            print(f"runtime updated: {freshness.get('installedVersion')}", file=sys.stderr)
+            print(f"runtime updated: {freshness.get('installedVersion')} · re-entering fresh runtime", file=sys.stderr)
+            try:
+                return redispatch_to_installed_runtime(root, raw_argv)
+            except SelfUpdateError as exc:
+                print(f"runtime re-entry warning: {exc}", file=sys.stderr)
         elif freshness.get("status") == "warn":
             print(f"runtime freshness warning: {freshness.get('error')}", file=sys.stderr)
         return work_cli.main_begin(root, args)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import math
 import re
 import subprocess
@@ -111,6 +112,36 @@ def _installed_runtime_version(root: Path) -> str | None:
         return None
     match = re.search(r"^__version__\s*=\s*['\"]([^'\"]+)['\"]\s*$", text, re.MULTILINE)
     return match.group(1) if match else None
+
+
+_RUNTIME_REENTRY_ENV = "AGENT_DEVTOOLS_RUNTIME_REENTRY"
+
+
+def redispatch_to_installed_runtime(
+    root: Path,
+    argv: Sequence[str],
+    *,
+    runner: Callable[..., subprocess.CompletedProcess[Any]] = subprocess.run,
+) -> int:
+    """Run the current command once through the freshly installed runtime.
+
+    Standard streams are inherited deliberately: this preserves JSON/stdout contracts
+    and avoids the Windows descendant-pipe lifetime problem fixed by self-update.
+    """
+    root = root.resolve()
+    agent = root / "devtools" / "agent" / "agent.py"
+    if not agent.is_file():
+        raise SelfUpdateError(f"fresh installed runtime entry point is missing: {agent}")
+    env = dict(os.environ)
+    if env.get(_RUNTIME_REENTRY_ENV) == "1":
+        raise SelfUpdateError("runtime re-entry is already active")
+    env[_RUNTIME_REENTRY_ENV] = "1"
+    command = [sys.executable, str(agent), *(str(item) for item in argv)]
+    try:
+        completed = runner(command, cwd=root, env=env, check=False)
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise SelfUpdateError(f"cannot re-enter freshly installed runtime: {exc}") from exc
+    return int(completed.returncode)
 
 
 def self_update(
