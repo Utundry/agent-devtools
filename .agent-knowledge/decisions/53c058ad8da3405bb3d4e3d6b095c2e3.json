@@ -1,0 +1,28 @@
+{
+  "format": "agent-devtools-project-knowledge",
+  "formatVersion": 1,
+  "id": "53c058ad8da3405bb3d4e3d6b095c2e3",
+  "kind": "decision",
+  "subject": "Safe generated-config reconciliation",
+  "status": "active",
+  "lifecycleStatus": "active",
+  "statement": "Runtime upgrade may automatically reconcile Python layout only when the current development config exactly matches a known unmodified generated Python preset. In that provable managed-default case it may re-render the same preset against current source roots; any customized or non-exact config remains untouched. This preserves consumer ownership while removing stale generated layout assumptions.",
+  "scope": [
+    "bootstrap/config reconciliation, doctor/check ergonomics, tests, durable architecture decision"
+  ],
+  "confidence": null,
+  "evidenceRefs": [],
+  "anchors": [],
+  "supersedes": [],
+  "sourceRefs": [],
+  "sourceSession": {
+    "taskId": "2f037d62-5af2-4570-b810-80669bb36115",
+    "taskGoal": "Reduce Agent DevTools integration friction for arbitrary Python execution environments by eliminating stale generated source-layout assumptions without weakening explicit project configuration",
+    "eventId": "96e997d0d6b6420fadadf3b71c75a551"
+  },
+  "taskId": "2f037d62-5af2-4570-b810-80669bb36115",
+  "taskGoal": "Reduce Agent DevTools integration friction for arbitrary Python execution environments by eliminating stale generated source-layout assumptions without weakening explicit project configuration",
+  "changedFiles": [],
+  "createdAtUtc": "2026-10-12T07:24:42Z",
+  "updatedAtUtc": "2026-10-12T07:24:42Z"
+}

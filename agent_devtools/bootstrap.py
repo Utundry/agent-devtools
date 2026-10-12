@@ -309,6 +309,57 @@ def rendered_preset(root: Path, preset: Preset) -> tuple[dict[str, Any], list[st
     return _adapt_python_layout(files, root, preset.preset_id)
 
 
+def _reconcile_generated_python_config(root: Path) -> dict[str, Any]:
+    """Refresh a stale bootstrap-owned Python layout without touching custom config.
+
+    The safe proof is intentionally strict: both development config files must still
+    match one bundled Python preset exactly before layout adaptation. If either file
+    differs, consumer ownership wins and nothing is rewritten.
+    """
+    root = root.resolve()
+    for preset_id in ("python-stdlib", "python-pytest"):
+        preset = get_preset(preset_id)
+        raw = deepcopy(preset.files)
+        managed_files = {
+            rel: content for rel, content in raw.items()
+            if rel in {"agent-tools.json", "agent-check.policy.json"}
+        }
+        if len(managed_files) != 2:
+            continue
+        if any(_read_json_if_object(root / rel) != content for rel, content in managed_files.items()):
+            continue
+        rendered, roots = rendered_preset(root, preset)
+        if not roots or all(rendered.get(rel) == content for rel, content in managed_files.items()):
+            return {
+                "status": "unchanged",
+                "reason": "generated preset already matches detected Python layout",
+                "preset": preset_id,
+                "pythonSourceRoots": roots,
+                "files": [],
+            }
+        changed: list[str] = []
+        for rel in sorted(managed_files):
+            content = rendered.get(rel)
+            if content is None or content == managed_files[rel]:
+                continue
+            atomic_json_write(root / rel, content)
+            changed.append(rel)
+        return {
+            "status": "reconciled",
+            "reason": "exact generated Python preset re-rendered for detected source roots",
+            "preset": preset_id,
+            "pythonSourceRoots": roots,
+            "files": changed,
+        }
+    return {
+        "status": "preserved",
+        "reason": "project config is customized or is not an exact generated Python preset",
+        "preset": None,
+        "pythonSourceRoots": [],
+        "files": [],
+    }
+
+
 def _iter_vendor_files(source_root: Path):
     """Yield only the portable runtime payload.
 
@@ -569,9 +620,9 @@ def specialize_development_workspace(target: Path, preset_id: str, *, source_roo
 def inspect_existing_installation(target: Path) -> dict[str, Any]:
     """Describe an existing consumer installation before a runtime-only upgrade.
 
-    Project configuration belongs to the consumer and is never silently replaced by
-    this path. The vendored runtime is disposable, but legacy config accidentally
-    stored inside devtools/agent must be migrated out before replacement.
+    Project configuration belongs to the consumer. Runtime upgrade preserves it unless
+    it is provably an exact unmodified generated Python preset whose detected source
+    layout has changed. The vendored runtime itself is disposable.
     """
     target = target.resolve()
     vendor = target / VENDOR_REL
@@ -595,11 +646,11 @@ def inspect_existing_installation(target: Path) -> dict[str, Any]:
 
 
 def upgrade_runtime(target: Path, *, source_root: Path | None = None) -> dict[str, Any]:
-    """Replace only the disposable Agent DevTools runtime, preserving project config.
+    """Replace the disposable runtime and safely reconcile generated Python layout.
 
-    This is the safe update path for existing consumers. It intentionally does not
-    render or overwrite presets/configuration. Existing project contracts are parsed
-    after the runtime swap so an incompatible old config fails visibly.
+    Consumer-owned configuration remains unchanged. Only an exact unmodified bundled
+    Python preset may be re-rendered against newly detected source roots; customized
+    configuration is never inferred or overwritten.
     """
     target = target.resolve()
     source_root = (source_root or Path(__file__).resolve().parents[1]).resolve()
@@ -638,7 +689,25 @@ def upgrade_runtime(target: Path, *, source_root: Path | None = None) -> dict[st
         vendor.parent.mkdir(parents=True, exist_ok=True)
         _copy_vendor(source_root, vendor)
 
-    if tools_path.read_bytes() != before_tools or (before_policy is not None and policy_path.read_bytes() != before_policy):
+    config_reconciliation = (
+        _reconcile_generated_python_config(target)
+        if development
+        else {
+            "status": "preserved",
+            "reason": "non-development profile has no generated check layout to reconcile",
+            "preset": None,
+            "pythonSourceRoots": [],
+            "files": [],
+        }
+    )
+    reconciled_files = set(config_reconciliation.get("files") or [])
+    if "agent-tools.json" not in reconciled_files and tools_path.read_bytes() != before_tools:
+        raise BootstrapError("Project Agent DevTools configuration changed during runtime-only update")
+    if (
+        before_policy is not None
+        and "agent-check.policy.json" not in reconciled_files
+        and policy_path.read_bytes() != before_policy
+    ):
         raise BootstrapError("Project Agent DevTools configuration changed during runtime-only update")
     if before_map is not None and map_path.read_bytes() != before_map:
         raise BootstrapError("Project semantic map changed during runtime-only update")
@@ -664,7 +733,8 @@ def upgrade_runtime(target: Path, *, source_root: Path | None = None) -> dict[st
         "afterRuntimeFiles": after_count,
         "sourceVersion": source_version,
         "installedVersion": installed_version,
-        "projectConfigPreserved": True,
+        "projectConfigPreserved": config_reconciliation["status"] != "reconciled",
+        "configReconciliation": config_reconciliation,
         "profile": profile_id,
         "developmentPolicyPresent": policy_path.is_file(),
         "semanticMapPreserved": before_map is not None,
