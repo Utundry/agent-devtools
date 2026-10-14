@@ -146,12 +146,14 @@ def _verification_source_state(root: Path) -> dict[str, Any]:
     try:
         from agent_devtools.changes import ChangeSetError, discover_changes
         report = discover_changes(root)
-    except (OSError, ValueError) as exc:
-        return {"available": False, "reason": f"{type(exc).__name__}: {exc}"}
-    except ChangeSetError as exc:
-        return {"available": False, "reason": str(exc)}
-    if not report.get("available"):
-        return {"available": False, "reason": str(report.get("reason") or "change discovery unavailable")}
+    except (OSError, ValueError, ChangeSetError):
+        from .source_snapshot import source_snapshot
+        return source_snapshot(root)
+    if report.get("available") is False:
+        # Source tree without Git (for example a ZIP prototype): preserve
+        # file-content freshness evidence without inventing a change list.
+        from .source_snapshot import source_snapshot
+        return source_snapshot(root)
 
     rows: list[dict[str, Any]] = []
     for item in report.get("entries", []):
@@ -185,8 +187,10 @@ def _verification_source_state(root: Path) -> dict[str, Any]:
 
 def _configured_command_relevance(root: Path, argv: list[str], source_state: dict[str, Any]) -> dict[str, Any]:
     """Conservatively bind an exact configured static suite command to affected policy."""
-    if not source_state.get("available"):
+    if source_state.get("available") is False:
         return {"status": "unknown", "reason": "source state unavailable"}
+    if source_state.get("mode") == "directory-snapshot":
+        return {"status": "unknown", "reason": "source snapshot verified, but changed paths are unavailable without Git"}
     try:
         from agent_devtools.check.config import CheckConfigError, load_check_config
         from agent_devtools.check.policy import PolicyError, load_policy

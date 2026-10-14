@@ -1299,9 +1299,21 @@ def main_work(root: Path, args: argparse.Namespace) -> int:
             knowledge_review = getattr(args, "knowledge_review", None)
             acceptance_review = getattr(args, "acceptance_review", None)
             review_note = str(getattr(args, "review_note", "") or "").strip()
-            if not knowledge_review or not acceptance_review or not review_note:
+            if all((knowledge_review, acceptance_review, review_note)) is False:
+                alignment = (load_task_state(root) or {}).get("taskAlignment") or {}
+                ux = alignment.get("uiAlignment") or {}
+                expectations = []
+                if alignment.get("interpretation"):
+                    expectations.append("Expected outcome: " + str(alignment["interpretation"]))
+                if ux.get("scenario"):
+                    expectations.append("Agreed UI scenario: " + str(ux["scenario"]))
+                if ux.get("entryPoint"):
+                    expectations.append("UI entry: " + str(ux["entryPoint"]))
+                if ux.get("risks"):
+                    expectations.append("UX risks: " + str(ux["risks"]))
+                context = ("\n" + "\n".join(expectations) + "\n") if expectations else "\n"
                 raise TaskStateError(
-                    "WORK COMPLETION: REVIEW REQUIRED (task is still active).\n"
+                    "WORK COMPLETION: REVIEW REQUIRED (task is still active)." + context +
                     "Agent: compare the requested outcome with delivered behavior and current durable knowledge. "
                     "If user-visible acceptance cannot be tested, delegate exact steps, expected results "
                     "and failure-report guidance to the user; do not claim PASS. "
