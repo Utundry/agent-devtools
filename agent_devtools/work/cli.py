@@ -1179,6 +1179,11 @@ def configure_work_parser(parser: argparse.ArgumentParser) -> None:
     action.add_argument("--user-approved", action="store_true", help="record explicit user approval after clarification")
     action.add_argument("--no-material-gaps", action="store_true", help="frictionless fast path when the task is already sufficiently specified; no user turn is required")
     align.add_argument("--proposal", default="", help="recommended concrete option(s) presented to the user")
+    align.add_argument("--interpretation", default="", help="agent interpretation of the expected result and boundaries")
+    align.add_argument("--ui-scenario", default="", help="optional user journey when the task changes UI")
+    align.add_argument("--ui-entry-point", default="", help="where the user expects to start")
+    align.add_argument("--ui-interaction", default="", help="primary actions and feedback")
+    align.add_argument("--ui-risks", default="", help="UX ambiguities, extra steps and contextual risks")
     align.add_argument("--summary", default="", help="approval/resolution summary; optional for --no-material-gaps")
     align.add_argument("--json", action="store_true", dest="json_output")
 
@@ -1272,6 +1277,11 @@ def main_work(root: Path, args: argparse.Namespace) -> int:
                 user_approved=args.user_approved,
                 no_material_gaps=args.no_material_gaps,
                 resolution=args.summary,
+                interpretation=args.interpretation,
+                ui_scenario=args.ui_scenario,
+                ui_entry_point=args.ui_entry_point,
+                ui_interaction=args.ui_interaction,
+                ui_risks=args.ui_risks,
             )
             payload = {
                 "format": "agent-devtools-work-alignment",
@@ -1403,7 +1413,15 @@ def main_work(root: Path, args: argparse.Namespace) -> int:
             print("Material gaps: " + "; ".join(alignment["materialGaps"]))
         if alignment.get("proposal"):
             print("Proposal: " + alignment["proposal"])
-        if alignment.get("resolution"):
+        if alignment.get("interpretation"):
+            print("Expected result: " + alignment["interpretation"])
+        ui = alignment.get("uiAlignment") or {}
+        if any(ui.values()):
+            print("UI alignment:")
+            for field, label in (("scenario", "Scenario"), ("entryPoint", "Entry"), ("interaction", "Interaction"), ("risks", "UX risks")):
+                if ui.get(field):
+                    print(f"  {label}: {ui[field]}")
+        if alignment.get("resolution", ""):
             print("Resolution: " + alignment["resolution"])
     else:
         print(render_brief(payload))

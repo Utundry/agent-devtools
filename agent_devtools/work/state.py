@@ -118,6 +118,14 @@ def validate_task_state(payload: Any) -> dict[str, Any]:
     alignment["status"] = alignment_status
     alignment["materialGaps"] = _strings(str(item) for item in gaps)
     alignment["proposal"] = str(alignment.get("proposal") or "").strip()
+    alignment["interpretation"] = str(alignment.get("interpretation") or "").strip()
+    raw_ui = alignment.get("uiAlignment") or {}
+    if not isinstance(raw_ui, dict):
+        raise TaskStateError("task alignment uiAlignment must be an object")
+    alignment["uiAlignment"] = {
+        key: str(raw_ui.get(key) or "").strip()
+        for key in ("scenario", "entryPoint", "interaction", "risks")
+    }
     alignment["resolution"] = str(alignment.get("resolution") or "").strip()
     alignment["explicitUserApproval"] = bool(alignment.get("explicitUserApproval", False))
     alignment["updatedAtUtc"] = str(alignment.get("updatedAtUtc") or clean.get("updatedAtUtc") or "")
@@ -159,17 +167,35 @@ def align_task(
     user_approved: bool = False,
     no_material_gaps: bool = False,
     resolution: str = "",
+    interpretation: str = "",
+    ui_scenario: str = "",
+    ui_entry_point: str = "",
+    ui_interaction: str = "",
+    ui_risks: str = "",
 ) -> dict[str, Any]:
-    """Resolve the lightweight task-gap gate before substantial execution."""
+    """Resolve user expectation gaps; UI notes are optional and never inferred."""
     state = load_task_state(root)
     if state is None:
         raise TaskStateError("no task state exists; use work start first")
+    if state.get("status") != "active":
+        raise TaskStateError("cannot realign a completed task")
     gaps = _strings(material_gaps)
     modes = int(bool(gaps)) + int(bool(user_approved)) + int(bool(no_material_gaps))
     if modes != 1:
         raise TaskStateError("choose exactly one alignment action: material gaps, user approval, or no material gaps")
     now = utc_now()
     current = dict(state.get("taskAlignment") or {})
+    incoming_ui = {
+        "scenario": ui_scenario.strip(),
+        "entryPoint": ui_entry_point.strip(),
+        "interaction": ui_interaction.strip(),
+        "risks": ui_risks.strip(),
+    }
+    ui = dict(current.get("uiAlignment") or {})
+    for key, value in incoming_ui.items():
+        if value:
+            ui[key] = value
+    interpreted = interpretation.strip() or str(current.get("interpretation") or "")
     if gaps:
         proposed = proposal.strip()
         if not proposed:
@@ -178,6 +204,8 @@ def align_task(
             "status": "clarification-required",
             "materialGaps": gaps,
             "proposal": proposed,
+            "interpretation": interpreted,
+            "uiAlignment": ui,
             "resolution": "",
             "explicitUserApproval": False,
             "updatedAtUtc": now,
@@ -195,11 +223,18 @@ def align_task(
         current.update({
             "status": "ready",
             "resolution": resolved,
+            "interpretation": interpreted,
+            "uiAlignment": ui,
             "explicitUserApproval": True,
             "updatedAtUtc": now,
         })
         state["taskAlignment"] = current
     else:
+        if str(current.get("status") or "") == "clarification-required":
+            raise TaskStateError(
+                "cannot bypass identified material gaps with --no-material-gaps; "
+                "obtain approval using work align --user-approved"
+            )
         resolved = resolution.strip() or (
             "No material task gaps identified; proceed without user clarification"
         )
@@ -207,6 +242,8 @@ def align_task(
             "status": "ready",
             "materialGaps": [],
             "proposal": "",
+            "interpretation": interpreted,
+            "uiAlignment": ui,
             "resolution": resolved,
             "explicitUserApproval": False,
             "updatedAtUtc": now,
@@ -214,7 +251,6 @@ def align_task(
     state["updatedAtUtc"] = now
     atomic_json_write(task_state_path(root), state)
     return validate_task_state(state)
-
 
 def load_task_state(root: Path) -> dict[str, Any] | None:
     path = task_state_path(root)
