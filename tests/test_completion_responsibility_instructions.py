@@ -14,7 +14,9 @@ class CompletionResponsibilityInstructionsTests(unittest.TestCase):
         self.assertIn("reproducible numbered steps", block)
         self.assertIn("user acceptance pending", block)
         self.assertIn("delegation is not evidence", block)
-        self.assertIn("Zero new durable records is valid", block)
+        self.assertIn("perform a Knowledge Review", block)
+        self.assertIn("reviewed with no additions needed", block)
+        self.assertIn("never claim knowledge was preserved", block)
 
     def test_reconciles_managed_block_without_touching_local_policy(self):
         with tempfile.TemporaryDirectory() as td:
@@ -33,7 +35,8 @@ class CompletionResponsibilityInstructionsTests(unittest.TestCase):
         from agent_devtools import workflow
         source = Path(workflow.__file__).read_text(encoding="utf-8")
         self.assertIn("leave acceptance pending, never PASS", source)
-        self.assertIn("zero durable additions is valid", source)
+        self.assertIn("a clean checkpoint cannot prove", source)
+        self.assertIn("pending is an explicit warning", source)
         self.assertIn('"canonicalRoutine": ["begin", "work", "checkpoint", "complete"]', source)
 
 
