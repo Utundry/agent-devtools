@@ -8,6 +8,8 @@ from pathlib import Path
 
 from .brief import _latest_run, build_brief, render_brief
 from .completion import complete_work
+from agent_devtools.core.io import atomic_json_write
+from .state import task_state_path
 from .entry import WorkEntryError, enter_work
 from .checkpoint import CheckpointError, create_checkpoint, inspect_checkpoint, restore_checkpoint
 from .state import TaskStateError, align_task, clear_task, complete_task, load_task_state, start_task, update_task, utc_now
@@ -1188,6 +1190,9 @@ def configure_work_parser(parser: argparse.ArgumentParser) -> None:
 
     complete = sub.add_parser("complete", help="adaptively verify, close semantic requirements, and finish")
     complete.add_argument("--summary")
+    complete.add_argument("--knowledge-review", choices=("updated", "unchanged", "pending"))
+    complete.add_argument("--acceptance-review", choices=("accepted", "pending", "not-applicable"))
+    complete.add_argument("--review-note", default="")
     complete.add_argument("--no-cache", action="store_true", help="force selected checks to execute even when current PASS exists")
     complete.add_argument("--resume", action="store_true", help="resume compatible development verification chunks")
     complete.add_argument("--verify", action="store_true", help="execute the command after `--` before adaptive completion")
@@ -1279,6 +1284,23 @@ def main_work(root: Path, args: argparse.Namespace) -> int:
             payload = build_brief(root, mode="work", budget=args.budget,
                                   include_context=not args.no_context, before_root=args.before)
         elif args.work_command == "complete":
+            # Agent-facing review only. The reusable complete_work() retains
+            # its original machine/semantic gate behavior for API callers.
+            knowledge_review = getattr(args, "knowledge_review", None)
+            acceptance_review = getattr(args, "acceptance_review", None)
+            review_note = str(getattr(args, "review_note", "") or "").strip()
+            if not knowledge_review or not acceptance_review or not review_note:
+                raise TaskStateError(
+                    "WORK COMPLETION: REVIEW REQUIRED (task is still active).\n"
+                    "Agent: compare the requested outcome with delivered behavior and current durable knowledge. "
+                    "If user-visible acceptance cannot be tested, delegate exact steps, expected results "
+                    "and failure-report guidance to the user; do not claim PASS. "
+                    "Capture missing reusable decisions with cognition before checkpoint.\n"
+                    "Next: retry `agent work complete --knowledge-review <updated|unchanged|pending> "
+                    "--acceptance-review <accepted|pending|not-applicable> "
+                    "--review-note <specific evidence, reason, or delegated-test reference>`. "
+                    "Review states are agent attestations, not automatically inferred facts."
+                )
             verify_argv = list(args.verify_argv or [])
             if verify_argv and verify_argv[0] == "--":
                 verify_argv = verify_argv[1:]
@@ -1297,6 +1319,19 @@ def main_work(root: Path, args: argparse.Namespace) -> int:
                 verification_timeout=args.verify_timeout,
                 verification_output_limit=args.verify_output_limit,
             )
+            # Persist only after all authoritative completion gates succeed.
+            review = {
+                "knowledgeReview": knowledge_review,
+                "acceptanceReview": acceptance_review,
+                "reviewNote": review_note,
+                "reviewedAtUtc": utc_now(),
+                "provenance": "agent-cli-attestation",
+            }
+            task = dict(payload["task"])
+            task["completionReview"] = review
+            atomic_json_write(task_state_path(root), task)
+            payload["task"] = task
+            payload["completionReview"] = review
         elif args.work_command == "finish":
             payload = complete_work(root, summary=args.summary, run_verification=False)
             payload["format"] = "agent-devtools-work-finish"
