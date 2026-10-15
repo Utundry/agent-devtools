@@ -5,11 +5,18 @@ import json
 from pathlib import Path
 
 from agent_devtools.work.brief import render_brief
-from .handoff import HandoffError, create_handoff, inspect_handoff, resume_handoff
+from .handoff import (
+    HandoffError, create_handoff, inspect_handoff, resume_handoff,
+)
+from . import handoff_tasks_cli
 
 
 def configure_parser(parser: argparse.ArgumentParser) -> None:
-    sub = parser.add_subparsers(dest="handoff_command", required=True)
+    sub = parser.add_subparsers(
+        dest="handoff_command", required=True
+    )
+    tasks = sub.add_parser("tasks", help="file-based task handoffs (explicit claim and result)")
+    handoff_tasks_cli.configure(tasks)
 
     create = sub.add_parser("create", help="create a portable cross-session/cross-agent handoff bundle")
     create.add_argument("--out", type=Path, default=None)
@@ -33,6 +40,8 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
 
 
 def main(root: Path, args: argparse.Namespace) -> int:
+    if args.handoff_command == "tasks":
+        return handoff_tasks_cli.main(root, args)
     try:
         if args.handoff_command == "create":
             if args.max_bytes is not None and args.max_bytes <= 0:

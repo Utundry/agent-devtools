@@ -92,6 +92,8 @@
         "agent_devtools/changes.py",
         "agent_devtools/changes_cli.py",
         "agent_devtools/handoff.py",
+        "agent_devtools/handoff_tasks.py",
+        "agent_devtools/handoff_tasks_cli.py",
         "agent_devtools/handoff_cli.py",
         "agent_devtools/onboarding.py",
         "agent_devtools/preserve.py",
