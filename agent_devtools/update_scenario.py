@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import fnmatch
 import hashlib
 import json
 import re
@@ -132,6 +133,10 @@ def load_scenario(path: Path) -> UpdateScenario:
         if op not in {"replace", "write", "delete", "assert_contains"}:
             raise UpdateScenarioError(f"unsupported scenario op at index {index}: {op!r}")
         change["path"] = _safe_rel(change.get("path"))
+        if change["path"] == "VERSION" and op != "assert_contains":
+            raise UpdateScenarioError(
+                "VERSION is managed by the release builder; update scenarios must not modify it"
+            )
 
         if op == "replace":
             before, after = change.get("before"), change.get("after")
@@ -483,6 +488,29 @@ def apply_scenario(root: Path, scenario: UpdateScenario, *, ignore_base_blobs: b
         "changes": rows,
     }
 
+def _verify_self_host_policy_coverage(root: Path) -> None:
+    """Catch new unclassified top-level modules before the release builder runs."""
+    policy_path = root / "agent-check.policy.json"
+    modules = root / "agent_devtools"
+    if not policy_path.is_file() or not modules.is_dir():
+        return
+    try:
+        policy = json.loads(policy_path.read_text(encoding="utf-8"))
+        sources = policy["sources"]
+        patterns = [pattern for source in sources for pattern in source["patterns"]]
+    except (OSError, UnicodeError, KeyError, TypeError, json.JSONDecodeError) as exc:
+        raise UpdateScenarioError(f"cannot inspect self-host classification: {exc}") from exc
+    unknown = [
+        f"agent_devtools/{module.name}"
+        for module in sorted(modules.glob("*.py"))
+        if not any(fnmatch.fnmatchcase(f"agent_devtools/{module.name}", pattern) for pattern in patterns)
+    ]
+    if unknown:
+        raise UpdateScenarioError(
+            "unclassified top-level modules in agent-check.policy.json: " + ", ".join(unknown)
+        )
+
+
 def preflight_scenarios(root: Path, scenarios: tuple[UpdateScenario, ...] | list[UpdateScenario], *, ignore_base_blobs: bool = False) -> dict[str, Any]:
     """Validate one or more scenarios against a sparse temporary projection without mutating the project."""
     root = root.resolve()
@@ -497,6 +525,16 @@ def preflight_scenarios(root: Path, scenarios: tuple[UpdateScenario, ...] | list
         }
 
     touched = {"VERSION"}
+    # Include the policy and all top-level modules in the sparse projection.
+    # Without this, a scenario that adds a module can pass preflight but fail
+    # the self-host coverage suite during the release build.
+    check_self_host = (root / "agent-check.policy.json").is_file()
+    if check_self_host:
+        touched.add("agent-check.policy.json")
+        touched.update(
+            path.relative_to(root).as_posix()
+            for path in (root / "agent_devtools").glob("*.py")
+        )
     copy_tests = False
     for scenario in sequence:
         touched.update(scenario.base_blobs)
@@ -529,6 +567,8 @@ def preflight_scenarios(root: Path, scenarios: tuple[UpdateScenario, ...] | list
                 raise UpdateScenarioError(
                     f"{scenario.path.name} ({scenario.from_version} -> {scenario.to_version}): {exc}"
                 ) from exc
+            if check_self_host:
+                _verify_self_host_policy_coverage(sandbox)
             results.append(result)
             (sandbox / "VERSION").write_text(scenario.to_version + "\n", encoding="utf-8")
 
